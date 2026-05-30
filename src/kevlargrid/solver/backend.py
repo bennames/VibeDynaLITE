@@ -127,7 +127,7 @@ def vmap(
         Callable: Vectorized function.
     """
     if BACKEND == "jax" and HAS_JAX:
-        return jax.vmap(fn, in_axes=in_axes, out_axes=out_axes)
+        return jax.vmap(fn, in_axes=in_axes, out_axes=out_axes)  # type: ignore[no-any-return]
 
     # NumPy/Numba fallback loop
     def vectorized_fn(*args: Any, **kwargs: Any) -> Any:
