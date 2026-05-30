@@ -1,0 +1,31 @@
+{
+  "version": "2.0",
+  "material": {
+    "name": "Kevlar 49",
+    "tensile_modulus_gpa": 112.4,
+    "failure_strain": 0.024,
+    "tensile_strength_gpa": 3.00,
+    "fiber_density_gcc": 1.44,
+    "areal_density_kgm2": 0.23,
+    "shear_ratio": 0.0003
+  },
+  "projectile": {
+    "mass_kg": 0.5,
+    "velocity_ms": 189.74,
+    "blade_width_mm": 50.0,
+    "edge_thickness_mm": 2.0
+  },
+  "simulation": {
+    "mode": "B",
+    "plies": 6,
+    "ply_spacing_mm": 0.5,
+    "penalty_stiffness_multiplier": 10.0,
+    "cfl": 0.8,
+    "boundary": "infinite",
+    "safety_factor": 1.5
+  },
+  "damping": {
+    "model": "viscous",
+    "coefficient": "auto"
+  }
+}
