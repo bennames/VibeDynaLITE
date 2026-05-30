@@ -28,7 +28,9 @@ def apply_clamped_boundary(
     np.ndarray
         Updated velocities with boundary nodes zeroed, shape ``(n_nodes, 3)``.
     """
-    raise NotImplementedError("Stub")
+    vel_new = velocities.copy()
+    vel_new[boundary_mask] = 0.0
+    return vel_new
 
 
 def compute_min_radius(
@@ -55,4 +57,4 @@ def compute_min_radius(
     float
         Minimum grid half-width (metres).
     """
-    raise NotImplementedError("Stub")
+    return float(wave_speed * sim_duration * safety_factor)

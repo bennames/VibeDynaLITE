@@ -114,3 +114,69 @@ def compute_spring_strains(
     diff = p2 - p1
     lengths = np.sqrt(np.sum(diff**2, axis=1))
     return (lengths - rest_lengths) / rest_lengths  # type: ignore[no-any-return]
+
+
+@backend.jit
+def compute_interply_contact_forces(
+    positions: np.ndarray,
+    n_nodes_per_layer: int,
+    n_plies: int,
+    t_ply: float,
+    k_penalty: float,
+) -> tuple[np.ndarray, float]:
+    """Compute vectorised inter-ply penalty contact forces and potential energy.
+
+    For each corresponding node index across adjacent layers, if layer n
+    penetrates layer n+1 along the Z axis, we apply equal and opposite
+    forces resisting interpenetration.
+
+    Parameters
+    ----------
+    positions : np.ndarray
+        Current node positions, shape ``(n_nodes, 3)``.
+    n_nodes_per_layer : int
+        Number of nodes in a single ply.
+    n_plies : int
+        Number of discrete plies.
+    t_ply : float
+        Inter-ply spacing (metres).
+    k_penalty : float
+        Penalty contact stiffness.
+
+    Returns
+    -------
+    tuple[np.ndarray, float]
+        - Nodal contact forces array, shape ``(n_nodes, 3)``.
+        - Total contact potential energy (Joules).
+    """
+    forces = np.zeros_like(positions)
+    total_energy = 0.0
+
+    if n_plies <= 1:
+        return forces, total_energy
+
+    for ply in range(n_plies - 1):
+        # Compute range of node indices for the current layer and next layer
+        start_idx = ply * n_nodes_per_layer
+        end_idx = start_idx + n_nodes_per_layer
+
+        # Positions along the Z axis
+        z_n = positions[start_idx:end_idx, 2]
+        z_n1 = positions[end_idx : end_idx + n_nodes_per_layer, 2]
+
+        # Penetration depth: delta = z_n - z_n1 + t_ply
+        delta = z_n - z_n1 + t_ply
+        penetration = np.maximum(0.0, delta)
+
+        # Force magnitude
+        f_mag = k_penalty * penetration
+
+        # Accumulate forces: layer n is pushed in -Z, layer n+1 in +Z
+        for i in range(n_nodes_per_layer):
+            forces[start_idx + i, 2] -= f_mag[i]
+            forces[end_idx + i, 2] += f_mag[i]
+
+        # Potential energy: 0.5 * k * x^2
+        total_energy += float(np.sum(0.5 * k_penalty * penetration**2))
+
+    return forces, total_energy

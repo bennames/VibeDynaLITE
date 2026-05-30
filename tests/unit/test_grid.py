@@ -87,3 +87,30 @@ class TestBoundaryNodes:
         interiors = [5, 6, 9, 10]
         for interior in interiors:
             assert node_degrees[interior] == 8
+
+    def test_grid_stacking_mode_b(self) -> None:
+        """Verify multi-ply stacked grid properties (Mode B)."""
+        nx, ny, dx = 5, 5, 0.01
+        n_plies = 3
+        t_ply = 0.002  # 2mm spacing
+
+        grid = generate_rectangular_grid(nx, ny, dx, MOCK_MATERIAL, n_plies=n_plies, t_ply=t_ply)
+
+        # Expected counts
+        expected_nodes_per_layer = nx * ny
+        assert grid.n_nodes == n_plies * expected_nodes_per_layer
+
+        # Expected springs = n_plies * springs_per_layer (72 * 3 = 216)
+        assert grid.n_springs == n_plies * 72
+
+        # Check Z coordinates of stacked nodes
+        for ply in range(n_plies):
+            start = ply * expected_nodes_per_layer
+            end = start + expected_nodes_per_layer
+            z_coords = grid.nodes[start:end, 2]
+            # All nodes in this layer should have identical Z coordinate equal to ply * t_ply
+            np.testing.assert_allclose(z_coords, ply * t_ply)
+
+        # Check that spring indices map within bounds
+        assert np.min(grid.springs) == 0
+        assert np.max(grid.springs) == grid.n_nodes - 1

@@ -73,8 +73,12 @@ def generate_rectangular_grid(
     dx: float,
     material: dict,
     n_plies: int = 1,
+    t_ply: float | None = None,
 ) -> Grid:
     """Create a rectangular grid with orthogonal and diagonal springs.
+
+    Supports both Sizing Mode (Mode A: single layer with scaled mass/stiffness)
+    and Checkout Mode (Mode B: physical stacked layers spaced along the Z axis).
 
     Parameters
     ----------
@@ -87,14 +91,16 @@ def generate_rectangular_grid(
     material : dict
         Material property dictionary (see :mod:`kevlargrid.materials.library`).
     n_plies : int
-        Number of plies (acts as scalar multiplier for mass/stiffness in Mode A).
+        Number of plies (acts as scalar multiplier in Mode A, or number of stacks in Mode B).
+    t_ply : float, optional
+        Vertical spacing between discrete layers (metres). If provided, enables Mode B.
 
     Returns
     -------
     Grid
         A fully initialised :class:`Grid` instance.
     """
-    # 1. Generate node coordinates
+    # 1. Base properties (single layer)
     x = np.arange(nx) * dx
     y = np.arange(ny) * dx
     # Center grid around (0, 0)
@@ -102,26 +108,31 @@ def generate_rectangular_grid(
     y = y - (ny - 1) * dx / 2.0
 
     x_grid, y_grid = np.meshgrid(x, y, indexing="ij")
-    nodes = np.stack([x_grid, y_grid, np.zeros_like(x_grid)], axis=-1).reshape(-1, 3)
+    base_nodes = np.stack([x_grid, y_grid, np.zeros_like(x_grid)], axis=-1).reshape(-1, 3)
+    n_nodes_per_layer = nx * ny
 
-    # 2. Lump masses by tributary area
+    # 2. Lump base masses by tributary area
     areal_density = material.get("areal_density_kgm2", 0.47)
-    m_cell = n_plies * areal_density * dx * dx
 
-    masses = np.zeros(nx * ny, dtype=np.float64)
+    # In Mode B, each layer has standard mass. In Mode A, we scale a single layer.
+    is_mode_b = t_ply is not None and n_plies > 1
+    m_scale = 1.0 if is_mode_b else float(n_plies)
+    m_cell = m_scale * areal_density * dx * dx
+
+    base_masses = np.zeros(n_nodes_per_layer, dtype=np.float64)
     for i in range(nx):
         for j in range(ny):
             idx = i * ny + j
             is_x_boundary = i == 0 or i == nx - 1
             is_y_boundary = j == 0 or j == ny - 1
             if is_x_boundary and is_y_boundary:
-                masses[idx] = 0.25 * m_cell
+                base_masses[idx] = 0.25 * m_cell
             elif is_x_boundary or is_y_boundary:
-                masses[idx] = 0.5 * m_cell
+                base_masses[idx] = 0.5 * m_cell
             else:
-                masses[idx] = m_cell
+                base_masses[idx] = m_cell
 
-    # 3. Connect springs
+    # 3. Connect base springs
     springs_list = []
     tension_only_list = []
 
@@ -149,8 +160,8 @@ def generate_rectangular_grid(
                 springs_list.append((idx, idx_diag2))
                 tension_only_list.append(False)
 
-    springs = np.array(springs_list, dtype=np.int32)
-    tension_only = np.array(tension_only_list, dtype=bool)
+    base_springs = np.array(springs_list, dtype=np.int32)
+    base_tension_only = np.array(tension_only_list, dtype=bool)
 
     # 4. Calculate spring stiffnesses
     tensile_modulus_gpa = material.get("tensile_modulus_gpa", 71.0)
@@ -161,11 +172,54 @@ def generate_rectangular_grid(
     t = areal_density / (fiber_density_gcc * 1000.0)
     e_mod = tensile_modulus_gpa * 1e9
 
-    k_ortho = n_plies * e_mod * t
+    k_scale = 1.0 if is_mode_b else float(n_plies)
+    k_ortho = k_scale * e_mod * t
     k_shear = k_ortho * shear_ratio
 
-    stiffnesses = np.where(tension_only, k_ortho, k_shear)
-    rest_lengths = np.where(tension_only, dx, np.sqrt(2.0) * dx)
+    base_stiffnesses = np.where(base_tension_only, k_ortho, k_shear)
+    base_rest_lengths = np.where(base_tension_only, dx, np.sqrt(2.0) * dx)
+
+    # 5. Stacking if Mode B
+    if is_mode_b:
+        assert t_ply is not None
+        all_nodes = []
+        all_springs = []
+        all_masses = []
+        all_stiffnesses = []
+        all_rest_lengths = []
+        all_tension_only = []
+
+        for ply in range(n_plies):
+            ply_nodes = base_nodes.copy()
+            # Stack along Z-axis
+            ply_nodes[:, 2] = ply * t_ply
+            all_nodes.append(ply_nodes)
+
+            # Offset spring connectivity indices to target correct nodes in this layer
+            offset = ply * n_nodes_per_layer
+            ply_springs = base_springs + offset
+            all_springs.append(ply_springs)
+
+            # Duplicate stiffnesses and mass profiles
+            all_masses.append(base_masses)
+            all_stiffnesses.append(base_stiffnesses)
+            all_rest_lengths.append(base_rest_lengths)
+            all_tension_only.append(base_tension_only)
+
+        nodes = np.concatenate(all_nodes, axis=0)
+        springs = np.concatenate(all_springs, axis=0)
+        masses = np.concatenate(all_masses, axis=0)
+        stiffnesses = np.concatenate(all_stiffnesses, axis=0)
+        rest_lengths = np.concatenate(all_rest_lengths, axis=0)
+        tension_only = np.concatenate(all_tension_only, axis=0)
+    else:
+        nodes = base_nodes
+        springs = base_springs
+        masses = base_masses
+        stiffnesses = base_stiffnesses
+        rest_lengths = base_rest_lengths
+        tension_only = base_tension_only
+
     failed = np.zeros(len(springs), dtype=bool)
 
     return Grid(
