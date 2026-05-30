@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from kevlargrid.solver import backend
 
+
+@backend.jit
 def compute_kinetic_energy(
     velocities: np.ndarray,
     masses: np.ndarray,
@@ -28,13 +31,16 @@ def compute_kinetic_energy(
     float
         Total kinetic energy (Joules).
     """
-    raise NotImplementedError("Stub")
+    v_sq = np.sum(velocities**2, axis=1)
+    return float(np.sum(0.5 * masses * v_sq))
 
 
+@backend.jit
 def compute_strain_energy(
     strains: np.ndarray,
     stiffnesses: np.ndarray,
     rest_lengths: np.ndarray,
+    failed: np.ndarray | None = None,
 ) -> float:
     """Compute the total elastic strain energy stored in all springs.
 
@@ -46,13 +52,19 @@ def compute_strain_energy(
         Axial stiffness per spring, shape ``(n_springs,)``.
     rest_lengths : np.ndarray
         Natural (rest) length per spring, shape ``(n_springs,)``.
+    failed : np.ndarray, optional
+        Boolean failure flags per spring, shape ``(n_springs,)``.
 
     Returns
     -------
     float
         Total strain energy (Joules).
     """
-    raise NotImplementedError("Stub")
+    # SE = 0.5 * k * dx^2 = 0.5 * k * (strain * L0)^2
+    se_springs = 0.5 * stiffnesses * (strains * rest_lengths) ** 2
+    if failed is not None:
+        se_springs = np.where(failed, 0.0, se_springs)
+    return float(np.sum(se_springs))
 
 
 def compute_energy_balance(
@@ -77,4 +89,10 @@ def compute_energy_balance(
         Dictionary with keys ``"kinetic"``, ``"strain"``, ``"damped"``,
         and ``"total"``.
     """
-    raise NotImplementedError("Stub")
+    total = ke + se + damped
+    return {
+        "kinetic": float(ke),
+        "strain": float(se),
+        "damped": float(damped),
+        "total": float(total),
+    }

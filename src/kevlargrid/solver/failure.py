@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from kevlargrid.solver import backend
 
+
+@backend.jit
 def check_failures(
     strains: np.ndarray,
     failed: np.ndarray,
@@ -34,4 +37,5 @@ def check_failures(
     np.ndarray
         Updated boolean failure array, shape ``(n_springs,)``.
     """
-    raise NotImplementedError("Stub")
+    failed |= strains > epsilon_fail
+    return failed

@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from kevlargrid.solver import backend
 
+
+@backend.jit
 def compute_cfl_timestep(
     stiffnesses: np.ndarray,
     masses: np.ndarray,
@@ -36,4 +39,13 @@ def compute_cfl_timestep(
     float
         Stable time-step size (seconds).
     """
-    raise NotImplementedError("Stub")
+    if cfl <= 0.0 or cfl > 1.0:
+        raise ValueError("CFL safety factor must be in the range (0, 1].")
+
+    m_min = np.min(masses)
+    k_max = np.max(stiffnesses)
+
+    # dt_crit = sqrt(m / k) representing physical wave traversal limit
+    dt_crit = np.sqrt(m_min / k_max)
+
+    return float(cfl * dt_crit)

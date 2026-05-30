@@ -27,13 +27,19 @@ try:
 except ImportError:
     HAS_NUMBA = False
 
-# Select backend
-if HAS_JAX:
-    BACKEND = "jax"
-elif HAS_NUMBA:
-    BACKEND = "numba"
+import os
+
+# Select backend with override support
+env_backend = os.environ.get("KEVLARGRID_BACKEND", "").lower()
+if env_backend in ("jax", "numba", "numpy"):
+    BACKEND = env_backend
 else:
-    BACKEND = "numpy"
+    if HAS_NUMBA:
+        BACKEND = "numba"
+    elif HAS_JAX:
+        BACKEND = "jax"
+    else:
+        BACKEND = "numpy"
 
 
 def get_backend_name() -> str:

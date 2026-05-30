@@ -61,10 +61,10 @@ def detect_backend() -> dict[str, str | bool]:
         details.append("Numba: Not installed")
 
     # Select recommended backend
-    if backends["jax"]:
-        recommended = "jax"
-    elif backends["numba"]:
+    if backends["numba"]:
         recommended = "numba"
+    elif backends["jax"]:
+        recommended = "jax"
     else:
         recommended = "numpy"
 

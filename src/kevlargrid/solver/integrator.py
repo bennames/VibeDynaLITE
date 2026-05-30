@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from kevlargrid.solver import backend
 
+
+@backend.jit
 def leapfrog_step(
     positions: np.ndarray,
     velocities: np.ndarray,
@@ -26,9 +29,9 @@ def leapfrog_step(
     positions : np.ndarray
         Current node positions, shape ``(n_nodes, 3)``.
     velocities : np.ndarray
-        Current node velocities, shape ``(n_nodes, 3)``.
+        Current node velocities at t - dt/2, shape ``(n_nodes, 3)``.
     forces : np.ndarray
-        Net forces on each node, shape ``(n_nodes, 3)``.
+        Net forces on each node at t, shape ``(n_nodes, 3)``.
     masses : np.ndarray
         Lumped mass per node, shape ``(n_nodes,)`` or ``(n_nodes, 1)``.
     dt : float
@@ -37,6 +40,18 @@ def leapfrog_step(
     Returns
     -------
     tuple[np.ndarray, np.ndarray]
-        Updated ``(positions, velocities)`` arrays.
+        Updated ``(positions, velocities)`` arrays at t + dt and t + dt/2.
     """
-    raise NotImplementedError("Stub")
+    # Reshape masses to support broad-casting
+    masses_col = masses.reshape(-1, 1) if masses.ndim == 1 else masses
+
+    # a(t) = F(t) / m
+    accel = forces / masses_col
+
+    # v(t + dt/2) = v(t - dt/2) + a(t) * dt
+    v_new = velocities + accel * dt
+
+    # x(t + dt) = x(t) + v(t + dt/2) * dt
+    x_new = positions + v_new * dt
+
+    return x_new, v_new
