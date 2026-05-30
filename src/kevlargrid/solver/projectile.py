@@ -7,7 +7,7 @@ onto the spring–mass grid.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -197,3 +197,113 @@ def distribute_contact_forces(
 
     forces[contact_nodes] = forces_c
     return forces
+
+
+def check_termination(
+    projectile: Projectile,
+    grid: Grid,
+    positions: np.ndarray,
+    t_current: float,
+    t_max: float,
+    initial_velocity_z: float,
+) -> str | None:
+    """Check if the simulation should terminate.
+
+    Parameters
+    ----------
+    projectile : Projectile
+        The projectile instance.
+    grid : Grid
+        The fabric grid.
+    positions : np.ndarray
+        Current node positions, shape ``(n_nodes, 3)``.
+    t_current : float
+        Current simulated time (seconds).
+    t_max : float
+        Maximum allowed simulation time (seconds).
+    initial_velocity_z : float
+        Initial vertical velocity of the projectile (m/s).
+
+    Returns
+    -------
+    str or None
+        Reason for termination ("arrest", "penetration", "timeout") or None.
+    """
+    # 1. Arrest Condition: velocity reversed or stopped
+    if (
+        np.sign(projectile.velocity[2]) != np.sign(initial_velocity_z)
+        or projectile.velocity[2] == 0.0
+    ):
+        return "arrest"
+
+    # 2. Timeout Condition
+    if t_current >= t_max:
+        return "timeout"
+
+    # 3. Penetration Condition: passes grid Z plane and all springs in contact footprint are ruptured
+    initial_grid_z = 0.0  # Planar grid at Z=0
+    # Has passed means projectile has gone past the Z=0 plane in the direction of its initial velocity
+    direction = np.sign(initial_velocity_z) if initial_velocity_z != 0.0 else 1.0
+    has_passed = (projectile.position[2] - initial_grid_z) * direction > 0.0
+
+    if has_passed:
+        contact_nodes = projectile.contact_nodes
+        if len(contact_nodes) > 0:
+            # Find springs connected to these contact nodes
+            # Check if all springs that connect to at least one contact node are failed
+            contact_nodes_set = set(contact_nodes)
+            contact_springs_failed = True
+            found_springs = False
+            for u, v, f in zip(grid.springs[:, 0], grid.springs[:, 1], grid.failed, strict=True):
+                if u in contact_nodes_set or v in contact_nodes_set:
+                    found_springs = True
+                    if not f:
+                        contact_springs_failed = False
+                        break
+            if found_springs and contact_springs_failed:
+                return "penetration"
+        else:
+            # No contact nodes but has passed? If all grid is ruptured, it's a penetration
+            if np.all(grid.failed):
+                return "penetration"
+
+    return None
+
+
+def generate_impact_report(
+    projectile: Projectile,
+    initial_ke: float,
+    termination_reason: str,
+) -> dict[str, Any]:
+    """Generate a summary report of the impact event.
+
+    Parameters
+    ----------
+    projectile : Projectile
+        The projectile instance.
+    initial_ke : float
+        Initial kinetic energy (Joules).
+    termination_reason : str
+        Why the simulation ended ("arrest", "penetration", "timeout").
+
+    Returns
+    -------
+    dict
+        Dictionary with keys like "arrested", "residual_ke", "exit_velocity", etc.
+    """
+    residual_ke = 0.5 * projectile.mass * np.sum(projectile.velocity**2)
+    exit_velocity = float(np.sqrt(np.sum(projectile.velocity**2)))
+    energy_absorbed = initial_ke - residual_ke
+
+    is_penetration = termination_reason == "penetration"
+    is_arrest = termination_reason == "arrest"
+
+    return {
+        "arrested": is_arrest,
+        "penetration": is_penetration,
+        "timeout": termination_reason == "timeout",
+        "exit_velocity_m_s": exit_velocity if is_penetration else 0.0,
+        "residual_ke_j": residual_ke if is_penetration else 0.0,
+        "energy_absorbed_j": float(energy_absorbed),
+        "termination_reason": termination_reason,
+    }

@@ -17,7 +17,13 @@ from kevlargrid.solver.failure import check_failures
 from kevlargrid.solver.forces import compute_spring_forces, compute_spring_strains
 from kevlargrid.solver.grid import Grid, generate_rectangular_grid
 from kevlargrid.solver.integrator import leapfrog_step
-from kevlargrid.solver.projectile import Projectile, distribute_contact_forces, update_contact_zone
+from kevlargrid.solver.projectile import (
+    Projectile,
+    check_termination,
+    distribute_contact_forces,
+    generate_impact_report,
+    update_contact_zone,
+)
 from kevlargrid.solver.timestep import compute_cfl_timestep
 
 __all__ = [
@@ -25,6 +31,7 @@ __all__ = [
     "Projectile",
     "apply_clamped_boundary",
     "check_failures",
+    "check_termination",
     "compute_cfl_timestep",
     "compute_energy_balance",
     "compute_kinetic_energy",
@@ -33,6 +40,7 @@ __all__ = [
     "compute_spring_strains",
     "compute_strain_energy",
     "distribute_contact_forces",
+    "generate_impact_report",
     "generate_rectangular_grid",
     "leapfrog_step",
     "rayleigh_damping",

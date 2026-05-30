@@ -109,3 +109,96 @@ class TestProjectile:
 
         forces = distribute_contact_forces(proj, grid)
         assert np.all(forces == 0.0)
+
+    def test_check_termination(self) -> None:
+        """Verify that simulation termination criteria are detected correctly."""
+        from kevlargrid.solver.projectile import check_termination
+
+        nx, ny, dx = 5, 5, 0.01
+        grid = generate_rectangular_grid(nx, ny, dx, MOCK_MATERIAL)
+        positions = grid.nodes.copy()
+
+        # Projectile moving in +Z (initially 50 m/s)
+        proj = Projectile(
+            mass=0.1,
+            velocity=[0.0, 0.0, 50.0],
+            position=[0.0, 0.0, -0.005],
+            blade_width=0.02,
+            edge_thickness=0.005,
+        )
+
+        # Active state: not arrested, not timed out, not passed fabric yet
+        assert (
+            check_termination(
+                proj, grid, positions, t_current=0.001, t_max=0.01, initial_velocity_z=50.0
+            )
+            is None
+        )
+
+        # 1. Timeout trigger
+        assert (
+            check_termination(
+                proj, grid, positions, t_current=0.01, t_max=0.01, initial_velocity_z=50.0
+            )
+            == "timeout"
+        )
+
+        # 2. Arrest trigger (velocity Z becomes zero or negative)
+        proj.velocity = np.array([0.0, 0.0, -1.0])
+        assert (
+            check_termination(
+                proj, grid, positions, t_current=0.001, t_max=0.01, initial_velocity_z=50.0
+            )
+            == "arrest"
+        )
+
+        # Restore velocity
+        proj.velocity = np.array([0.0, 0.0, 30.0])
+
+        # 3. Penetration trigger
+        # Projectile moves past Z=0
+        proj.position = np.array([0.0, 0.0, 0.005])
+        # Mark all springs as failed
+        grid.failed[:] = True
+        # Setup some contact nodes
+        proj.contact_nodes = np.array([12], dtype=np.int32)
+        assert (
+            check_termination(
+                proj, grid, positions, t_current=0.001, t_max=0.01, initial_velocity_z=50.0
+            )
+            == "penetration"
+        )
+
+    def test_generate_impact_report(self) -> None:
+        """Verify correct calculation of report metrics in the impact summary."""
+        from kevlargrid.solver.projectile import generate_impact_report
+
+        proj = Projectile(
+            mass=0.2,
+            velocity=[0.0, 0.0, 100.0],
+            position=[0.0, 0.0, 0.0],
+            blade_width=0.02,
+            edge_thickness=0.005,
+        )
+
+        initial_ke = 0.5 * proj.mass * 150.0**2  # 2250 J
+
+        # 1. Arrest case
+        proj.velocity = np.array([0.0, 0.0, 0.0])
+        report = generate_impact_report(proj, initial_ke, "arrest")
+        assert report["arrested"] is True
+        assert report["penetration"] is False
+        assert report["timeout"] is False
+        assert report["exit_velocity_m_s"] == 0.0
+        assert report["residual_ke_j"] == 0.0
+        assert report["energy_absorbed_j"] == initial_ke
+
+        # 2. Penetration case
+        proj.velocity = np.array([0.0, 0.0, 40.0])  # exit velocity = 40 m/s
+        report = generate_impact_report(proj, initial_ke, "penetration")
+        assert report["arrested"] is False
+        assert report["penetration"] is True
+        assert report["timeout"] is False
+        assert report["exit_velocity_m_s"] == 40.0
+        assert report["residual_ke_j"] == 0.5 * 0.2 * 40.0**2  # 160 J
+        assert report["energy_absorbed_j"] == initial_ke - 160.0
