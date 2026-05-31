@@ -398,6 +398,7 @@ controls = SimulationControls()
 strain_plot = StrainPlot()
 energy_plot = EnergyPlot()
 dashboard = ResultsDashboard()
+dashboard.set_references(runner, config_panel)
 viewport3d = Viewport3D()
 
 # Playback controls state

@@ -6,6 +6,8 @@ simulation settings with dynamic widgets visibility and live calculations.
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
     import dearpygui.dearpygui as dpg
 except ImportError:  # pragma: no cover
@@ -62,6 +64,8 @@ class ConfigPanel:
         self.sim_duration = "sim_duration"
         self.sim_cfl = "sim_cfl"
         self.sim_damping = "sim_damping"
+        self.sim_snapshot_interval = "sim_snapshot_interval"
+        self.sim_file_size_display = "sim_file_size_display"
 
     def build(self) -> None:
         """Construct the panel's DearPyGui widgets."""
@@ -129,10 +133,24 @@ class ConfigPanel:
 
             # --- GRID GEOMETRY SECTION ---
             with dpg.collapsing_header(label="Grid Geometry & Boundaries", default_open=True):
-                dpg.add_input_int(label="Nodes Nx", tag=self.grid_nx, default_value=11)
-                dpg.add_input_int(label="Nodes Ny", tag=self.grid_ny, default_value=11)
+                dpg.add_input_int(
+                    label="Nodes Nx",
+                    tag=self.grid_nx,
+                    default_value=11,
+                    callback=self._update_file_size_estimate_cb,
+                )
+                dpg.add_input_int(
+                    label="Nodes Ny",
+                    tag=self.grid_ny,
+                    default_value=11,
+                    callback=self._update_file_size_estimate_cb,
+                )
                 dpg.add_input_float(
-                    label="Spacing dx (m)", tag=self.grid_dx, default_value=0.01, format="%.4f"
+                    label="Spacing dx (m)",
+                    tag=self.grid_dx,
+                    default_value=0.01,
+                    format="%.4f",
+                    callback=self._update_file_size_estimate_cb,
                 )
                 dpg.add_combo(
                     label="Analysis Mode",
@@ -141,13 +159,19 @@ class ConfigPanel:
                     tag=self.grid_mode,
                     callback=self._on_mode_change,
                 )
-                dpg.add_input_int(label="Number of Plies", tag=self.grid_n_plies, default_value=1)
+                dpg.add_input_int(
+                    label="Number of Plies",
+                    tag=self.grid_n_plies,
+                    default_value=1,
+                    callback=self._update_file_size_estimate_cb,
+                )
                 with dpg.group(tag=self.grid_t_ply_group, show=False):
                     dpg.add_input_float(
                         label="Spacing t_ply (m)",
                         tag=self.grid_t_ply,
                         default_value=0.001,
                         format="%.4f",
+                        callback=self._update_file_size_estimate_cb,
                     )
                 dpg.add_combo(
                     label="Boundary Condition",
@@ -226,9 +250,29 @@ class ConfigPanel:
                     format="%.5f",
                     callback=self._on_boundary_change,
                 )
-                dpg.add_input_float(label="CFL safety factor", tag=self.sim_cfl, default_value=0.8)
+                dpg.add_input_float(
+                    label="CFL safety factor",
+                    tag=self.sim_cfl,
+                    default_value=0.8,
+                    callback=self._update_file_size_estimate_cb,
+                )
                 dpg.add_input_float(
                     label="Viscous Damping (N.s/m)", tag=self.sim_damping, default_value=0.5
+                )
+                dpg.add_input_int(
+                    label="Snapshot Interval",
+                    tag=self.sim_snapshot_interval,
+                    default_value=100,
+                    min_value=1,
+                    max_value=1000,
+                    callback=self._update_file_size_estimate_cb,
+                )
+                dpg.add_spacer(height=5)
+                dpg.add_text("Estimated HDF5 File Size:")
+                dpg.add_input_text(
+                    tag=self.sim_file_size_display,
+                    default_value="0.0 KB",
+                    enabled=False,
                 )
 
             # --- Add Tooltips ---
@@ -278,6 +322,7 @@ class ConfigPanel:
 
         is_mode_b = "Mode B" in app_data
         dpg.configure_item(self.grid_t_ply_group, show=is_mode_b)
+        self._update_file_size_estimate()
 
     def _on_boundary_change(self, sender: str | None, app_data: str | None) -> None:
         """Triggered when boundary selection is toggled or sim duration changes."""
@@ -310,6 +355,8 @@ class ConfigPanel:
             sim_duration = dpg.get_value(self.sim_duration)
             r_min = compute_min_radius(c_transverse, sim_duration, 1.5)
             dpg.set_value(self.grid_rmin_display, r_min)
+
+        self._update_file_size_estimate()
 
     def _on_projectile_change(self, sender: str | None, app_data: str | None) -> None:
         """Triggered when projectile mass or velocity inputs are modified."""
@@ -365,6 +412,96 @@ class ConfigPanel:
             dpg.add_text("CFL stability safety factor multiplier (must be <= 1.0)")
         with dpg.tooltip(self.sim_damping):
             dpg.add_text("Viscous velocity-damping coefficient per node (N.s/m)")
+        with dpg.tooltip(self.sim_snapshot_interval):
+            dpg.add_text("How often solver data frames are logged (e.g. log every 100 timesteps)")
+
+    def _update_file_size_estimate_cb(self, sender: str | None, app_data: Any) -> None:
+        """DearPyGui callback proxy to trigger file size recalculation."""
+        self._update_file_size_estimate()
+
+    def _update_file_size_estimate(self) -> None:
+        """Calculate and display the estimated HDF5 file size in real-time."""
+        if dpg is None or not dpg.does_item_exist(self.sim_file_size_display):
+            return
+
+        try:
+            nx = int(dpg.get_value(self.grid_nx))
+            ny = int(dpg.get_value(self.grid_ny))
+            dx = float(dpg.get_value(self.grid_dx))
+            n_plies = int(dpg.get_value(self.grid_n_plies))
+
+            # Determine Mode B vs Mode A
+            grid_mode = dpg.get_value(self.grid_mode)
+            is_mode_b = "Mode B" in grid_mode
+
+            n_nodes = nx * ny
+            if is_mode_b:
+                n_nodes_tot = n_nodes * n_plies
+            else:
+                n_nodes_tot = n_nodes
+
+            # Springs per layer
+            ortho = nx * (ny - 1) + ny * (nx - 1)
+            diag = 2 * (nx - 1) * (ny - 1)
+            springs_per_ply = ortho + diag
+            if is_mode_b:
+                n_springs_tot = springs_per_ply * n_plies
+            else:
+                n_springs_tot = springs_per_ply
+
+            # Wave velocity to get dt
+            modulus_gpa = dpg.get_value(self.mat_modulus)
+            areal_density = dpg.get_value(self.mat_areal_density)
+            fiber_density_gcc = dpg.get_value(self.mat_fiber_density)
+
+            thickness = areal_density / (fiber_density_gcc * 1000.0)
+            e_mod = modulus_gpa * 1e9
+            k_ortho = e_mod * thickness
+
+            is_mode_b_flag = is_mode_b and n_plies > 1
+            m_scale = 1.0 if is_mode_b_flag else float(n_plies)
+            m_cell = m_scale * areal_density * dx * dx
+
+            # critical timestep
+            if m_cell > 0.0 and k_ortho > 0.0:
+                dt_crit = (m_cell / k_ortho) ** 0.5
+            else:
+                dt_crit = 1e-6
+
+            cfl = dpg.get_value(self.sim_cfl)
+            dt = cfl * dt_crit
+            if dt <= 0.0:
+                dt = 1e-6
+
+            duration = dpg.get_value(self.sim_duration)
+            total_steps = int(duration / dt)
+
+            snapshot_interval = int(dpg.get_value(self.sim_snapshot_interval))
+            if snapshot_interval < 1:
+                snapshot_interval = 1
+
+            saved_steps = max(1, total_steps // snapshot_interval)
+
+            # Estimate HDF5 size in bytes
+            pos_size = saved_steps * n_nodes_tot * 3 * 4
+            spring_size = saved_steps * n_springs_tot * 1
+            energy_size = saved_steps * 5 * 4
+            proj_size = saved_steps * 3 * 4
+            time_size = saved_steps * 4
+            metadata_size = 2000
+
+            tot_bytes = pos_size + spring_size + energy_size + proj_size + time_size + metadata_size
+
+            if tot_bytes < 1024:
+                size_str = f"{tot_bytes} Bytes"
+            elif tot_bytes < 1024 * 1024:
+                size_str = f"{tot_bytes / 1024:.2f} KB"
+            else:
+                size_str = f"{tot_bytes / (1024 * 1024):.2f} MB"
+
+            dpg.set_value(self.sim_file_size_display, size_str)
+        except Exception:
+            dpg.set_value(self.sim_file_size_display, "Error")
 
     def get_config(self) -> dict:
         """Read the current widget values and return a structured config dict."""
@@ -416,6 +553,9 @@ class ConfigPanel:
                 "duration": dpg.get_value(self.sim_duration),
                 "cfl_factor": dpg.get_value(self.sim_cfl),
                 "damping_coefficient": dpg.get_value(self.sim_damping),
+                "snapshot_interval": dpg.get_value(self.sim_snapshot_interval)
+                if dpg.does_item_exist(self.sim_snapshot_interval)
+                else 100,
             },
         }
 
@@ -492,6 +632,9 @@ class ConfigPanel:
         dpg.set_value(self.sim_duration, sim.get("duration", 0.001))
         dpg.set_value(self.sim_cfl, sim.get("cfl_factor", 0.8))
         dpg.set_value(self.sim_damping, sim.get("damping_coefficient", 0.5))
+        if "snapshot_interval" in sim and dpg.does_item_exist(self.sim_snapshot_interval):
+            dpg.set_value(self.sim_snapshot_interval, sim["snapshot_interval"])
 
-        # Re-sync boundary sizing calculation
+        # Re-sync boundary sizing calculation & file size estimate
         self._on_boundary_change(None, None)
+        self._update_file_size_estimate()

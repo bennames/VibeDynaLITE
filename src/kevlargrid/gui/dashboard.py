@@ -6,6 +6,8 @@ averages, energy dissipation rates, and color-coded PASS/FAIL status indicators.
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
     import dearpygui.dearpygui as dpg
 except ImportError:  # pragma: no cover
@@ -27,12 +29,21 @@ class ResultsDashboard:
         self.val_energy_loss = "dash_val_energy_loss"
         self.val_penetration_ply = "dash_val_penetration_ply"
 
+        # References placeholders
+        self.runner: Any = None
+        self.config_panel: Any = None
+
+    def set_references(self, runner: Any, config_panel: Any) -> None:
+        """Connect global thread runner and config panel to enable live data exporting."""
+        self.runner = runner
+        self.config_panel = config_panel
+
     def build(self) -> None:
         """Construct the results dashboard DearPyGui widgets."""
         if dpg is None:  # pragma: no cover
             return
 
-        with dpg.child_window(tag=self.group_tag, border=True, height=270, width=-1):
+        with dpg.child_window(tag=self.group_tag, border=True, height=410, width=-1):
             dpg.add_text("Impact Summary Dashboard", color=[0, 191, 255])
             dpg.add_separator()
 
@@ -84,6 +95,40 @@ class ResultsDashboard:
                     dpg.add_text("Max Ply Perforated Layer")
                     dpg.add_text("Layer --", tag=self.val_penetration_ply)
 
+            dpg.add_spacer(height=15)
+            dpg.add_text("Actionable Exports & Reporting:", color=[0, 191, 255])
+            dpg.add_separator()
+            dpg.add_spacer(height=5)
+            with dpg.group(horizontal=True):
+                dpg.add_button(
+                    label="Export HDF5 Archive",
+                    callback=self._export_hdf5,
+                    width=180,
+                    tag="btn_export_hdf5",
+                    enabled=False,
+                )
+                dpg.add_button(
+                    label="Export CSV Telemetry",
+                    callback=self._export_csv,
+                    width=180,
+                    tag="btn_export_csv",
+                    enabled=False,
+                )
+                dpg.add_button(
+                    label="Compile Video Animation",
+                    callback=self._compile_video,
+                    width=180,
+                    tag="btn_export_video",
+                    enabled=False,
+                )
+                dpg.add_button(
+                    label="Generate PDF Report",
+                    callback=self._generate_pdf,
+                    width=180,
+                    tag="btn_export_pdf",
+                    enabled=False,
+                )
+
     def populate(self, results: dict) -> None:
         """Fill dashboard fields with structural parameters from completed dynamic runs.
 
@@ -129,3 +174,137 @@ class ResultsDashboard:
             dpg.set_value(self.val_penetration_ply, "None (Arrested Layer 0)")
         else:
             dpg.set_value(self.val_penetration_ply, f"Layer {max_ply}")
+
+        # Enable actionable export buttons
+        dpg.configure_item("btn_export_hdf5", enabled=True)
+        dpg.configure_item("btn_export_csv", enabled=True)
+        dpg.configure_item("btn_export_video", enabled=True)
+        dpg.configure_item("btn_export_pdf", enabled=True)
+
+    def _export_hdf5(self, sender: str, app_data: Any) -> None:
+        import os
+
+        from kevlargrid.io.export.h5_writer import export_to_h5
+
+        os.makedirs("exports", exist_ok=True)
+        filepath = "exports/simulation_archive.h5"
+
+        try:
+            cfg = self.config_panel.get_config()
+            results = self.runner.get_telemetry()["results_report"]
+            history = self.runner.history
+
+            export_to_h5(cfg, results, history, filepath)
+            self._show_modal(
+                "Export Success", f"HDF5 Trajectory successfully archived to:\n{filepath}"
+            )
+        except Exception as e:
+            self._show_modal("Export Error", f"Failed to export HDF5:\n{e}")
+
+    def _export_csv(self, sender: str, app_data: Any) -> None:
+        import os
+
+        from kevlargrid.io.export.csv_writer import export_to_csv
+
+        os.makedirs("exports", exist_ok=True)
+        filepath = "exports/telemetry.csv"
+
+        try:
+            history = self.runner.history
+            export_to_csv(history, filepath)
+            self._show_modal("Export Success", f"CSV Summary successfully exported to:\n{filepath}")
+        except Exception as e:
+            self._show_modal("Export Error", f"Failed to export CSV:\n{e}")
+
+    def _compile_video(self, sender: str, app_data: Any) -> None:
+        import os
+        import threading
+
+        from kevlargrid.io.export.video_exporter import VideoExporter
+
+        os.makedirs("exports", exist_ok=True)
+        filepath = "exports/animation.mp4"
+
+        self._show_modal(
+            "Compiling Animation",
+            "Rendering 3D frames in background thread...\nPlease wait.",
+            has_button=False,
+        )
+
+        def _thread_task():
+            try:
+                cfg = self.config_panel.get_config()
+                history = self.runner.history
+
+                nx = cfg["grid"]["nx"]
+                ny = cfg["grid"]["ny"]
+                n_plies = cfg["grid"]["n_plies"]
+
+                exporter = VideoExporter(
+                    config=cfg,
+                    history=history,
+                    nx=nx,
+                    ny=ny,
+                    n_plies=n_plies,
+                    n_nodes_per_layer=nx * ny,
+                )
+                exporter.compile(filepath, yaw=45.0, pitch=30.0, fps=30)
+
+                if dpg.does_item_exist("popup_modal_dashboard_message"):
+                    dpg.delete_item("popup_modal_dashboard_message")
+                self._show_modal(
+                    "Compile Success", f"3D slowed-down animation compiled to:\n{filepath}"
+                )
+            except Exception as e:
+                if dpg.does_item_exist("popup_modal_dashboard_message"):
+                    dpg.delete_item("popup_modal_dashboard_message")
+                self._show_modal("Compile Error", f"Animation compiler failed:\n{e}")
+
+        threading.Thread(target=_thread_task, daemon=True).start()
+
+    def _generate_pdf(self, sender: str, app_data: Any) -> None:
+        import os
+
+        from kevlargrid.io.export.report_builder import generate_pdf_report
+
+        os.makedirs("exports", exist_ok=True)
+        filepath = "exports/executive_report.pdf"
+
+        try:
+            cfg = self.config_panel.get_config()
+            results = self.runner.get_telemetry()["results_report"]
+            history = self.runner.history
+
+            try:
+                generate_pdf_report(cfg, results, history, filepath)
+                self._show_modal(
+                    "Report Success", f"Print-ready PDF Summary compiled to:\n{filepath}"
+                )
+            except ImportError as ie:
+                self._show_modal("Report Success (HTML Fallback)", str(ie))
+        except Exception as e:
+            self._show_modal("Report Error", f"Report generation failed:\n{e}")
+
+    def _show_modal(self, title: str, message: str, has_button: bool = True) -> None:
+        """Utility dialog overlay box wrapper."""
+        if dpg is None:
+            return
+
+        modal_tag = "popup_modal_dashboard_message"
+        if dpg.does_item_exist(modal_tag):
+            dpg.delete_item(modal_tag)
+
+        with dpg.window(
+            label=title,
+            tag=modal_tag,
+            modal=True,
+            show=True,
+            width=380,
+            height=160,
+            no_resize=True,
+            no_move=True,
+        ):
+            dpg.add_text(message)
+            dpg.add_spacer(height=10)
+            if has_button:
+                dpg.add_button(label="OK", width=75, callback=lambda: dpg.delete_item(modal_tag))

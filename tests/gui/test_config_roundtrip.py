@@ -219,6 +219,49 @@ class TestGUIWidgets:
         assert retrieved["simulation"]["damping_coefficient"] == pytest.approx(
             VALID_CONFIG["simulation"]["damping_coefficient"]
         )
+        assert retrieved["simulation"]["snapshot_interval"] == 100
+
+        # Verify setting custom snapshot_interval
+        cfg_custom = VALID_CONFIG.copy()
+        cfg_custom["simulation"] = {
+            **VALID_CONFIG["simulation"],
+            "snapshot_interval": 250,
+        }
+        panel.set_config(cfg_custom)
+        retrieved_custom = panel.get_config()
+        assert retrieved_custom["simulation"]["snapshot_interval"] == 250
+
+    def test_file_size_estimate(self) -> None:
+        """Verify dynamic HDF5 file size calculation and snapshot interval widgets."""
+        panel = ConfigPanel()
+        panel.build()
+
+        # Check default snapshot interval widget exists
+        assert dpg.get_value(panel.sim_snapshot_interval) == 100
+
+        # Change grid size and verify estimate changes
+        dpg.set_value(panel.grid_nx, 25)
+        dpg.set_value(panel.grid_ny, 25)
+        panel._update_file_size_estimate()
+
+        size_str_25 = dpg.get_value(panel.sim_file_size_display)
+        assert "KB" in size_str_25 or "MB" in size_str_25 or "Bytes" in size_str_25
+
+        # Decrease snapshot interval (saving more steps) -> size should increase
+        dpg.set_value(panel.sim_snapshot_interval, 10)
+        panel._update_file_size_estimate()
+        size_str_10 = dpg.get_value(panel.sim_file_size_display)
+
+        # Helper to parse size
+        def parse_kb(s: str) -> float:
+            val = float(s.split()[0])
+            if "MB" in s:
+                return val * 1024
+            elif "Bytes" in s:
+                return val / 1024
+            return val
+
+        assert parse_kb(size_str_10) > parse_kb(size_str_25)
 
 
 class TestControlsWidget:
