@@ -98,6 +98,6 @@ class TestEnergy:
         # Ply 1: 0.5 * 50 * (0.2 * 2.0)^2 = 4.0 J
         assert se_layers[0] == pytest.approx(0.5)
         assert se_layers[1] == pytest.approx(4.0)
-        assert np.sum(se_layers) == pytest.approx(compute_strain_energy(
-            strains, stiffnesses, rest_lengths, failed
-        ))
+        assert np.sum(se_layers) == pytest.approx(
+            compute_strain_energy(strains, stiffnesses, rest_lengths, failed)
+        )
