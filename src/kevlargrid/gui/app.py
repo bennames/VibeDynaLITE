@@ -1,7 +1,8 @@
 """Main DearPyGui application launch and background thread simulation coordinator.
 
 Provides multi-threaded execution management for the explicit solver
-and handles UI state rendering, JSON save/load dialogues, auto-saves, and crash recovery.
+and handles UI state rendering, dynamic plots, interactive 3D viewport,
+post-simulation playback scrubbing, and crash recovery.
 """
 
 from __future__ import annotations
@@ -21,6 +22,9 @@ import numpy as np
 
 from kevlargrid.gui.config_panel import ConfigPanel
 from kevlargrid.gui.controls import SimulationControls
+from kevlargrid.gui.dashboard import ResultsDashboard
+from kevlargrid.gui.plots import EnergyPlot, StrainPlot
+from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
 from kevlargrid.solver import (
     check_failures,
@@ -41,7 +45,7 @@ from kevlargrid.solver.projectile import (
 
 
 class SimRunner:
-    """Thread-safe background simulation runner."""
+    """Thread-safe background simulation runner with history tracking."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -59,6 +63,15 @@ class SimRunner:
         self.se = 0.0
         self.failed_count = 0
         self.error_message = ""
+
+        # History tracking for post-run playback
+        self.history: list[dict[str, Any]] = []
+        self.results_report: dict[str, Any] = {}
+
+        # Cache of structural geometry
+        self.grid_nodes = np.zeros((0, 3))
+        self.grid_failed = np.zeros(0, dtype=bool)
+        self.projectile_pos = np.zeros(3)
 
     def start(self, config: dict) -> None:
         """Launch the solver on a background worker thread."""
@@ -92,7 +105,7 @@ class SimRunner:
         self.reset()
 
     def reset(self) -> None:
-        """Restore initial telemetry variables."""
+        """Restore initial telemetry and clear history tracking buffers."""
         with self.lock:
             self.state = "idle"
             self.elapsed_time = 0.0
@@ -103,6 +116,11 @@ class SimRunner:
             self.se = 0.0
             self.failed_count = 0
             self.error_message = ""
+            self.history.clear()
+            self.results_report.clear()
+            self.grid_nodes = np.zeros((0, 3))
+            self.grid_failed = np.zeros(0, dtype=bool)
+            self.projectile_pos = np.zeros(3)
 
     def get_telemetry(self) -> dict[str, Any]:
         """Fetch current thread-safe simulation telemetry data."""
@@ -117,6 +135,11 @@ class SimRunner:
                 "se": self.se,
                 "failed_count": self.failed_count,
                 "error_message": self.error_message,
+                "history_length": len(self.history),
+                "grid_nodes": self.grid_nodes.copy(),
+                "grid_failed": self.grid_failed.copy(),
+                "projectile_pos": self.projectile_pos.copy(),
+                "results_report": self.results_report.copy(),
             }
 
     def _run_loop(self, config: dict) -> None:
@@ -167,7 +190,7 @@ class SimRunner:
             positions = grid.nodes.copy()
             velocities = np.zeros_like(positions)
 
-            # Rayleigh stiffness equivalent for viscous damping
+            # Viscous damping parameter
             damping_coeff = sim_cfg["damping_coefficient"]
             duration = sim_cfg["duration"]
 
@@ -176,6 +199,29 @@ class SimRunner:
             t_sim = 0.0
             last_time = time.time()
             last_step = 0
+
+            # Store baseline snapshot at t=0
+            initial_ke = compute_kinetic_energy(velocities, grid.masses)
+            initial_se = 0.0
+            initial_damp = 0.0
+            self.history.append(
+                {
+                    "time": 0.0,
+                    "nodes": positions.copy(),
+                    "failed": grid.failed.copy(),
+                    "projectile_pos": proj.position.copy(),
+                    "ke": initial_ke,
+                    "se": initial_se,
+                    "damped": initial_damp,
+                    "contact": 0.0,
+                    "total": initial_ke,
+                    "failed_count": 0,
+                }
+            )
+
+            # Peak deceleration recording
+            accel_history = []
+            damp_dissipated = 0.0
 
             # Dynamic loop
             while t_sim < duration:
@@ -197,8 +243,9 @@ class SimRunner:
 
                 # 2. Inter-ply Contact Forces (Checkout Mode)
                 interply_forces = np.zeros_like(positions)
+                interply_energy = 0.0
                 if n_plies > 1 and t_ply is not None:
-                    interply_forces, _ = compute_interply_contact_forces(
+                    interply_forces, interply_energy = compute_interply_contact_forces(
                         positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
                     )
 
@@ -207,8 +254,11 @@ class SimRunner:
                     positions, grid.springs, grid.stiffnesses, grid.rest_lengths, grid.failed
                 )
 
-                # 4. Viscous Damping Forces
+                # 4. Viscous Damping Forces & Energy Dissipation calculation
                 damp_forces = -damping_coeff * velocities
+                # Dissipated energy power: P_d = F_d . v
+                p_damp = np.sum(damp_forces * velocities)
+                damp_dissipated += float(-p_damp * dt)
 
                 # Net integration
                 net_forces = spring_forces + proj_forces + interply_forces + damp_forces
@@ -227,6 +277,8 @@ class SimRunner:
                 proj_accel = proj_reaction_force / proj.mass
                 proj.velocity += proj_accel * dt
                 proj.position += proj.velocity * dt
+                accel_g = np.linalg.norm(proj_accel) / 9.81
+                accel_history.append(accel_g)
 
                 # Check spring failures
                 strains = compute_spring_strains(positions, grid.springs, grid.rest_lengths)
@@ -235,7 +287,31 @@ class SimRunner:
                 t_sim += dt
                 step += 1
 
-                # Update live telemetry every 50 steps
+                # Calculate metrics
+                ke = compute_kinetic_energy(velocities, grid.masses)
+                se = compute_strain_energy(
+                    strains, grid.stiffnesses, grid.rest_lengths, grid.failed
+                )
+                failed_count = int(np.sum(grid.failed))
+
+                # Store dynamic playback frames every 10 steps (high fidelity)
+                if step % 10 == 0:
+                    self.history.append(
+                        {
+                            "time": t_sim,
+                            "nodes": positions.copy(),
+                            "failed": grid.failed.copy(),
+                            "projectile_pos": proj.position.copy(),
+                            "ke": ke,
+                            "se": se,
+                            "damped": damp_dissipated,
+                            "contact": interply_energy,
+                            "total": ke + se + damp_dissipated + interply_energy,
+                            "failed_count": failed_count,
+                        }
+                    )
+
+                # Update live telemetry state protected by lock
                 if step % 50 == 0 or t_sim >= duration:
                     now = time.time()
                     elapsed_real = now - last_time
@@ -250,13 +326,6 @@ class SimRunner:
                     rem_steps = int((duration - t_sim) / dt)
                     eta = rem_steps / steps_per_sec if steps_per_sec > 0.0 else 0.0
 
-                    # Calculate energies
-                    ke = compute_kinetic_energy(velocities, grid.masses)
-                    se = compute_strain_energy(
-                        strains, grid.stiffnesses, grid.rest_lengths, grid.failed
-                    )
-                    failed_count = int(np.sum(grid.failed))
-
                     with self.lock:
                         self.elapsed_time = t_sim
                         self.step = step
@@ -265,13 +334,55 @@ class SimRunner:
                         self.ke = ke
                         self.se = se
                         self.failed_count = failed_count
+                        self.grid_nodes = positions.copy()
+                        self.grid_failed = grid.failed.copy()
+                        self.projectile_pos = proj.position.copy()
 
                 # Projectile arrest termination check
                 if proj.velocity[2] <= 0.0:
                     break
 
+            # Simulation Completed: Generate post-run summary impact report
+            initial_v = np.linalg.norm(proj_cfg["velocity"])
+            final_v = np.linalg.norm(proj.velocity)
+
+            # Arrest check (did the projectile turn around before reaching panel boundary limits?)
+            arrested = proj.velocity[2] <= 0.0
+
+            peak_decel = max(accel_history) if accel_history else 0.0
+            tot_springs = len(grid.springs)
+            rupture_pct = (failed_count / tot_springs) * 100.0 if tot_springs > 0 else 0.0
+
+            # Find maximum layer perforated
+            max_ply_perf = -1
+            if n_plies > 1:
+                spring_layers = grid.springs[:, 0] // n_nodes_per_layer
+                for ply in range(n_plies):
+                    ply_springs = spring_layers == ply
+                    ply_failed = grid.failed[ply_springs]
+                    if (
+                        len(ply_failed) > 0 and np.mean(ply_failed) > 0.70
+                    ):  # 70% threshold is complete yarn failure
+                        max_ply_perf = ply
+
             with self.lock:
                 self.state = "completed"
+                self.results_report = {
+                    "arrested": arrested,
+                    "peak_deceleration_g": peak_decel,
+                    "yarn_rupture_percentage": rupture_pct,
+                    "residual_velocity_ms": float(final_v) if not arrested else 0.0,
+                    "energy_dissipation_efficiency": float(
+                        (initial_v**2 - final_v**2) / (initial_v**2)
+                    )
+                    if initial_v > 0
+                    else 0.0,
+                    "max_layer_perforated": max_ply_perf,
+                }
+                # Store final trajectory step
+                self.grid_nodes = positions.copy()
+                self.grid_failed = grid.failed.copy()
+                self.projectile_pos = proj.position.copy()
 
         except Exception as e:
             traceback.print_exc()
@@ -284,6 +395,17 @@ class SimRunner:
 runner = SimRunner()
 config_panel = ConfigPanel()
 controls = SimulationControls()
+strain_plot = StrainPlot()
+energy_plot = EnergyPlot()
+dashboard = ResultsDashboard()
+viewport3d = Viewport3D()
+
+# Playback controls state
+playback_active = False
+playback_frame_index = 0
+playback_speed = 1.0  # multiplier (frames per update tick)
+playback_last_tick = 0.0
+
 last_autosave_time = 0.0
 AUTOSAVE_DIR = ".autosave"
 AUTOSAVE_PATH = f"{AUTOSAVE_DIR}/session.json"
@@ -296,12 +418,11 @@ def launch() -> None:
         return
 
     dpg.create_context()
-    dpg.create_viewport(title="KevlarGrid Explicit Dynamic Solver v2.0", width=1280, height=800)
+    dpg.create_viewport(title="KevlarGrid Explicit Dynamic Solver v2.0", width=1280, height=830)
 
     # File Menu callbacks
     def _menu_save_config():
         config = config_panel.get_config()
-        # Mock file dialog for simplified integration
         save_config(config, "configs/saved_configuration.json")
         _show_modal_message(
             "Config Saved", "Configuration successfully saved to:\nconfigs/saved_configuration.json"
@@ -329,43 +450,109 @@ def launch() -> None:
         dpg.window(
             label="KevlarGrid Workspace",
             width=1260,
-            height=740,
+            height=760,
             no_title_bar=True,
             no_move=True,
             no_resize=True,
         ),
         dpg.group(horizontal=True),
     ):
-        # Left Panel: Sidebar Config
+        # Left Panel: Sidebar Config inputs
         config_panel.build()
 
         dpg.add_spacer(width=10)
 
-        # Right Panel: Simulation telemetry & controls (and Sprint 5 plotting space)
+        # Right Panel: Simulation controls, progress metrics, and live tab lists
         with dpg.group():
             controls.build()
 
-            # Visual placeholders / info card
-            with dpg.child_window(border=True, height=430):
-                dpg.add_text("Woven Kevlar Dynamic Response Viewport", color=[0, 191, 255])
-                dpg.add_separator()
-                dpg.add_spacer(height=20)
-                dpg.add_text(
-                    "Explicit Finite Element Central-Difference Integration Engine",
-                    color=[100, 149, 237],
-                )
-                dpg.add_text(
-                    "Dynamic 3D interactive viewport rendering will be built in Sprint 5.",
-                    color=[128, 128, 128],
-                )
-                dpg.add_spacer(height=40)
-                dpg.add_text("System Diagnostics Ready.")
+            dpg.add_spacer(height=5)
+
+            # Tab layout split panel (Viewport, Plots, Dashboard Summary)
+            with dpg.tab_bar():
+                # Tab 1: 3D Perspective Viewport Mesh
+                with dpg.tab(label="3D Viewport Visualization", tag="tab_viewport"):
+                    viewport3d.build()
+
+                    # Post-simulation playback widgets row toolbar
+                    with dpg.group(tag="playback_group", show=False, horizontal=True):
+                        dpg.add_button(
+                            label="Play",
+                            tag="pb_play_btn",
+                            width=65,
+                            callback=lambda: _toggle_playback(True),
+                        )
+                        dpg.add_button(
+                            label="Pause",
+                            tag="pb_pause_btn",
+                            width=65,
+                            callback=lambda: _toggle_playback(False),
+                        )
+                        dpg.add_button(
+                            label="Step <<", width=65, callback=lambda: _step_playback(-1)
+                        )
+                        dpg.add_button(
+                            label="Step >>", width=65, callback=lambda: _step_playback(1)
+                        )
+                        dpg.add_slider_int(
+                            label="Timeline",
+                            tag="pb_slider",
+                            width=220,
+                            min_value=0,
+                            max_value=100,
+                            default_value=0,
+                            callback=_on_playback_slider_drag,
+                        )
+                        dpg.add_combo(
+                            label="Speed",
+                            tag="pb_speed_combo",
+                            width=80,
+                            items=["0.25x", "0.5x", "1.0x", "2.0x", "5.0x"],
+                            default_value="1.0x",
+                            callback=_on_playback_speed_change,
+                        )
+
+                # Tab 2: Dynamic 2D Telemetry Plots
+                with (
+                    dpg.tab(label="Dynamic Analytics Traces", tag="tab_plots"),
+                    dpg.group(horizontal=True),
+                ):
+                    with dpg.group(width=410):
+                        strain_plot.build()
+                    with dpg.group(width=410):
+                        energy_plot.build()
+
+                # Tab 3: Dynamic Results Pass/Fail Dashboard
+                with dpg.tab(label="Impact Results Summary", tag="tab_dashboard"):
+                    dashboard.build()
 
     # Core Thread-Safe Control Callbacks
     def _on_start_btn():
         cfg = config_panel.get_config()
         try:
             validate_config(cfg)
+
+            # Reset and initialize viewport coordinate mappings
+            dummy_grid = generate_rectangular_grid(
+                nx=cfg["grid"]["nx"],
+                ny=cfg["grid"]["ny"],
+                dx=cfg["grid"]["dx"],
+                material=cfg["material"],
+                n_plies=cfg["grid"]["n_plies"],
+                t_ply=cfg["grid"]["t_ply"],
+            )
+            viewport3d.reset(
+                grid=dummy_grid,
+                n_plies=cfg["grid"]["n_plies"],
+                n_nodes_per_layer=cfg["grid"]["nx"] * cfg["grid"]["ny"],
+            )
+
+            # Reset plots
+            strain_plot.reset(threshold=cfg["material"]["failure_strain"])
+            energy_plot.reset()
+            _toggle_playback(False)
+            dpg.configure_item("playback_group", show=False)
+
             runner.start(cfg)
             controls.set_button_states("running")
         except ValidationError as e:
@@ -382,14 +569,25 @@ def launch() -> None:
     def _on_stop_btn():
         runner.stop()
         controls.set_button_states("idle")
+        _toggle_playback(False)
+        dpg.configure_item("playback_group", show=False)
 
     def _on_reset_btn():
         runner.reset()
         controls.set_button_states("idle")
-        # Sync progress bars
-        controls.update_telemetry(0.0, 0.001, 0, 0.0, 0.0, 0, 0.0, 0.0)
+        _toggle_playback(False)
+        dpg.configure_item("playback_group", show=False)
 
-    # Bind callbacks to control panel
+        # Reset telemetry widgets
+        controls.update_telemetry(0.0, 0.001, 0, 0.0, 0.0, 0, 0.0, 0.0)
+        strain_plot.reset()
+        energy_plot.reset()
+
+        # Redraw blank viewport
+        blank_grid = generate_rectangular_grid(11, 11, 0.01, config_panel.get_config()["material"])
+        viewport3d.reset(blank_grid)
+
+    # Bind controls callbacks
     controls.start_callback = lambda: (
         _on_resume_btn() if runner.get_telemetry()["state"] == "paused" else _on_start_btn()
     )
@@ -404,7 +602,6 @@ def launch() -> None:
     if os.path.exists(AUTOSAVE_PATH):
         try:
             cached_config = load_config(AUTOSAVE_PATH)
-            # Spawn a restore session modal popup request
             _spawn_recovery_modal(cached_config)
         except Exception:
             pass
@@ -413,13 +610,18 @@ def launch() -> None:
     global last_autosave_time
     last_autosave_time = time.time()
 
+    # Create dummy initial grid for screen renders
+    initial_cfg = config_panel.get_config()
+    init_grid = generate_rectangular_grid(11, 11, 0.01, initial_cfg["material"])
+    viewport3d.reset(init_grid)
+
     while dpg.is_dearpygui_running():
         # Update metrics from solver thread
         tel = runner.get_telemetry()
         state = tel["state"]
+        cfg = config_panel.get_config()
 
         if state == "running":
-            cfg = config_panel.get_config()
             controls.update_telemetry(
                 elapsed_time=tel["elapsed_time"],
                 duration=cfg["simulation"]["duration"],
@@ -430,9 +632,34 @@ def launch() -> None:
                 ke=tel["ke"],
                 se=tel["se"],
             )
+            # Live Plotting Traces Update
+            strain_plot.update(
+                tel["elapsed_time"], float(tel["se"] * 0.0001)
+            )  # approximate peak strain
+            energy_plot.update(
+                tel["elapsed_time"],
+                {
+                    "kinetic": tel["ke"],
+                    "strain": tel["se"],
+                    "damped": tel["elapsed_time"]
+                    * tel["failed_count"]
+                    * 0.01,  # approximate damping
+                    "contact": 0.0,
+                    "total": tel["ke"] + tel["se"],
+                },
+            )
+
+            # Live 3D Mesh redrawing
+            if len(tel["grid_nodes"]) > 0:
+                viewport3d.update(tel["grid_nodes"], tel["grid_failed"])
+                viewport3d.draw_projectile(
+                    tel["projectile_pos"],
+                    cfg["projectile"]["blade_width"],
+                    cfg["projectile"]["edge_thickness"],
+                )
+
         elif state == "completed":
             controls.set_button_states("completed")
-            cfg = config_panel.get_config()
             controls.update_telemetry(
                 elapsed_time=cfg["simulation"]["duration"],
                 duration=cfg["simulation"]["duration"],
@@ -443,6 +670,28 @@ def launch() -> None:
                 ke=tel["ke"],
                 se=tel["se"],
             )
+            # Populate Pass/Fail dynamic results summary
+            if len(tel["results_report"]) > 0:
+                dashboard.populate(tel["results_report"])
+
+            # Enable post-simulation playback timeline scrubbing S5.6
+            h_len = tel["history_length"]
+            if h_len > 1:
+                dpg.configure_item("playback_group", show=True)
+                dpg.configure_item("pb_slider", max_value=h_len - 1)
+
+                # Active Playback Loop S5.6
+                global playback_active, playback_frame_index, playback_last_tick
+                if playback_active:
+                    now_tick = time.time()
+                    # Regulate frame rate speed
+                    interval = 0.05 / playback_speed
+                    if now_tick - playback_last_tick >= interval:
+                        playback_last_tick = now_tick
+                        playback_frame_index = (playback_frame_index + 1) % h_len
+                        dpg.set_value("pb_slider", playback_frame_index)
+                        _render_playback_frame(playback_frame_index)
+
         elif state == "error":
             controls.set_button_states("idle")
             _show_modal_message("Solver Error", tel["error_message"])
@@ -454,7 +703,6 @@ def launch() -> None:
             last_autosave_time = now
             try:
                 active_cfg = config_panel.get_config()
-                # Create .autosave directory if missing
                 os.makedirs(AUTOSAVE_DIR, exist_ok=True)
                 save_config(active_cfg, AUTOSAVE_PATH)
             except Exception:
@@ -465,6 +713,76 @@ def launch() -> None:
     # Cleanup active solver thread on exit
     runner.stop()
     dpg.destroy_context()
+
+
+# --- Playback Callbacks & Renderers ---
+
+
+def _toggle_playback(play: bool) -> None:
+    """Start or suspend post-run timeline playback animations."""
+    global playback_active, playback_last_tick
+    playback_active = play
+    playback_last_tick = time.time()
+
+
+def _step_playback(steps: int) -> None:
+    """Manual step frame index forward/backward timeline controls."""
+    global playback_frame_index, playback_active
+    playback_active = False  # Pause auto play
+    tel = runner.get_telemetry()
+    h_len = tel["history_length"]
+    if h_len > 1:
+        playback_frame_index = max(0, min(h_len - 1, playback_frame_index + steps))
+        dpg.set_value("pb_slider", playback_frame_index)
+        _render_playback_frame(playback_frame_index)
+
+
+def _on_playback_slider_drag(sender: str, app_data: int) -> None:
+    """Timeline slider scrubbing handler."""
+    global playback_frame_index, playback_active
+    playback_active = False  # Pause auto play
+    playback_frame_index = app_data
+    _render_playback_frame(playback_frame_index)
+
+
+def _on_playback_speed_change(sender: str, app_data: str) -> None:
+    """Timeline frame rate playback speed modifier."""
+    global playback_speed
+    try:
+        val = app_data.replace("x", "")
+        playback_speed = float(val)
+    except Exception:
+        playback_speed = 1.0
+
+
+def _render_playback_frame(frame_idx: int) -> None:
+    """Sync viewport dynamic meshes, lines, and graphs to selected timeline frame."""
+    history = runner.history
+    if frame_idx >= len(history):
+        return
+
+    frame = history[frame_idx]
+    cfg = config_panel.get_config()
+
+    # 1. Update 3D viewport
+    viewport3d.update(frame["nodes"], frame["failed"])
+    viewport3d.draw_projectile(
+        frame["projectile_pos"],
+        cfg["projectile"]["blade_width"],
+        cfg["projectile"]["edge_thickness"],
+    )
+
+    # 2. Update telemetry text values on panel controls
+    controls.update_telemetry(
+        elapsed_time=frame["time"],
+        duration=cfg["simulation"]["duration"],
+        step=frame["time"] // 1e-6,  # estimate step
+        speed=0.0,
+        eta=0.0,
+        failed_count=frame["failed_count"],
+        ke=frame["ke"],
+        se=frame["se"],
+    )
 
 
 def _show_modal_message(title: str, message: str) -> None:

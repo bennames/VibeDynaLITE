@@ -3,11 +3,16 @@ from __future__ import annotations
 import os
 
 import dearpygui.dearpygui as dpg
+import numpy as np
 import pytest
 
 from kevlargrid.gui.config_panel import ConfigPanel
 from kevlargrid.gui.controls import SimulationControls
+from kevlargrid.gui.dashboard import ResultsDashboard
+from kevlargrid.gui.plots import EnergyPlot, StrainPlot
+from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
+from kevlargrid.solver.grid import generate_rectangular_grid
 
 VALID_CONFIG = {
     "material": {
@@ -276,3 +281,110 @@ class TestControlsWidget:
         assert "Step: 1200" in dpg.get_value(ctrls.text_steps)
         assert "Ruptured Springs: 4" in dpg.get_value(ctrls.text_failed)
         assert "KE=120.00" in dpg.get_value(ctrls.text_energy)
+
+
+class TestVisualizationWidgets:
+    """Unit tests for plots, 3D viewport, results dashboard, and playback timeline."""
+
+    @pytest.fixture(autouse=True)
+    def setup_dpg(self) -> None:
+        """Initialize DPG context for visualization widgets."""
+        dpg.create_context()
+        dpg.add_window(tag="test_parent_window")
+        dpg.push_container_stack("test_parent_window")
+        yield
+        dpg.pop_container_stack()
+        dpg.destroy_context()
+
+    def test_strain_and_energy_plots(self) -> None:
+        """Verify real-time plots update dynamic buffers correctly."""
+        p_strain = StrainPlot()
+        p_strain.build()
+        p_strain.reset(threshold=0.04)
+
+        # Confirm reset state
+        assert p_strain.threshold_val == 0.04
+        assert len(p_strain.x_data) == 0
+
+        # Append data slices
+        p_strain.update(0.0001, 0.015)
+        p_strain.update(0.0002, 0.025)
+        assert len(p_strain.x_data) == 2
+        assert p_strain.y_data[1] == pytest.approx(0.025)
+
+        p_energy = EnergyPlot()
+        p_energy.build()
+        p_energy.reset()
+        assert len(p_energy.x_data) == 0
+
+        # Append energy values
+        p_energy.update(
+            0.0001,
+            {"kinetic": 100.0, "strain": 50.0, "damped": 5.0, "contact": 1.0, "total": 156.0},
+        )
+        assert len(p_energy.x_data) == 1
+        assert p_energy.ke_data[0] == pytest.approx(100.0)
+        assert p_energy.total_data[0] == pytest.approx(156.0)
+
+    def test_results_dashboard(self) -> None:
+        """Verify color-coded PASS/FAIL outcome indicators and Deceleration populate."""
+        dash = ResultsDashboard()
+        dash.build()
+
+        # Outcome 1: Arrested (PASS)
+        arrest_report = {
+            "arrested": True,
+            "peak_deceleration_g": 320.0,
+            "yarn_rupture_percentage": 14.5,
+            "residual_velocity_ms": 0.0,
+            "energy_dissipation_efficiency": 1.0,
+            "max_layer_perforated": -1,
+        }
+        dash.populate(arrest_report)
+        assert "ARRESTED - PASS" in dpg.get_item_configuration(dash.status_badge)["label"]
+        assert "320.0 G" in dpg.get_value(dash.val_max_decel)
+        assert "14.50%" in dpg.get_value(dash.val_rupture_pct)
+
+        # Outcome 2: Perforated (FAIL)
+        perf_report = {
+            "arrested": False,
+            "peak_deceleration_g": 120.0,
+            "yarn_rupture_percentage": 95.0,
+            "residual_velocity_ms": 150.0,
+            "energy_dissipation_efficiency": 0.85,
+            "max_layer_perforated": 1,
+        }
+        dash.populate(perf_report)
+        assert "PERFORATED - FAIL" in dpg.get_item_configuration(dash.status_badge)["label"]
+        assert "120.0 G" in dpg.get_value(dash.val_max_decel)
+        assert "95.00%" in dpg.get_value(dash.val_rupture_pct)
+        assert "Layer 1" in dpg.get_value(dash.val_penetration_ply)
+
+    def test_viewport_perspective_projection(self) -> None:
+        """Verify viewport initializes camera values and updates layer states."""
+        view = Viewport3D()
+        view.build()
+
+        # Defaults
+        assert view.yaw == pytest.approx(0.785)
+        assert view.pitch == pytest.approx(0.523)
+        assert view.distance == pytest.approx(0.3)
+
+        # Load grid coordinates
+        grid = generate_rectangular_grid(
+            5, 5, 0.01, VALID_CONFIG["material"], n_plies=2, t_ply=0.002
+        )
+        view.reset(grid, n_plies=2, n_nodes_per_layer=25)
+
+        assert view.n_plies == 2
+        assert len(view.layer_visibility) == 2
+        assert view.layer_visibility[0] is True
+
+        # Test slide updates
+        dpg.set_value(view.slider_yaw, 90.0)
+        view._on_slider_change(view.slider_yaw, 90.0)
+        assert view.yaw == pytest.approx(np.radians(90.0))
+
+        dpg.set_value(view.slider_zoom, 0.5)
+        view._on_slider_change(view.slider_zoom, 0.5)
+        assert view.distance == pytest.approx(0.5)
