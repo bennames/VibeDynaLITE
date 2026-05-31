@@ -11,6 +11,8 @@ from kevlargrid.solver.damping import rayleigh_damping, viscous_damping
 from kevlargrid.solver.energy import (
     compute_energy_balance,
     compute_kinetic_energy,
+    compute_layer_kinetic_energy,
+    compute_layer_strain_energy,
     compute_strain_energy,
 )
 from kevlargrid.solver.failure import check_failures, get_layer_failure_stats
@@ -40,6 +42,8 @@ __all__ = [
     "compute_energy_balance",
     "compute_interply_contact_forces",
     "compute_kinetic_energy",
+    "compute_layer_kinetic_energy",
+    "compute_layer_strain_energy",
     "compute_min_radius",
     "compute_spring_forces",
     "compute_spring_strains",

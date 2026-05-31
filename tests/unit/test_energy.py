@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from kevlargrid.solver.energy import (
     compute_energy_balance,
@@ -48,3 +49,55 @@ class TestEnergy:
         assert eb["strain"] == 50.0
         assert eb["damped"] == 10.0
         assert eb["total"] == 160.0
+
+    def test_layer_energies(self) -> None:
+        """Verify that per-layer energies compute correctly and sum to total energy."""
+        from kevlargrid.solver.energy import (
+            compute_layer_kinetic_energy,
+            compute_layer_strain_energy,
+        )
+
+        n_nodes_per_layer = 4
+        n_plies = 2
+
+        # 1. Kinetic energy per layer
+        velocities = np.array(
+            [
+                [1.0, 2.0, 3.0],  # Ply 0, Node 0: v^2 = 14
+                [0.0, 0.0, 0.0],  # Ply 0, Node 1: v^2 = 0
+                [0.0, 0.0, 0.0],  # Ply 0, Node 2: v^2 = 0
+                [0.0, 0.0, 0.0],  # Ply 0, Node 3: v^2 = 0
+                # Ply 1
+                [2.0, 0.0, 1.0],  # Ply 1, Node 4: v^2 = 5
+                [0.0, 0.0, 0.0],  # Ply 1, Node 5: v^2 = 0
+                [0.0, 0.0, 0.0],  # Ply 1, Node 6: v^2 = 0
+                [0.0, 0.0, 0.0],  # Ply 1, Node 7: v^2 = 0
+            ]
+        )
+        masses = np.array([2.0, 2.0, 2.0, 2.0, 4.0, 4.0, 4.0, 4.0])
+
+        ke_layers = compute_layer_kinetic_energy(velocities, masses, n_nodes_per_layer, n_plies)
+        # Ply 0: 0.5 * 2.0 * 14 = 14.0 J
+        # Ply 1: 0.5 * 4.0 * 5 = 10.0 J
+        assert ke_layers[0] == 14.0
+        assert ke_layers[1] == 10.0
+        assert np.sum(ke_layers) == compute_kinetic_energy(velocities, masses)
+
+        # 2. Strain energy per layer
+        # 2 springs: spring 0 belongs to ply 0, spring 1 to ply 1
+        springs = np.array([[0, 1], [4, 5]], dtype=np.int32)
+        strains = np.array([0.1, 0.2])
+        stiffnesses = np.array([100.0, 50.0])
+        rest_lengths = np.array([1.0, 2.0])
+        failed = np.array([False, False])
+
+        se_layers = compute_layer_strain_energy(
+            strains, stiffnesses, rest_lengths, springs, n_nodes_per_layer, n_plies, failed
+        )
+        # Ply 0: 0.5 * 100 * (0.1 * 1.0)^2 = 0.5 J
+        # Ply 1: 0.5 * 50 * (0.2 * 2.0)^2 = 4.0 J
+        assert se_layers[0] == pytest.approx(0.5)
+        assert se_layers[1] == pytest.approx(4.0)
+        assert np.sum(se_layers) == pytest.approx(compute_strain_energy(
+            strains, stiffnesses, rest_lengths, failed
+        ))
