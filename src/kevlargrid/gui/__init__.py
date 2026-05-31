@@ -5,3 +5,7 @@ visualising KevlarGrid simulations.
 """
 
 from __future__ import annotations
+
+from kevlargrid.gui.app import launch
+
+__all__ = ["launch"]
