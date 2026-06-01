@@ -61,7 +61,7 @@ def compute_strain_energy(
         Total strain energy (Joules).
     """
     # SE = 0.5 * k * dx^2 = 0.5 * k * (strain * L0)^2
-    se_springs = 0.5 * stiffnesses * (strains * rest_lengths) ** 2
+    se_springs = 0.5 * stiffnesses * (np.maximum(0.0, strains) * rest_lengths) ** 2
     if failed is not None:
         se_springs = np.where(failed, 0.0, se_springs)
     return float(np.sum(se_springs))
@@ -171,7 +171,7 @@ def compute_layer_strain_energy(
         Strain energy per layer, shape ``(n_plies,)``.
     """
     se_layers = np.zeros(n_plies, dtype=np.float64)
-    se_springs = 0.5 * stiffnesses * (strains * rest_lengths) ** 2
+    se_springs = 0.5 * stiffnesses * (np.maximum(0.0, strains) * rest_lengths) ** 2
     if failed is not None:
         se_springs = np.where(failed, 0.0, se_springs)
 

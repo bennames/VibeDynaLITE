@@ -61,6 +61,9 @@ class SimRunner:
         self.eta = 0.0
         self.ke = 0.0
         self.se = 0.0
+        self.damp_dissipated = 0.0
+        self.peak_strain = 0.0
+        self.proj_ke = 0.0
         self.failed_count = 0
         self.error_message = ""
 
@@ -114,6 +117,9 @@ class SimRunner:
             self.eta = 0.0
             self.ke = 0.0
             self.se = 0.0
+            self.damp_dissipated = 0.0
+            self.peak_strain = 0.0
+            self.proj_ke = 0.0
             self.failed_count = 0
             self.error_message = ""
             self.history.clear()
@@ -133,6 +139,9 @@ class SimRunner:
                 "eta": self.eta,
                 "ke": self.ke,
                 "se": self.se,
+                "damp_dissipated": self.damp_dissipated,
+                "peak_strain": self.peak_strain,
+                "proj_ke": self.proj_ke,
                 "failed_count": self.failed_count,
                 "error_message": self.error_message,
                 "history_length": len(self.history),
@@ -160,11 +169,13 @@ class SimRunner:
                 nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
             )
 
-            # Build boundary mask
+            # Build boundary mask S6.5.1
             boundary_mask = np.zeros(grid.n_nodes, dtype=bool)
             n_nodes_per_layer = nx * ny
+            # Only loop over physical layers in the grid to prevent IndexError in Mode A
+            n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
             if grid_cfg["boundary_type"] == "fixed":
-                for ply in range(n_plies):
+                for ply in range(n_layers):
                     offset = ply * n_nodes_per_layer
                     for i in range(nx):
                         for j in range(ny):
@@ -202,6 +213,8 @@ class SimRunner:
 
             # Store baseline snapshot at t=0
             initial_ke = compute_kinetic_energy(velocities, grid.masses)
+            # Projectile initial kinetic energy S6.5.5
+            initial_proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
             initial_se = 0.0
             initial_damp = 0.0
             self.history.append(
@@ -214,8 +227,10 @@ class SimRunner:
                     "se": initial_se,
                     "damped": initial_damp,
                     "contact": 0.0,
-                    "total": initial_ke,
+                    "total": initial_ke + initial_proj_ke,
                     "failed_count": 0,
+                    "peak_strain": 0.0,
+                    "proj_ke": initial_proj_ke,
                 }
             )
 
@@ -272,6 +287,13 @@ class SimRunner:
                     positions, velocities, net_forces, grid.masses, dt
                 )
 
+                # Check for numerical instability (NaN/inf values) S6.5.11
+                if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
+                    raise ValueError(
+                        "Numerical instability detected: coordinates have diverged to NaN.\n"
+                        "Please reduce your CFL safety factor or increase spacing dx."
+                    )
+
                 # Integrate projectile kinematics
                 proj_reaction_force = -np.sum(proj_forces, axis=0)
                 proj_accel = proj_reaction_force / proj.mass
@@ -287,12 +309,14 @@ class SimRunner:
                 t_sim += dt
                 step += 1
 
-                # Calculate metrics
+                # Calculate metrics S6.5.5
                 ke = compute_kinetic_energy(velocities, grid.masses)
                 se = compute_strain_energy(
                     strains, grid.stiffnesses, grid.rest_lengths, grid.failed
                 )
+                proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
                 failed_count = int(np.sum(grid.failed))
+                peak_strain = float(np.max(strains)) if len(strains) > 0 else 0.0
 
                 # Store dynamic playback frames every 10 steps (high fidelity)
                 if step % 10 == 0:
@@ -306,8 +330,10 @@ class SimRunner:
                             "se": se,
                             "damped": damp_dissipated,
                             "contact": interply_energy,
-                            "total": ke + se + damp_dissipated + interply_energy,
+                            "total": ke + se + damp_dissipated + interply_energy + proj_ke,
                             "failed_count": failed_count,
+                            "peak_strain": peak_strain,
+                            "proj_ke": proj_ke,
                         }
                     )
 
@@ -333,6 +359,9 @@ class SimRunner:
                         self.eta = eta
                         self.ke = ke
                         self.se = se
+                        self.damp_dissipated = damp_dissipated
+                        self.peak_strain = peak_strain
+                        self.proj_ke = proj_ke
                         self.failed_count = failed_count
                         self.grid_nodes = positions.copy()
                         self.grid_failed = grid.failed.copy()
@@ -353,9 +382,10 @@ class SimRunner:
             tot_springs = len(grid.springs)
             rupture_pct = (failed_count / tot_springs) * 100.0 if tot_springs > 0 else 0.0
 
-            # Find maximum layer perforated
+            # Find maximum layer perforated S6.5.1
             max_ply_perf = -1
-            if n_plies > 1:
+            is_mode_b = t_ply is not None and n_plies > 1
+            if is_mode_b:
                 spring_layers = grid.springs[:, 0] // n_nodes_per_layer
                 for ply in range(n_plies):
                     ply_springs = spring_layers == ply
@@ -584,8 +614,16 @@ def launch() -> None:
         strain_plot.reset()
         energy_plot.reset()
 
-        # Redraw blank viewport
-        blank_grid = generate_rectangular_grid(11, 11, 0.01, config_panel.get_config()["material"])
+        # Redraw blank viewport S6.5.3
+        reset_cfg = config_panel.get_config()
+        blank_grid = generate_rectangular_grid(
+            nx=reset_cfg["grid"]["nx"],
+            ny=reset_cfg["grid"]["ny"],
+            dx=reset_cfg["grid"]["dx"],
+            material=reset_cfg["material"],
+            n_plies=reset_cfg["grid"]["n_plies"],
+            t_ply=reset_cfg["grid"]["t_ply"],
+        )
         viewport3d.reset(blank_grid)
 
     # Bind controls callbacks
@@ -595,6 +633,10 @@ def launch() -> None:
     controls.pause_callback = _on_pause_btn
     controls.stop_callback = _on_stop_btn
     controls.reset_callback = _on_reset_btn
+
+    # Bind sidebar config load/save callbacks S6.5.9
+    config_panel.load_callback = _menu_load_config
+    config_panel.save_callback = _menu_save_config
 
     dpg.setup_dearpygui()
     dpg.show_viewport()
@@ -611,16 +653,51 @@ def launch() -> None:
     global last_autosave_time
     last_autosave_time = time.time()
 
-    # Create dummy initial grid for screen renders
+    # Create dynamic initial grid for screen renders S6.5.3
     initial_cfg = config_panel.get_config()
-    init_grid = generate_rectangular_grid(11, 11, 0.01, initial_cfg["material"])
+    init_grid = generate_rectangular_grid(
+        nx=initial_cfg["grid"]["nx"],
+        ny=initial_cfg["grid"]["ny"],
+        dx=initial_cfg["grid"]["dx"],
+        material=initial_cfg["material"],
+        n_plies=initial_cfg["grid"]["n_plies"],
+        t_ply=initial_cfg["grid"]["t_ply"],
+    )
     viewport3d.reset(init_grid)
+
+    last_grid_key = None
 
     while dpg.is_dearpygui_running():
         # Update metrics from solver thread
         tel = runner.get_telemetry()
         state = tel["state"]
         cfg = config_panel.get_config()
+
+        # Check for grid parameter updates in real time (idle state) S6.5.3
+        if state == "idle":
+            current_grid_key = (
+                cfg["grid"]["nx"],
+                cfg["grid"]["ny"],
+                cfg["grid"]["dx"],
+                cfg["grid"]["n_plies"],
+                cfg["grid"]["t_ply"],
+                cfg["grid"]["boundary_type"],
+                cfg["material"].get("material_name", ""),
+            )
+            if current_grid_key != last_grid_key:
+                last_grid_key = current_grid_key
+                try:
+                    preview_grid = generate_rectangular_grid(
+                        nx=cfg["grid"]["nx"],
+                        ny=cfg["grid"]["ny"],
+                        dx=cfg["grid"]["dx"],
+                        material=cfg["material"],
+                        n_plies=cfg["grid"]["n_plies"],
+                        t_ply=cfg["grid"]["t_ply"],
+                    )
+                    viewport3d.reset(preview_grid)
+                except Exception:
+                    pass
 
         if state == "running":
             controls.update_telemetry(
@@ -633,20 +710,17 @@ def launch() -> None:
                 ke=tel["ke"],
                 se=tel["se"],
             )
-            # Live Plotting Traces Update
-            strain_plot.update(
-                tel["elapsed_time"], float(tel["se"] * 0.0001)
-            )  # approximate peak strain
+            # Live Plotting Traces Update S6.5.5
+            strain_plot.update(tel["elapsed_time"], tel["peak_strain"])
             energy_plot.update(
                 tel["elapsed_time"],
                 {
                     "kinetic": tel["ke"],
+                    "proj_ke": tel["proj_ke"],
                     "strain": tel["se"],
-                    "damped": tel["elapsed_time"]
-                    * tel["failed_count"]
-                    * 0.01,  # approximate damping
+                    "damped": tel["damp_dissipated"],
                     "contact": 0.0,
-                    "total": tel["ke"] + tel["se"],
+                    "total": tel["ke"] + tel["se"] + tel["damp_dissipated"] + tel["proj_ke"],
                 },
             )
 
@@ -784,6 +858,11 @@ def _render_playback_frame(frame_idx: int) -> None:
         ke=frame["ke"],
         se=frame["se"],
     )
+
+    # 3. Update plot timeline markers S6.5.4
+    strain_plot.set_playback_marker(frame["time"], frame.get("peak_strain", 0.0))
+    max_energy = max(frame["total"], 9000.0)
+    energy_plot.set_playback_marker(frame["time"], max_energy)
 
 
 def _show_modal_message(title: str, message: str) -> None:

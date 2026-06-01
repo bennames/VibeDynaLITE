@@ -6,6 +6,8 @@ simulation settings with dynamic widgets visibility and live calculations.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
 from typing import Any
 
 try:
@@ -33,6 +35,10 @@ class ConfigPanel:
         self.mat_areal_density = "mat_areal_density"
         self.mat_shear_ratio = "mat_shear_ratio"
         self.mat_crimp = "mat_crimp"
+
+        # Configuration file callbacks S6.5.9
+        self.load_callback: Callable[[], None] | None = None
+        self.save_callback: Callable[[], None] | None = None
         self.mat_yarn_count_x = "mat_yarn_count_x"
         self.mat_yarn_count_y = "mat_yarn_count_y"
 
@@ -115,21 +121,18 @@ class ConfigPanel:
                 dpg.add_input_float(
                     label="Crimp Factor", tag=self.mat_crimp, default_value=0.10, enabled=False
                 )
-                with dpg.group(horizontal=True):
-                    dpg.add_input_int(
-                        label="Yarn X",
-                        width=70,
-                        tag=self.mat_yarn_count_x,
-                        default_value=17,
-                        enabled=False,
-                    )
-                    dpg.add_input_int(
-                        label="Yarn Y (counts/in)",
-                        width=150,
-                        tag=self.mat_yarn_count_y,
-                        default_value=17,
-                        enabled=False,
-                    )
+                dpg.add_input_int(
+                    label="Yarn X (Warp Count/in)",
+                    tag=self.mat_yarn_count_x,
+                    default_value=17,
+                    enabled=False,
+                )
+                dpg.add_input_int(
+                    label="Yarn Y (Weft Count/in)",
+                    tag=self.mat_yarn_count_y,
+                    default_value=17,
+                    enabled=False,
+                )
 
             # --- GRID GEOMETRY SECTION ---
             with dpg.collapsing_header(label="Grid Geometry & Boundaries", default_open=True):
@@ -186,6 +189,12 @@ class ConfigPanel:
                         tag=self.grid_rmin_display,
                         default_value=0.0,
                         enabled=False,
+                    )
+                    dpg.add_button(
+                        label="Apply Infinite Boundary Dimensions",
+                        callback=self._apply_infinite_boundary_dims,
+                        tag="btn_apply_infinite_dims",
+                        width=250,
                     )
 
             # --- PROJECTILE GEOMETRY SECTION ---
@@ -273,6 +282,23 @@ class ConfigPanel:
                     tag=self.sim_file_size_display,
                     default_value="0.0 KB",
                     enabled=False,
+                )
+                dpg.add_spacer(height=5)
+
+            # --- CONFIGURATION PROFILES SECTION S6.5.9 ---
+            with (
+                dpg.collapsing_header(label="Configuration Profiles", default_open=True),
+                dpg.group(horizontal=True),
+            ):
+                dpg.add_button(
+                    label="Load Config",
+                    callback=self._menu_load_config_cb,
+                    width=110,
+                )
+                dpg.add_button(
+                    label="Save Config",
+                    callback=self._menu_save_config_cb,
+                    width=110,
                 )
 
             # --- Add Tooltips ---
@@ -384,6 +410,14 @@ class ConfigPanel:
             dpg.add_text("Young's modulus of fiber material (GPa)")
         with dpg.tooltip(self.mat_strain):
             dpg.add_text("Axial strain value at which spring rupture irreversibly occurs")
+        with dpg.tooltip(self.mat_yarn_count_x):
+            dpg.add_text(
+                "Warp Yarn Count: Number of longitudinal yarns per inch of Kevlar fabric construction."
+            )
+        with dpg.tooltip(self.mat_yarn_count_y):
+            dpg.add_text(
+                "Weft Yarn Count: Number of transverse yarns per inch of Kevlar fabric construction."
+            )
 
         # Grid Section
         with dpg.tooltip(self.grid_nx):
@@ -412,6 +446,10 @@ class ConfigPanel:
             dpg.add_text("CFL stability safety factor multiplier (must be <= 1.0)")
         with dpg.tooltip(self.sim_damping):
             dpg.add_text("Viscous velocity-damping coefficient per node (N.s/m)")
+        with dpg.tooltip(self.grid_dx):
+            dpg.add_text(
+                "Spacing dx: Grid physical nodal mesh resolution.\nWarning: For stable contact mechanics, dx should be <= projectile edge thickness."
+            )
         with dpg.tooltip(self.sim_snapshot_interval):
             dpg.add_text("How often solver data frames are logged (e.g. log every 100 timesteps)")
 
@@ -462,9 +500,14 @@ class ConfigPanel:
             m_scale = 1.0 if is_mode_b_flag else float(n_plies)
             m_cell = m_scale * areal_density * dx * dx
 
-            # critical timestep
-            if m_cell > 0.0 and k_ortho > 0.0:
-                dt_crit = (m_cell / k_ortho) ** 0.5
+            # critical timestep S6.5.7
+            # Match actual solver which uses m_min = 0.25 * m_cell (corner node)
+            # and k_max = max(k_ortho, k_penalty) where k_penalty = 10 * k_ortho
+            m_min = 0.25 * m_cell if m_cell > 0.0 else 0.0
+            k_penalty = 10.0 * k_ortho
+            k_max = max(k_ortho, k_penalty)
+            if m_min > 0.0 and k_max > 0.0:
+                dt_crit = (m_min / k_max) ** 0.5
             else:
                 dt_crit = 1e-6
 
@@ -638,3 +681,29 @@ class ConfigPanel:
         # Re-sync boundary sizing calculation & file size estimate
         self._on_boundary_change(None, None)
         self._update_file_size_estimate()
+
+    def _apply_infinite_boundary_dims(self, sender: str, app_data: Any) -> None:
+        """Calculate and set the exact Nx and Ny required to satisfy R_min S6.5.8."""
+        if dpg is None:
+            return
+        dx = float(dpg.get_value(self.grid_dx))
+        r_min = float(dpg.get_value(self.grid_rmin_display))
+        if dx > 0.0 and r_min > 0.0:
+            nx = math.ceil(2 * r_min / dx + 1)
+            if nx % 2 == 0:
+                nx += 1
+            # Clamp to a safe max to avoid system freezing before sprint 7 parallelization
+            nx = max(11, min(101, nx))
+            dpg.set_value(self.grid_nx, nx)
+            dpg.set_value(self.grid_ny, nx)
+            self._update_file_size_estimate()
+
+    def _menu_load_config_cb(self, sender: str, app_data: Any) -> None:
+        """Forward sidebar Load trigger S6.5.9."""
+        if hasattr(self, "load_callback") and self.load_callback is not None:
+            self.load_callback()
+
+    def _menu_save_config_cb(self, sender: str, app_data: Any) -> None:
+        """Forward sidebar Save trigger S6.5.9."""
+        if hasattr(self, "save_callback") and self.save_callback is not None:
+            self.save_callback()
