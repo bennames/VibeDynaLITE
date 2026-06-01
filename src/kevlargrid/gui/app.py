@@ -27,16 +27,13 @@ from kevlargrid.gui.plots import EnergyPlot, StrainPlot
 from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
 from kevlargrid.solver import (
-    check_failures,
     compute_cfl_timestep,
     compute_interply_contact_forces,
     compute_kinetic_energy,
-    compute_spring_forces,
-    compute_spring_strains,
     compute_strain_energy,
     generate_rectangular_grid,
-    leapfrog_step,
 )
+from kevlargrid.solver.fused import fused_leapfrog_loop
 from kevlargrid.solver.projectile import (
     Projectile,
     distribute_contact_forces,
@@ -238,7 +235,10 @@ class SimRunner:
             accel_history = []
             damp_dissipated = 0.0
 
-            # Dynamic loop
+            # Fused chunking loop S7
+            n_chunk = 100
+            save_interval = 10
+
             while t_sim < duration:
                 # Check stop signal
                 if self.stop_event.is_set():
@@ -250,42 +250,57 @@ class SimRunner:
                     last_time = time.time()  # reset speed calc
                     continue
 
-                # 1. Projectile Contact Forces (on layer 0)
-                update_contact_zone(proj, grid, proximity_threshold=dx * 2.0, positions=positions)
-                proj_forces = distribute_contact_forces(
-                    proj, grid, positions=positions, k_contact=k_penalty
+                # How many steps to run in this chunk?
+                steps_remaining = int(np.ceil((duration - t_sim) / dt))
+                current_steps = min(n_chunk, steps_remaining)
+
+                if current_steps <= 0:
+                    break
+
+                # JIT-Fused loop dispatching!
+                (
+                    positions,
+                    velocities,
+                    grid.failed,
+                    proj.position,
+                    proj.velocity,
+                    damp_dissipated,
+                    t_sim,
+                    hist_pos,
+                    hist_failed,
+                    hist_proj_pos,
+                    hist_time,
+                    hist_ke,
+                    hist_se,
+                    hist_proj_ke,
+                ) = fused_leapfrog_loop(
+                    positions,
+                    velocities,
+                    grid.springs,
+                    grid.stiffnesses,
+                    grid.rest_lengths,
+                    grid.failed,
+                    grid.masses,
+                    boundary_mask,
+                    proj.position,
+                    proj.velocity,
+                    proj.mass,
+                    proj.blade_width,
+                    proj.edge_thickness,
+                    n_plies,
+                    n_nodes_per_layer,
+                    t_ply if t_ply is not None else 0.002,
+                    k_penalty,
+                    damping_coeff,
+                    mat["failure_strain"],
+                    dt,
+                    current_steps,
+                    save_interval,
+                    damp_dissipated,
+                    t_sim,
                 )
 
-                # 2. Inter-ply Contact Forces (Checkout Mode)
-                interply_forces = np.zeros_like(positions)
-                interply_energy = 0.0
-                if n_plies > 1 and t_ply is not None:
-                    interply_forces, interply_energy = compute_interply_contact_forces(
-                        positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
-                    )
-
-                # 3. Internal Spring Forces
-                spring_forces = compute_spring_forces(
-                    positions, grid.springs, grid.stiffnesses, grid.rest_lengths, grid.failed
-                )
-
-                # 4. Viscous Damping Forces & Energy Dissipation calculation
-                damp_forces = -damping_coeff * velocities
-                # Dissipated energy power: P_d = F_d . v
-                p_damp = np.sum(damp_forces * velocities)
-                damp_dissipated += float(-p_damp * dt)
-
-                # Net integration
-                net_forces = spring_forces + proj_forces + interply_forces + damp_forces
-
-                # Clamped boundary constraints
-                net_forces[boundary_mask] = 0.0
-                velocities[boundary_mask] = 0.0
-
-                # Integrate node dynamics
-                positions, velocities = leapfrog_step(
-                    positions, velocities, net_forces, grid.masses, dt
-                )
+                step += current_steps
 
                 # Check for numerical instability (NaN/inf values) S6.5.11
                 if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
@@ -294,23 +309,11 @@ class SimRunner:
                         "Please reduce your CFL safety factor or increase spacing dx."
                     )
 
-                # Integrate projectile kinematics
-                proj_reaction_force = -np.sum(proj_forces, axis=0)
-                proj_accel = proj_reaction_force / proj.mass
-                proj.velocity += proj_accel * dt
-                proj.position += proj.velocity * dt
-                accel_g = np.linalg.norm(proj_accel) / 9.81
-                accel_history.append(accel_g)
-
-                # Check spring failures
-                strains = compute_spring_strains(positions, grid.springs, grid.rest_lengths)
-                check_failures(strains, grid.failed, mat["failure_strain"])
-
-                t_sim += dt
-                step += 1
-
-                # Calculate metrics S6.5.5
+                # Store live metrics at chunk end
                 ke = compute_kinetic_energy(velocities, grid.masses)
+                diff = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
+                lengths = np.sqrt(np.sum(diff**2, axis=1))
+                strains = (lengths - grid.rest_lengths) / grid.rest_lengths
                 se = compute_strain_energy(
                     strains, grid.stiffnesses, grid.rest_lengths, grid.failed
                 )
@@ -318,54 +321,77 @@ class SimRunner:
                 failed_count = int(np.sum(grid.failed))
                 peak_strain = float(np.max(strains)) if len(strains) > 0 else 0.0
 
-                # Store dynamic playback frames every 10 steps (high fidelity)
-                if step % 10 == 0:
+                # Compute deceleration from contact force at the end of chunk
+                update_contact_zone(proj, grid, proximity_threshold=dx * 2.0, positions=positions)
+                proj_forces = distribute_contact_forces(
+                    proj, grid, positions=positions, k_contact=k_penalty
+                )
+                proj_reaction_force = -np.sum(proj_forces, axis=0)
+                proj_accel = proj_reaction_force / proj.mass
+                accel_g = np.linalg.norm(proj_accel) / 9.81
+                accel_history.append(accel_g)
+
+                # Compute interply energy for mode B contact
+                interply_energy = 0.0
+                if n_plies > 1 and t_ply is not None:
+                    _, interply_energy = compute_interply_contact_forces(
+                        positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
+                    )
+
+                # Append JIT pre-allocated frames into our history list!
+                m_actual = current_steps // save_interval
+                for frame_idx in range(m_actual):
+                    p_pos = hist_proj_pos[frame_idx]
+                    f_ke = hist_ke[frame_idx]
+                    f_se = hist_se[frame_idx]
+                    f_p_ke = hist_proj_ke[frame_idx]
+                    f_failed_c = int(np.sum(hist_failed[frame_idx]))
+
                     self.history.append(
                         {
-                            "time": t_sim,
-                            "nodes": positions.copy(),
-                            "failed": grid.failed.copy(),
-                            "projectile_pos": proj.position.copy(),
-                            "ke": ke,
-                            "se": se,
+                            "time": hist_time[frame_idx],
+                            "nodes": hist_pos[frame_idx].copy(),
+                            "failed": hist_failed[frame_idx].copy(),
+                            "projectile_pos": p_pos.copy(),
+                            "ke": f_ke,
+                            "se": f_se,
                             "damped": damp_dissipated,
                             "contact": interply_energy,
-                            "total": ke + se + damp_dissipated + interply_energy + proj_ke,
-                            "failed_count": failed_count,
-                            "peak_strain": peak_strain,
-                            "proj_ke": proj_ke,
+                            "total": f_ke + f_se + damp_dissipated + interply_energy + f_p_ke,
+                            "failed_count": f_failed_c,
+                            "peak_strain": 0.0,
+                            "proj_ke": f_p_ke,
                         }
                     )
 
                 # Update live telemetry state protected by lock
-                if step % 50 == 0 or t_sim >= duration:
-                    now = time.time()
-                    elapsed_real = now - last_time
-                    if elapsed_real >= 0.1:
-                        steps_per_sec = (step - last_step) / elapsed_real
-                        last_time = now
-                        last_step = step
-                    else:
-                        steps_per_sec = self.speed
+                now = time.time()
+                elapsed_real = now - last_time
+                if elapsed_real >= 0.05:
+                    steps_per_sec = (step - last_step) / elapsed_real
+                    last_time = now
+                    last_step = step
+                else:
+                    steps_per_sec = self.speed
 
-                    # Estimate ETA
-                    rem_steps = int((duration - t_sim) / dt)
-                    eta = rem_steps / steps_per_sec if steps_per_sec > 0.0 else 0.0
+                # Estimate ETA
+                rem_steps = int((duration - t_sim) / dt)
+                eta = rem_steps / steps_per_sec if steps_per_sec > 0.0 else 0.0
 
-                    with self.lock:
-                        self.elapsed_time = t_sim
-                        self.step = step
-                        self.speed = steps_per_sec
-                        self.eta = eta
-                        self.ke = ke
-                        self.se = se
-                        self.damp_dissipated = damp_dissipated
-                        self.peak_strain = peak_strain
-                        self.proj_ke = proj_ke
-                        self.failed_count = failed_count
-                        self.grid_nodes = positions.copy()
-                        self.grid_failed = grid.failed.copy()
-                        self.projectile_pos = proj.position.copy()
+                with self.lock:
+                    self.elapsed_time = t_sim
+                    self.step = step
+                    self.speed = steps_per_sec
+                    self.eta = eta
+                    self.ke = ke
+                    self.se = se
+                    self.damp_dissipated = damp_dissipated
+                    self.peak_strain = peak_strain
+                    self.proj_ke = proj_ke
+                    self.failed_count = failed_count
+                    self.grid_nodes = positions.copy()
+                    self.grid_failed = grid.failed.copy()
+                    self.projectile_pos = proj.position.copy()
 
                 # Projectile arrest termination check
                 if proj.velocity[2] <= 0.0:

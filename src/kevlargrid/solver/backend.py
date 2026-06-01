@@ -51,49 +51,24 @@ def get_backend_name() -> str:
     return BACKEND
 
 
-def zeros(shape: int | tuple[int, ...], dtype: Any = np.float64) -> Any:
-    """Create array of zeros.
-
-    Args:
-        shape: Array shape.
-        dtype: Data type.
+def get_active_device() -> str:
+    """Get description of the current active hardware device.
 
     Returns:
-        array: Backend array.
+        str: Active hardware device info.
     """
+    import platform
+
     if BACKEND == "jax" and HAS_JAX:
-        return jnp.zeros(shape, dtype=dtype)
-    return np.zeros(shape, dtype=dtype)
-
-
-def ones(shape: int | tuple[int, ...], dtype: Any = np.float64) -> Any:
-    """Create array of ones.
-
-    Args:
-        shape: Array shape.
-        dtype: Data type.
-
-    Returns:
-        array: Backend array.
-    """
-    if BACKEND == "jax" and HAS_JAX:
-        return jnp.ones(shape, dtype=dtype)
-    return np.ones(shape, dtype=dtype)
-
-
-def array(data: Any, dtype: Any = None) -> Any:
-    """Create backend array from data.
-
-    Args:
-        data: Input data.
-        dtype: Data type.
-
-    Returns:
-        array: Backend array.
-    """
-    if BACKEND == "jax" and HAS_JAX:
-        return jnp.array(data, dtype=dtype)
-    return np.array(data, dtype=dtype)
+        try:
+            device = jax.devices()[0]
+            return f"JAX GPU/Metal ({device.device_kind})"
+        except Exception:
+            return f"JAX CPU ({platform.machine()})"
+    elif BACKEND == "numba" and HAS_NUMBA:
+        return f"CPU ({platform.machine()}) with Numba JIT"
+    else:
+        return f"CPU ({platform.machine()}) with NumPy fallback"
 
 
 def jit(fn: Callable[..., Any], **kwargs: Any) -> Callable[..., Any]:
@@ -156,46 +131,128 @@ def vmap(
     return vectorized_fn
 
 
-def sqrt(x: Any) -> Any:
-    """Element-wise square root.
+# Define JIT-compiled subroutines under Numba so they resolve at typing time.
+if HAS_NUMBA:
 
-    Args:
-        x: Input array.
+    @numba.njit(cache=True)
+    def numba_scatter_add(
+        target: np.ndarray, indices: np.ndarray, values: np.ndarray
+    ) -> np.ndarray:
+        for i in range(len(indices)):
+            target[indices[i]] += values[i]
+        return target
 
-    Returns:
-        array: Square root of x.
-    """
+    @numba.njit(cache=True)
+    def numba_stack_z(f_mag: np.ndarray) -> np.ndarray:
+        res = np.zeros((len(f_mag), 3), dtype=f_mag.dtype)
+        res[:, 2] = f_mag
+        return res
+else:
+    numba_scatter_add = None
+    numba_stack_z = None
+
+
+# Define functional wrappers for NumPy/JAX fallbacks
+def py_zeros(shape: int | tuple[int, ...], dtype: Any = np.float64) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.zeros(shape, dtype=dtype)
+    return np.zeros(shape, dtype=dtype)
+
+
+def py_ones(shape: int | tuple[int, ...], dtype: Any = np.float64) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.ones(shape, dtype=dtype)
+    return np.ones(shape, dtype=dtype)
+
+
+def py_array(data: Any, dtype: Any = None) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.array(data, dtype=dtype)
+    return np.array(data, dtype=dtype)
+
+
+def py_sqrt(x: Any) -> Any:
     if BACKEND == "jax" and HAS_JAX:
         return jnp.sqrt(x)
     return np.sqrt(x)
 
 
-def maximum(x: Any, y: Any) -> Any:
-    """Element-wise maximum of array elements.
-
-    Args:
-        x: First input.
-        y: Second input.
-
-    Returns:
-        array: Maximum of x and y.
-    """
+def py_maximum(x: Any, y: Any) -> Any:
     if BACKEND == "jax" and HAS_JAX:
         return jnp.maximum(x, y)
     return np.maximum(x, y)
 
 
-def where(condition: Any, x: Any, y: Any) -> Any:
-    """Return elements chosen from x or y depending on condition.
-
-    Args:
-        condition: Boolean condition array.
-        x: Values if True.
-        y: Values if False.
-
-    Returns:
-        array: Chosen elements.
-    """
+def py_where(condition: Any, x: Any, y: Any) -> Any:
     if BACKEND == "jax" and HAS_JAX:
         return jnp.where(condition, x, y)
     return np.where(condition, x, y)
+
+
+def py_sum(x: Any, axis: Any = None, keepdims: bool = False) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.sum(x, axis=axis, keepdims=keepdims)
+    return np.sum(x, axis=axis, keepdims=keepdims)
+
+
+def py_min(x: Any, axis: Any = None) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.min(x, axis=axis)
+    return np.min(x, axis=axis)
+
+
+def py_max(x: Any, axis: Any = None) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.max(x, axis=axis)
+    return np.max(x, axis=axis)
+
+
+def py_abs(x: Any) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.abs(x)
+    return np.abs(x)
+
+
+def py_scatter_add(target: Any, indices: Any, values: Any) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return target.at[indices].add(values)
+    np.add.at(target, indices, values)
+    return target
+
+
+def py_stack_z(f_mag: Any) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.zeros((len(f_mag), 3), dtype=f_mag.dtype).at[:, 2].set(f_mag)
+    res = np.zeros((len(f_mag), 3), dtype=f_mag.dtype)
+    res[:, 2] = f_mag
+    return res
+
+
+# Assign active variables
+if BACKEND == "numba" and HAS_NUMBA:
+    zeros = np.zeros  # type: ignore[assignment]
+    ones = np.ones  # type: ignore[assignment]
+    array = py_array  # type: ignore[assignment]
+    sqrt = np.sqrt  # type: ignore[assignment]
+    maximum = np.maximum  # type: ignore[assignment]
+    where = np.where  # type: ignore[assignment]
+    sum = np.sum  # type: ignore[assignment]
+    min = np.min  # type: ignore[assignment]
+    max = np.max  # type: ignore[assignment]
+    abs = np.abs  # type: ignore[assignment]
+    scatter_add = numba_scatter_add  # type: ignore[assignment]
+    stack_z = numba_stack_z  # type: ignore[assignment]
+else:
+    zeros = py_zeros  # type: ignore[assignment]
+    ones = py_ones  # type: ignore[assignment]
+    array = py_array  # type: ignore[assignment]
+    sqrt = py_sqrt  # type: ignore[assignment]
+    maximum = py_maximum  # type: ignore[assignment]
+    where = py_where  # type: ignore[assignment]
+    sum = py_sum  # type: ignore[assignment]
+    min = py_min  # type: ignore[assignment]
+    max = py_max  # type: ignore[assignment]
+    abs = py_abs  # type: ignore[assignment]
+    scatter_add = py_scatter_add  # type: ignore[assignment]
+    stack_z = py_stack_z  # type: ignore[assignment]
+

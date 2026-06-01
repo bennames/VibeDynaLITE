@@ -9,6 +9,16 @@ from __future__ import annotations
 import numpy as np
 
 from kevlargrid.solver import backend
+from kevlargrid.solver.backend import (
+    maximum,
+    min,
+    scatter_add,
+    sqrt,
+    stack_z,
+    sum,
+    where,
+    zeros,
+)
 
 
 @backend.jit
@@ -48,10 +58,10 @@ def compute_spring_forces(
     p1 = positions[springs[:, 0]]
     p2 = positions[springs[:, 1]]
     diff = p2 - p1
-    lengths = np.sqrt(np.sum(diff**2, axis=1))
+    lengths = sqrt(sum(diff**2, axis=1))
 
     # Avoid divide-by-zero for overlapping nodes
-    lengths_safe = np.where(lengths == 0.0, 1.0, lengths)
+    lengths_safe = where(lengths == 0.0, 1.0, lengths)
     strains = (lengths - rest_lengths) / rest_lengths
 
     # Spring force magnitude: F = k * strain * L_rest
@@ -59,29 +69,26 @@ def compute_spring_forces(
 
     # Orthogonal springs are tension-only
     if tension_only is not None:
-        f_mag = np.where(tension_only & (strains < 0.0), 0.0, f_mag)
+        f_mag = where(tension_only & (strains < 0.0), 0.0, f_mag)
     else:
         # Fallback: springs close to min rest length are considered orthogonal
-        min_l0 = np.min(rest_lengths)
+        min_l0 = min(rest_lengths)
         is_ortho = rest_lengths < 1.1 * min_l0
-        f_mag = np.where(is_ortho & (strains < 0.0), 0.0, f_mag)
+        f_mag = where(is_ortho & (strains < 0.0), 0.0, f_mag)
 
     # Failed springs carry zero load
-    f_mag = np.where(failed, 0.0, f_mag)
+    f_mag = where(failed, 0.0, f_mag)
 
     # Force vectors directed along spring axes
     force_vecs = (f_mag / lengths_safe)[:, np.newaxis] * diff
 
     # Accumulate forces on nodes
-    forces = np.zeros_like(positions)
-    for idx in range(len(springs)):
-        u = springs[idx, 0]
-        v = springs[idx, 1]
-        f_vec = force_vecs[idx]
-        forces[u] += f_vec
-        forces[v] -= f_vec
+    forces = zeros(positions.shape, dtype=positions.dtype)
+    forces = scatter_add(forces, springs[:, 0], force_vecs)
+    forces = scatter_add(forces, springs[:, 1], -force_vecs)
 
-    return forces
+    return forces  # type: ignore[no-any-return]
+
 
 
 @backend.jit
@@ -112,7 +119,7 @@ def compute_spring_strains(
     p1 = positions[springs[:, 0]]
     p2 = positions[springs[:, 1]]
     diff = p2 - p1
-    lengths = np.sqrt(np.sum(diff**2, axis=1))
+    lengths = sqrt(sum(diff**2, axis=1))
     return (lengths - rest_lengths) / rest_lengths  # type: ignore[no-any-return]
 
 
@@ -149,7 +156,7 @@ def compute_interply_contact_forces(
         - Nodal contact forces array, shape ``(n_nodes, 3)``.
         - Total contact potential energy (Joules).
     """
-    forces = np.zeros_like(positions)
+    forces = zeros(positions.shape, dtype=positions.dtype)
     total_energy = 0.0
 
     if n_plies <= 1:
@@ -166,17 +173,22 @@ def compute_interply_contact_forces(
 
         # Penetration depth: delta = z_n - z_n1 + t_ply
         delta = z_n - z_n1 + t_ply
-        penetration = np.maximum(0.0, delta)
+        penetration = maximum(0.0, delta)
 
         # Force magnitude
         f_mag = k_penalty * penetration
 
         # Accumulate forces: layer n is pushed in -Z, layer n+1 in +Z
-        for i in range(n_nodes_per_layer):
-            forces[start_idx + i, 2] -= f_mag[i]
-            forces[end_idx + i, 2] += f_mag[i]
+        indices_n = np.arange(start_idx, end_idx)
+        indices_n1 = np.arange(end_idx, end_idx + n_nodes_per_layer)
+
+        forces_n = stack_z(-f_mag)
+        forces_n1 = stack_z(f_mag)
+
+        forces = scatter_add(forces, indices_n, forces_n)
+        forces = scatter_add(forces, indices_n1, forces_n1)
 
         # Potential energy: 0.5 * k * x^2
-        total_energy += float(np.sum(0.5 * k_penalty * penetration**2))
+        total_energy += float(sum(0.5 * k_penalty * penetration**2))
 
     return forces, total_energy

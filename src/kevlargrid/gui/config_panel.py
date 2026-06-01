@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
     dpg = None  # type: ignore[assignment]
 
 from kevlargrid.materials.library import MATERIALS, get_material
+from kevlargrid.solver import backend
 from kevlargrid.solver.boundary import compute_min_radius
 
 
@@ -72,6 +73,8 @@ class ConfigPanel:
         self.sim_damping = "sim_damping"
         self.sim_snapshot_interval = "sim_snapshot_interval"
         self.sim_file_size_display = "sim_file_size_display"
+        self.compute_backend = "compute_backend"
+        self.hardware_device = "hardware_device"
 
     def build(self) -> None:
         """Construct the panel's DearPyGui widgets."""
@@ -281,6 +284,20 @@ class ConfigPanel:
                 dpg.add_input_text(
                     tag=self.sim_file_size_display,
                     default_value="0.0 KB",
+                    enabled=False,
+                )
+                dpg.add_spacer(height=5)
+                dpg.add_combo(
+                    label="Compute Backend",
+                    items=["Numba", "JAX", "NumPy"],
+                    default_value=backend.get_backend_name().capitalize(),
+                    tag=self.compute_backend,
+                    callback=self._on_backend_change,
+                )
+                dpg.add_text("Active Hardware Device:")
+                dpg.add_input_text(
+                    tag=self.hardware_device,
+                    default_value=backend.get_active_device(),
                     enabled=False,
                 )
                 dpg.add_spacer(height=5)
@@ -707,3 +724,12 @@ class ConfigPanel:
         """Forward sidebar Save trigger S6.5.9."""
         if hasattr(self, "save_callback") and self.save_callback is not None:
             self.save_callback()
+
+    def _on_backend_change(self, sender: Any, app_data: Any) -> None:
+        """Callback triggered when the compute backend combo selection changes."""
+        backend.BACKEND = str(app_data).lower()
+        import os
+
+        os.environ["KEVLARGRID_BACKEND"] = str(app_data).lower()
+        if dpg is not None:
+            dpg.set_value(self.hardware_device, backend.get_active_device())
