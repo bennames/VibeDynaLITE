@@ -193,6 +193,12 @@ def py_maximum(x: Any, y: Any) -> Any:
     return np.maximum(x, y)
 
 
+def py_minimum(x: Any, y: Any) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.minimum(x, y)
+    return np.minimum(x, y)
+
+
 def py_where(condition: Any, x: Any, y: Any) -> Any:
     if BACKEND == "jax" and HAS_JAX:
         return jnp.where(condition, x, y)
@@ -252,6 +258,7 @@ if BACKEND == "numba" and HAS_NUMBA:
     array = py_array  # type: ignore[assignment]
     sqrt = np.sqrt  # type: ignore[assignment]
     maximum = np.maximum  # type: ignore[assignment]
+    minimum = np.minimum  # type: ignore[assignment]
     where = np.where  # type: ignore[assignment]
     sum = np.sum  # type: ignore[assignment]
     min = np.min  # type: ignore[assignment]
@@ -266,6 +273,7 @@ else:
     array = py_array  # type: ignore[assignment]
     sqrt = py_sqrt  # type: ignore[assignment]
     maximum = py_maximum  # type: ignore[assignment]
+    minimum = py_minimum  # type: ignore[assignment]
     where = py_where  # type: ignore[assignment]
     sum = py_sum  # type: ignore[assignment]
     min = py_min  # type: ignore[assignment]

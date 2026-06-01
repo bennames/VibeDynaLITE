@@ -57,6 +57,7 @@ def run_benchmark(backend_name: str, size: int, n_steps: int = 50) -> float:
     grid_stiffnesses = np.ones(n_springs, dtype=np.float64) * 1e5
     grid_rest_lengths = np.ones(n_springs, dtype=np.float64) * 0.05
     grid_failed = np.zeros(n_springs, dtype=bool)
+    grid_tension_only = np.ones(n_springs, dtype=bool)
     grid_masses = np.ones(n_nodes, dtype=np.float64) * 0.02
     boundary_mask = np.zeros(n_nodes, dtype=bool)
     boundary_mask[[0, size - 1, n_nodes - size, n_nodes - 1]] = True
@@ -84,6 +85,7 @@ def run_benchmark(backend_name: str, size: int, n_steps: int = 50) -> float:
             grid_rest_lengths.copy(),
             grid_failed.copy(),
             grid_masses.copy(),
+            grid_tension_only.copy(),
             boundary_mask.copy(),
             proj_pos.copy(),
             proj_vel.copy(),
@@ -93,6 +95,7 @@ def run_benchmark(backend_name: str, size: int, n_steps: int = 50) -> float:
             n_plies=1,
             n_nodes_per_layer=n_nodes,
             t_ply=0.002,
+            dx=0.05,
             k_penalty=k_penalty,
             damping_coeff=damping_coeff,
             failure_strain=failure_strain,
@@ -115,6 +118,7 @@ def run_benchmark(backend_name: str, size: int, n_steps: int = 50) -> float:
         grid_rest_lengths.copy(),
         grid_failed.copy(),
         grid_masses.copy(),
+        grid_tension_only.copy(),
         boundary_mask.copy(),
         proj_pos.copy(),
         proj_vel.copy(),
@@ -124,6 +128,7 @@ def run_benchmark(backend_name: str, size: int, n_steps: int = 50) -> float:
         n_plies=1,
         n_nodes_per_layer=n_nodes,
         t_ply=0.002,
+        dx=0.05,
         k_penalty=k_penalty,
         damping_coeff=damping_coeff,
         failure_strain=failure_strain,

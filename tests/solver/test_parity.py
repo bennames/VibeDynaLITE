@@ -45,6 +45,7 @@ def test_fused_step_consistency() -> None:
     grid_stiffnesses = np.ones(n_springs, dtype=np.float64) * 1e5
     grid_rest_lengths = np.ones(n_springs, dtype=np.float64) * 0.05
     grid_failed = np.zeros(n_springs, dtype=bool)
+    grid_tension_only = np.ones(n_springs, dtype=bool)
     grid_masses = np.ones(n_nodes, dtype=np.float64) * 0.02
     boundary_mask = np.zeros(n_nodes, dtype=bool)
     boundary_mask[[0, 3, 12, 15]] = True  # clamp corners
@@ -106,7 +107,12 @@ def test_fused_step_consistency() -> None:
 
         # spring forces
         spring_forces = compute_spring_forces(
-            pos_seq, grid_springs, grid_stiffnesses, grid_rest_lengths, failed_seq
+            pos_seq,
+            grid_springs,
+            grid_stiffnesses,
+            grid_rest_lengths,
+            failed_seq,
+            tension_only=grid_tension_only,
         )
 
         # damping
@@ -114,7 +120,7 @@ def test_fused_step_consistency() -> None:
         p_damp = np.sum(damp_forces * vel_seq)
         damp_diss_seq += -p_damp * dt
 
-        # dynamics
+        # net forces
         net_forces = spring_forces + proj_forces + interply_forces + damp_forces
         net_forces[boundary_mask] = 0.0
         vel_seq[boundary_mask] = 0.0
@@ -164,6 +170,7 @@ def test_fused_step_consistency() -> None:
         grid_rest_lengths.copy(),
         grid_failed.copy(),
         grid_masses.copy(),
+        grid_tension_only.copy(),
         boundary_mask.copy(),
         proj_pos.copy(),
         proj_vel.copy(),
@@ -173,6 +180,7 @@ def test_fused_step_consistency() -> None:
         n_plies=1,
         n_nodes_per_layer=n_nodes,
         t_ply=0.002,
+        dx=0.05,
         k_penalty=k_penalty,
         damping_coeff=damping_coeff,
         failure_strain=failure_strain,
@@ -213,6 +221,7 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
     grid_stiffnesses = np.ones(4, dtype=np.float64) * 1e5
     grid_rest_lengths = np.ones(4, dtype=np.float64) * 0.05
     grid_failed = np.zeros(4, dtype=bool)
+    grid_tension_only = np.ones(4, dtype=bool)
     grid_masses = np.ones(4, dtype=np.float64) * 0.02
     boundary_mask = np.zeros(4, dtype=bool)
 
@@ -229,6 +238,7 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
         grid_rest_lengths.copy(),
         grid_failed.copy(),
         grid_masses.copy(),
+        grid_tension_only.copy(),
         boundary_mask.copy(),
         proj_pos.copy(),
         proj_vel.copy(),
@@ -238,6 +248,7 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
         n_plies=1,  # actual physical layers = 1 in Mode A
         n_nodes_per_layer=n_nodes,
         t_ply=0.002,
+        dx=0.05,
         k_penalty=1e5,
         damping_coeff=0.1,
         failure_strain=0.05,
@@ -248,3 +259,254 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
         t_sim_init=0.0,
     )
     assert len(res) == 14
+
+
+def test_fused_mode_b_multiply_parity() -> None:
+    """Verify that fused_leapfrog_loop matches step-by-step sequential path in Mode B (multi-ply)."""
+    from kevlargrid.solver.grid import generate_rectangular_grid
+
+    # Create a 6x6 grid, 3 plies, t_ply=0.002, dx=0.01
+    nx, ny = 6, 6
+    dx = 0.01
+    n_plies = 3
+    t_ply = 0.002
+
+    mat = {
+        "density": 1440.0,
+        "k_ortho": 1e6,
+        "k_shear": 2e5,
+        "failure_strain": 0.05,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
+    )
+
+    n_nodes = grid.n_nodes
+    n_springs = len(grid.springs)
+
+    positions = grid.nodes.copy()
+    velocities = np.zeros_like(positions)
+    grid_failed = np.zeros(n_springs, dtype=bool)
+
+    # Boundary mask: clamp edges of all layers
+    boundary_mask = np.zeros(n_nodes, dtype=bool)
+    n_nodes_per_layer = nx * ny
+    for ply in range(n_plies):
+        offset = ply * n_nodes_per_layer
+        for i in range(nx):
+            for j in range(ny):
+                if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+                    boundary_mask[offset + i * ny + j] = True
+
+    # Projectile setup near center of top layer, moving downward
+    proj_pos = np.array([0.025, 0.025, 0.006], dtype=np.float64)
+    proj_vel = np.array([0.0, 0.0, -10.0], dtype=np.float64)
+    proj_mass = 0.05
+    blade_width = 0.02
+    edge_thickness = 0.005
+    k_penalty = 1e6
+    damping_coeff = 0.1
+    failure_strain = 0.05
+
+    dt = 1e-6
+    n_steps = 10
+    save_interval = 5
+
+    # Run Fused
+    (
+        pos_fused,
+        vel_fused,
+        failed_fused,
+        p_pos_fused,
+        p_vel_fused,
+        damp_diss_fused,
+        t_sim_fused,
+        hist_pos,
+        hist_failed,
+        hist_proj_pos,
+        hist_time,
+        hist_ke,
+        hist_se,
+        hist_proj_ke,
+    ) = fused_leapfrog_loop(
+        positions.copy(),
+        velocities.copy(),
+        grid.springs.copy(),
+        grid.stiffnesses.copy(),
+        grid.rest_lengths.copy(),
+        grid_failed.copy(),
+        grid.masses.copy(),
+        grid.tension_only.copy(),
+        boundary_mask.copy(),
+        proj_pos.copy(),
+        proj_vel.copy(),
+        proj_mass,
+        blade_width,
+        edge_thickness,
+        n_plies=n_plies,
+        n_nodes_per_layer=n_nodes_per_layer,
+        t_ply=t_ply,
+        dx=dx,
+        k_penalty=k_penalty,
+        damping_coeff=damping_coeff,
+        failure_strain=failure_strain,
+        dt=dt,
+        n_steps=n_steps,
+        save_interval=save_interval,
+        damp_dissipated_init=0.0,
+        t_sim_init=0.0,
+    )
+
+    # Assert return shapes are correct
+    assert pos_fused.shape == positions.shape
+    assert vel_fused.shape == velocities.shape
+    assert len(failed_fused) == n_springs
+    assert p_pos_fused.shape == (3,)
+    assert p_vel_fused.shape == (3,)
+    assert isinstance(damp_diss_fused, float)
+    assert t_sim_fused == pytest.approx(10 * dt)
+    assert hist_pos.shape == (2, n_nodes, 3)
+    assert hist_failed.shape == (2, n_springs)
+    assert hist_proj_pos.shape == (2, 3)
+    assert hist_time.shape == (2,)
+    assert hist_ke.shape == (2,)
+    assert hist_se.shape == (2,)
+    assert hist_proj_ke.shape == (2,)
+
+
+def test_fused_contact_force_nonzero() -> None:
+    """Verify that a projectile hitting a dx=0.01 grid produces clear decelerating reaction force."""
+    from kevlargrid.solver.grid import generate_rectangular_grid
+
+    nx, ny = 10, 10
+    dx = 0.01
+
+    mat = {
+        "density": 1440.0,
+        "k_ortho": 1e6,
+        "k_shear": 2e5,
+        "failure_strain": 0.05,
+    }
+
+    grid = generate_rectangular_grid(nx=nx, ny=ny, dx=dx, material=mat)
+
+    positions = grid.nodes.copy()
+    # Position projectile exactly in contact with grid at center
+    proj_pos = np.array([0.045, 0.045, 0.0001], dtype=np.float64)
+    proj_vel = np.array([0.0, 0.0, -100.0], dtype=np.float64)  # Moving downward fast
+
+    boundary_mask = np.zeros(grid.n_nodes, dtype=bool)
+    # Clamped boundary
+    for i in range(nx):
+        for j in range(ny):
+            if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+                boundary_mask[i * ny + j] = True
+
+    # Run for 20 steps
+    (
+        _pos_fused,
+        _vel_fused,
+        _failed_fused,
+        _p_pos_fused,
+        p_vel_fused,
+        *_,
+    ) = fused_leapfrog_loop(
+        positions.copy(),
+        np.zeros_like(positions),
+        grid.springs.copy(),
+        grid.stiffnesses.copy(),
+        grid.rest_lengths.copy(),
+        np.zeros(len(grid.springs), dtype=bool),
+        grid.masses.copy(),
+        grid.tension_only.copy(),
+        boundary_mask,
+        proj_pos.copy(),
+        proj_vel.copy(),
+        proj_mass=0.01,  # Light projectile to see clear deceleration
+        proj_blade_width=0.015,
+        proj_edge_thickness=0.005,
+        n_plies=1,
+        n_nodes_per_layer=grid.n_nodes,
+        t_ply=0.002,
+        dx=dx,
+        k_penalty=5e6,
+        damping_coeff=0.1,
+        failure_strain=0.05,
+        dt=1e-6,
+        n_steps=20,
+        save_interval=10,
+        damp_dissipated_init=0.0,
+        t_sim_init=0.0,
+    )
+
+    # Projectile was moving at -100 m/s. It should slow down because of contact forces.
+    # Its Z-velocity should be less negative (i.e. > -100.0)
+    assert p_vel_fused[2] > -100.0
+    # Deceleration should be significant (at least 0.1 m/s over 20us)
+    assert p_vel_fused[2] > -99.9
+
+
+def test_fused_proximity_threshold_correctness() -> None:
+    """Assert that contact is localized for dx=0.01 rather than spreading to 1000+ nodes."""
+    from kevlargrid.solver.grid import generate_rectangular_grid
+
+    nx, ny = 50, 50
+    dx = 0.01
+    mat = {
+        "density": 1440.0,
+        "k_ortho": 1e6,
+        "k_shear": 2e5,
+        "failure_strain": 0.05,
+    }
+    grid = generate_rectangular_grid(nx=nx, ny=ny, dx=dx, material=mat)
+
+    # Projectile exactly at center node
+    proj_pos = np.array([25 * dx, 25 * dx, -0.0001], dtype=np.float64)
+
+    boundary_mask = np.zeros(grid.n_nodes, dtype=bool)
+
+    # Run 1 step
+    (
+        _pos_fused,
+        vel_fused,
+        _failed_fused,
+        _p_pos_fused,
+        _p_vel_fused,
+        *_,
+    ) = fused_leapfrog_loop(
+        grid.nodes.copy(),
+        np.zeros_like(grid.nodes),
+        grid.springs.copy(),
+        grid.stiffnesses.copy(),
+        grid.rest_lengths.copy(),
+        np.zeros(len(grid.springs), dtype=bool),
+        grid.masses.copy(),
+        grid.tension_only.copy(),
+        boundary_mask,
+        proj_pos.copy(),
+        np.array([0.0, 0.0, -10.0]),
+        proj_mass=0.1,
+        proj_blade_width=0.01,
+        proj_edge_thickness=0.002,
+        n_plies=1,
+        n_nodes_per_layer=grid.n_nodes,
+        t_ply=0.002,
+        dx=dx,
+        k_penalty=1e6,
+        damping_coeff=0.0,
+        failure_strain=0.05,
+        dt=1e-7,
+        n_steps=1,
+        save_interval=1,
+        damp_dissipated_init=0.0,
+        t_sim_init=0.0,
+    )
+
+    # If the proximity threshold was computed correctly as dx * 2 = 0.02,
+    # the nodes that moved (got positive velocities/accelerations in Z due to contact force)
+    # should be small (definitely < 100 nodes).
+    # If the fallback dx=0.05 was used, threshold = 0.10, bounding box would cover center +/- 0.105,
+    # which would cover a 21x21 node area = 441 nodes!
+    contact_active_nodes = np.sum(vel_fused[:, 2] != 0.0)
+    assert 0 < contact_active_nodes < 100

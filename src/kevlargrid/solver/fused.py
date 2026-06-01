@@ -19,6 +19,7 @@ from kevlargrid.solver import backend
 from kevlargrid.solver.backend import (
     clamp_boundary,
     maximum,
+    minimum,
     sqrt,
     stack_z,
     sum,
@@ -108,6 +109,7 @@ def fused_leapfrog_loop(
     grid_rest_lengths: np.ndarray,
     grid_failed: np.ndarray,
     grid_masses: np.ndarray,
+    grid_tension_only: np.ndarray,
     boundary_mask: np.ndarray,
     proj_position: np.ndarray,
     proj_velocity: np.ndarray,
@@ -117,6 +119,7 @@ def fused_leapfrog_loop(
     n_plies: int,
     n_nodes_per_layer: int,
     t_ply: float,
+    dx: float,
     k_penalty: float,
     damping_coeff: float,
     failure_strain: float,
@@ -158,14 +161,6 @@ def fused_leapfrog_loop(
     w_h = proj_blade_width / 2.0
     t_h = proj_edge_thickness / 2.0
     # Proximity threshold matches dx * 2.0.
-    # In VibeDynaLITE, grid node spacing dx can be computed from the grid nodes
-    # coordinate difference.
-    # Let's compute average coordinate difference dx
-    dx = 0.05  # fallback
-    if n_nodes_per_layer > 1:
-        dx = float(positions[1, 0] - positions[0, 0])
-        if dx == 0.0:
-            dx = 0.05
     proximity_threshold = dx * 2.0
 
     damp_dissipated = damp_dissipated_init
@@ -174,8 +169,8 @@ def fused_leapfrog_loop(
     # Loop steps inside JIT boundary
     for step in range(n_steps):
         # 1. Projectile Contact Forces (IDW Distribution)
-        x_proj = np.clip(positions[:, 0], proj_position[0] - w_h, proj_position[0] + w_h)
-        y_proj = np.clip(positions[:, 1], proj_position[1] - t_h, proj_position[1] + t_h)
+        x_proj = maximum(proj_position[0] - w_h, minimum(positions[:, 0], proj_position[0] + w_h))
+        y_proj = maximum(proj_position[1] - t_h, minimum(positions[:, 1], proj_position[1] + t_h))
         dists = sqrt(
             (positions[:, 0] - x_proj) ** 2
             + (positions[:, 1] - y_proj) ** 2
@@ -206,7 +201,12 @@ def fused_leapfrog_loop(
 
         # 3. Internal Spring Forces
         spring_forces = compute_spring_forces(
-            positions, grid_springs, grid_stiffnesses, grid_rest_lengths, grid_failed
+            positions,
+            grid_springs,
+            grid_stiffnesses,
+            grid_rest_lengths,
+            grid_failed,
+            tension_only=grid_tension_only,
         )
 
         # 4. Viscous Damping Forces & Energy Dissipation
