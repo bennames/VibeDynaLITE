@@ -200,3 +200,51 @@ def test_fused_step_consistency() -> None:
     assert hist_ke.shape == (2,)
     assert hist_se.shape == (2,)
     assert hist_proj_ke.shape == (2,)
+
+
+def test_fused_mode_a_multi_ply_compilation() -> None:
+    """Verify that fused_leapfrog_loop runs without crash in Mode A (1 physical layer) with nominal n_plies > 1."""
+    n_nodes = 4
+    positions = np.array(
+        [[0.0, 0.0, 0.0], [0.05, 0.0, 0.0], [0.0, 0.05, 0.0], [0.05, 0.05, 0.0]], dtype=np.float64
+    )
+    velocities = np.zeros_like(positions)
+    grid_springs = np.array([[0, 1], [0, 2], [1, 3], [2, 3]], dtype=np.int32)
+    grid_stiffnesses = np.ones(4, dtype=np.float64) * 1e5
+    grid_rest_lengths = np.ones(4, dtype=np.float64) * 0.05
+    grid_failed = np.zeros(4, dtype=bool)
+    grid_masses = np.ones(4, dtype=np.float64) * 0.02
+    boundary_mask = np.zeros(4, dtype=bool)
+
+    # Projectile
+    proj_pos = np.array([0.025, 0.025, 0.01], dtype=np.float64)
+    proj_vel = np.array([0.0, 0.0, -10.0], dtype=np.float64)
+
+    # This should execute cleanly because we pass n_plies = 1 internally to avoid interply contacts.
+    res = fused_leapfrog_loop(
+        positions.copy(),
+        velocities.copy(),
+        grid_springs.copy(),
+        grid_stiffnesses.copy(),
+        grid_rest_lengths.copy(),
+        grid_failed.copy(),
+        grid_masses.copy(),
+        boundary_mask.copy(),
+        proj_pos.copy(),
+        proj_vel.copy(),
+        proj_mass=0.05,
+        proj_blade_width=0.02,
+        proj_edge_thickness=0.005,
+        n_plies=1,  # actual physical layers = 1 in Mode A
+        n_nodes_per_layer=n_nodes,
+        t_ply=0.002,
+        k_penalty=1e5,
+        damping_coeff=0.1,
+        failure_strain=0.05,
+        dt=1e-5,
+        n_steps=2,
+        save_interval=2,
+        damp_dissipated_init=0.0,
+        t_sim_init=0.0,
+    )
+    assert len(res) == 14

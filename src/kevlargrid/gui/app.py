@@ -309,7 +309,7 @@ class SimRunner:
                     proj.mass,
                     proj.blade_width,
                     proj.edge_thickness,
-                    n_plies,
+                    n_layers,
                     n_nodes_per_layer,
                     t_ply if t_ply is not None else 0.002,
                     k_penalty,
