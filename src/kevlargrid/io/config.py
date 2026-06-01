@@ -9,6 +9,10 @@ from __future__ import annotations
 import json
 import os
 
+from kevlargrid.utils import get_logger
+
+logger = get_logger("io.config")
+
 
 class ValidationError(ValueError):
     """Raised when configuration validation fails."""
@@ -32,6 +36,7 @@ def save_config(config: dict, path: str) -> None:
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4)
+    logger.info("Configuration saved successfully to path: %s", path)
 
 
 def load_config(path: str) -> dict:
@@ -48,10 +53,13 @@ def load_config(path: str) -> dict:
         Loaded configuration dictionary.
     """
     if not os.path.exists(path):
+        logger.error("Configuration file not found at path: %s", path)
         raise FileNotFoundError(f"Configuration file not found: {path}")
 
     with open(path, encoding="utf-8") as f:
-        return json.load(f)  # type: ignore[no-any-return]
+        config = json.load(f)
+    logger.info("Configuration loaded successfully from path: %s", path)
+    return config  # type: ignore[no-any-return]
 
 
 def validate_config(config: dict) -> bool:
@@ -71,7 +79,9 @@ def validate_config(config: dict) -> bool:
     required_sections = ["material", "grid", "projectile", "simulation"]
     for sec in required_sections:
         if sec not in config or not isinstance(config[sec], dict):
-            raise ValidationError(f"Missing or invalid section: '{sec}'")
+            msg = f"Missing or invalid section: '{sec}'"
+            logger.warning("Configuration validation failed: %s", msg)
+            raise ValidationError(msg)
 
     # 2. Material validation
     mat = config["material"]
@@ -185,4 +195,5 @@ def validate_config(config: dict) -> bool:
             f"Simulation parameter 'damping_coefficient' must be a non-negative number (got {damp})."
         )
 
+    logger.info("Configuration validation succeeded.")
     return True

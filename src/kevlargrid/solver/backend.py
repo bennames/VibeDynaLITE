@@ -147,9 +147,19 @@ if HAS_NUMBA:
         res = np.zeros((len(f_mag), 3), dtype=f_mag.dtype)
         res[:, 2] = f_mag
         return res
+
+    @numba.njit(cache=True)
+    def numba_clamp_boundary(forces: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        for i in range(len(mask)):
+            if mask[i]:
+                forces[i, 0] = 0.0
+                forces[i, 1] = 0.0
+                forces[i, 2] = 0.0
+        return forces
 else:
     numba_scatter_add = None
     numba_stack_z = None
+    numba_clamp_boundary = None
 
 
 # Define functional wrappers for NumPy/JAX fallbacks
@@ -228,6 +238,13 @@ def py_stack_z(f_mag: Any) -> Any:
     return res
 
 
+def py_clamp_boundary(forces: Any, mask: Any) -> Any:
+    if BACKEND == "jax" and HAS_JAX:
+        return jnp.where(mask[:, None], 0.0, forces)
+    forces[mask] = 0.0
+    return forces
+
+
 # Assign active variables
 if BACKEND == "numba" and HAS_NUMBA:
     zeros = np.zeros  # type: ignore[assignment]
@@ -242,6 +259,7 @@ if BACKEND == "numba" and HAS_NUMBA:
     abs = np.abs  # type: ignore[assignment]
     scatter_add = numba_scatter_add  # type: ignore[assignment]
     stack_z = numba_stack_z  # type: ignore[assignment]
+    clamp_boundary = numba_clamp_boundary  # type: ignore[assignment]
 else:
     zeros = py_zeros  # type: ignore[assignment]
     ones = py_ones  # type: ignore[assignment]
@@ -255,4 +273,4 @@ else:
     abs = py_abs  # type: ignore[assignment]
     scatter_add = py_scatter_add  # type: ignore[assignment]
     stack_z = py_stack_z  # type: ignore[assignment]
-
+    clamp_boundary = py_clamp_boundary  # type: ignore[assignment]

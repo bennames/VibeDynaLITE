@@ -90,7 +90,6 @@ def compute_spring_forces(
     return forces  # type: ignore[no-any-return]
 
 
-
 @backend.jit
 def compute_spring_strains(
     positions: np.ndarray,

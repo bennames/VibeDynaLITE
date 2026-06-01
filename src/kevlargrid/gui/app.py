@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import threading
 import time
-import traceback
 from typing import Any
 
 try:
@@ -27,6 +26,7 @@ from kevlargrid.gui.plots import EnergyPlot, StrainPlot
 from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
 from kevlargrid.solver import (
+    backend,
     compute_cfl_timestep,
     compute_interply_contact_forces,
     compute_kinetic_energy,
@@ -39,6 +39,9 @@ from kevlargrid.solver.projectile import (
     distribute_contact_forces,
     update_contact_zone,
 )
+from kevlargrid.utils import get_logger
+
+logger = get_logger("gui.app")
 
 
 class SimRunner:
@@ -79,8 +82,10 @@ class SimRunner:
         self.state = "running"
         self.stop_event.clear()
         self.pause_event.clear()
+        logger.info("Initializing solver background worker thread...")
         self.active_thread = threading.Thread(target=self._run_loop, args=(config,), daemon=True)
         self.active_thread.start()
+        logger.info("Solver worker thread started successfully.")
 
     def pause(self) -> None:
         """Pause worker thread execution."""
@@ -88,6 +93,7 @@ class SimRunner:
             if self.state == "running":
                 self.state = "paused"
                 self.pause_event.set()
+                logger.info("Simulation execution paused by user.")
 
     def resume(self) -> None:
         """Resume worker thread execution."""
@@ -95,13 +101,16 @@ class SimRunner:
             if self.state == "paused":
                 self.state = "running"
                 self.pause_event.clear()
+                logger.info("Simulation execution resumed by user.")
 
     def stop(self) -> None:
         """Forcibly terminate background execution."""
+        logger.info("User requested simulation stop. Terminating solver thread...")
         self.stop_event.set()
         self.pause_event.clear()
         if self.active_thread and self.active_thread.is_alive():
             self.active_thread.join(timeout=1.0)
+        logger.info("Solver thread successfully terminated.")
         self.reset()
 
     def reset(self) -> None:
@@ -151,6 +160,11 @@ class SimRunner:
     def _run_loop(self, config: dict) -> None:
         """Main solver dynamic time integration worker loop."""
         try:
+            logger.info(
+                "Initializing dynamic explicit solver. Compute Backend: %s, Hardware Device: %s",
+                backend.get_backend_name().upper(),
+                backend.get_active_device(),
+            )
             # 1. Setup simulation components based on config
             mat = config["material"]
             grid_cfg = config["grid"]
@@ -238,10 +252,12 @@ class SimRunner:
             # Fused chunking loop S7
             n_chunk = 100
             save_interval = 10
+            jit_warmed = False
 
             while t_sim < duration:
                 # Check stop signal
                 if self.stop_event.is_set():
+                    logger.info("Simulation loop aborted via stop event.")
                     break
 
                 # Check pause signal
@@ -258,6 +274,12 @@ class SimRunner:
                     break
 
                 # JIT-Fused loop dispatching!
+                if not jit_warmed:
+                    logger.info(
+                        "Executing initial integrator chunk; JIT compilation warm-up triggered..."
+                    )
+                    t_start_warm = time.time()
+
                 (
                     positions,
                     velocities,
@@ -300,10 +322,20 @@ class SimRunner:
                     t_sim,
                 )
 
+                if not jit_warmed:
+                    logger.info(
+                        "JIT compilation warm-up complete in %.2f seconds.",
+                        time.time() - t_start_warm,
+                    )
+                    jit_warmed = True
+
                 step += current_steps
 
                 # Check for numerical instability (NaN/inf values) S6.5.11
                 if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
+                    logger.error(
+                        "Numerical instability detected: coordinates have diverged to NaN."
+                    )
                     raise ValueError(
                         "Numerical instability detected: coordinates have diverged to NaN.\n"
                         "Please reduce your CFL safety factor or increase spacing dx."
@@ -421,6 +453,16 @@ class SimRunner:
                     ):  # 70% threshold is complete yarn failure
                         max_ply_perf = ply
 
+            logger.info(
+                "Simulation completed successfully in %d steps. Projectile arrested: %s. "
+                "Peak deceleration: %.2f g. Rupture: %.2f%%. Max layer perforated: %d",
+                step,
+                arrested,
+                peak_decel,
+                rupture_pct,
+                max_ply_perf,
+            )
+
             with self.lock:
                 self.state = "completed"
                 self.results_report = {
@@ -441,7 +483,7 @@ class SimRunner:
                 self.projectile_pos = proj.position.copy()
 
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("Simulation execution crashed due to an unhandled exception: %s", e)
             with self.lock:
                 self.state = "error"
                 self.error_message = str(e)

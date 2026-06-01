@@ -17,6 +17,7 @@ except ImportError:
 
 from kevlargrid.solver import backend
 from kevlargrid.solver.backend import (
+    clamp_boundary,
     maximum,
     sqrt,
     stack_z,
@@ -217,14 +218,14 @@ def fused_leapfrog_loop(
         net_forces = spring_forces + proj_forces + interply_forces + damp_forces
 
         # Reset forces/velocities on boundary clamped nodes
-        net_forces = where(boundary_mask[:, np.newaxis], 0.0, net_forces)
-        velocities = where(boundary_mask[:, np.newaxis], 0.0, velocities)
+        net_forces = clamp_boundary(net_forces, boundary_mask)
+        velocities = clamp_boundary(velocities, boundary_mask)
 
         # Integrate node dynamics (leapfrog Verlet)
         masses_col = grid_masses.reshape(-1, 1)
         accel = net_forces / masses_col
         velocities = velocities + accel * dt
-        velocities = where(boundary_mask[:, np.newaxis], 0.0, velocities)
+        velocities = clamp_boundary(velocities, boundary_mask)
         positions = positions + velocities * dt
 
         # Integrate rigid-body projectile kinematics
