@@ -17,6 +17,16 @@ except ImportError:  # pragma: no cover
 
 import numpy as np
 
+try:
+    import pyvista as pv
+    import vtk
+
+    HAS_PYVISTA = True
+except ImportError:
+    pv = None  # type: ignore[assignment]
+    vtk = None  # type: ignore[assignment]
+    HAS_PYVISTA = False
+
 from kevlargrid.solver.grid import Grid
 
 
@@ -55,6 +65,18 @@ class Viewport3D:
         # Mouse Drag gesture trackers
         self.drag_start = [0.0, 0.0]
         self.is_dragging = False
+
+        # Projectile state cache for renderer
+        self.proj_position = np.zeros(3)
+        self.proj_blade_width = 0.02
+        self.proj_edge_thickness = 0.005
+
+        # PyVista Offscreen visualization objects
+        self.plotter: pv.Plotter | None = None
+        self.mesh: pv.PolyData | None = None
+        self.actor: Any = None
+        self.proj_actor: Any = None
+        self.has_pyvista = False
 
     def build(self) -> None:
         """Construct the DearPyGui 3-D drawing layout, sliders, and handlers."""
@@ -103,6 +125,19 @@ class Viewport3D:
 
             # Per-Ply visibility checkbox row
             dpg.add_group(tag=self.layer_group, horizontal=True)
+
+            # Setup dynamic texture registry for PyVista offscreen rendering
+            if HAS_PYVISTA:
+                texture_reg_tag = "viewport_texture_registry"
+                texture_tag = "viewport_texture_data"
+                if not dpg.does_item_exist(texture_reg_tag):
+                    with dpg.texture_registry(tag=texture_reg_tag, show=False):
+                        dpg.add_dynamic_texture(
+                            width=700,
+                            height=310,
+                            default_value=np.zeros(700 * 310 * 4, dtype=np.float32),
+                            tag=texture_tag,
+                        )
 
     def _setup_mouse_handlers(self) -> None:
         """Register trackpad-friendly keyboard/mouse coordinate listeners."""
@@ -205,6 +240,63 @@ class Viewport3D:
         self.pan_x = 0.0
         self.pan_y = 0.0
 
+        # Try to initialize PyVista offscreen visualization plotter
+        if HAS_PYVISTA and pv is not None:
+            try:
+                # Clean up existing plotter to free GPU memory
+                if self.plotter is not None:
+                    import contextlib
+
+                    with contextlib.suppress(Exception):
+                        self.plotter.close()
+
+                self.plotter = pv.Plotter(off_screen=True, window_size=[700, 310])
+                self.plotter.background_color = "black"  # type: ignore[assignment]
+
+                # Pre-calculate VTK cell-connectivity connectivity line lists once
+                springs = grid.springs
+                n_springs = len(springs)
+                lines = np.empty(n_springs * 3, dtype=np.int32)
+                lines[0::3] = 2
+                lines[1::3] = springs[:, 0]
+                lines[2::3] = springs[:, 1]
+
+                self.mesh = pv.PolyData(grid.nodes, lines=lines)
+
+                # Initialize cell color array (RGBA uint8)
+                dummy_colors = np.zeros((n_springs, 4), dtype=np.uint8)
+                self.mesh.cell_data["colors"] = dummy_colors
+
+                # Add mesh to plotter
+                self.actor = self.plotter.add_mesh(
+                    self.mesh,
+                    scalars="colors",
+                    rgba=True,
+                    line_width=1.5,
+                    show_scalar_bar=False,
+                    lighting=False,
+                )
+
+                # Add wireframe Box representing the projectile
+                w_h = self.proj_blade_width / 2.0
+                t_h = self.proj_edge_thickness / 2.0
+                h_h = 0.005
+                self.proj_mesh = pv.Box(bounds=[-w_h, w_h, -t_h, t_h, -h_h, h_h])
+                self.proj_actor = self.plotter.add_mesh(
+                    self.proj_mesh,
+                    color=[230, 230, 250],
+                    style="wireframe",
+                    line_width=2.5,
+                    lighting=False,
+                )
+
+                self.has_pyvista = True
+            except Exception:
+                # Fall back to DearPyGui native draw_line loop
+                self.has_pyvista = False
+        else:
+            self.has_pyvista = False
+
         if dpg is None:  # pragma: no cover
             return
 
@@ -241,12 +333,6 @@ class Viewport3D:
         if not dpg.does_item_exist(self.canvas_tag):  # pragma: no cover
             return
 
-        dpg.delete_item(self.canvas_tag, children_only=True)
-
-        # Render nothing if node arrays are empty
-        if len(self.grid.nodes) == 0:  # pragma: no cover
-            return
-
         # 1. Calculate camera rotations and screen translations
         cy, sy = math.cos(self.yaw), math.sin(self.yaw)
         cp, sp = math.cos(self.pitch), math.sin(self.pitch)
@@ -254,41 +340,120 @@ class Viewport3D:
         # 3D Yaw-Pitch camera projection coordinates rotation matrix
         R = np.array([[cy, 0.0, -sy], [-sy * sp, cp, -cy * sp], [sy * cp, sp, cy * cp]])  # noqa: N806
 
-        # 2. Translate nodes relative to center target point
-        nodes_rel = self.grid.nodes - self.grid_center
-        # Rotate coordinates
-        nodes_rotated = nodes_rel @ R.T
-
-        # Camera translations including horizontal/vertical pans
-        cam_x = nodes_rotated[:, 0] + self.pan_x
-        cam_y = nodes_rotated[:, 1] + self.pan_y
-        cam_z = nodes_rotated[:, 2] + self.distance
-        cam_z = np.maximum(cam_z, 1e-4)  # clip zero bounds
-
-        # Project coordinates onto viewport canvas
-        scr_x = self.center_x + (self.focal_length * cam_x / cam_z)
-        scr_y = self.center_y - (self.focal_length * cam_y / cam_z)
-
-        # 3. Draw springs with active layer filtering
         springs = self.grid.springs
-        stiffnesses = self.grid.stiffnesses
-        rest_lengths = self.grid.rest_lengths
         failed = self.grid.failed
+        n_springs = len(springs)
 
         # Calculate live engineering strain for color-scale mapping
         p1 = self.grid.nodes[springs[:, 0]]
         p2 = self.grid.nodes[springs[:, 1]]
         lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
-        strains = (lengths - rest_lengths) / rest_lengths
-
-        # Color Spectrum mapping threshold (e.g. failure strain)
+        strains = (lengths - self.grid.rest_lengths) / self.grid.rest_lengths
         fail_thresh = 0.036
-        if len(stiffnesses) > 0:
-            # Try to fetch from default active material failure strain limit
-            fail_thresh = 0.036
 
-        # Draw lines in drawlist
-        for j in range(len(springs)):
+        # --- PyVista offscreen hardware rendering path ---
+        if HAS_PYVISTA and self.has_pyvista and self.plotter is not None and self.mesh is not None:
+            try:
+                # Update point coordinate positions in-place
+                self.mesh.points = self.grid.nodes
+
+                # Compute RGBA cell colors vectorised
+                colors = np.zeros((n_springs, 4), dtype=np.uint8)
+
+                # Failed springs: Deep brick red transparent lines [139, 0, 0, 45]
+                colors[failed] = [139, 0, 0, 45]
+
+                # Active springs: interpolate Blue -> Yellow -> Crimson
+                active = ~failed
+                ratios = np.clip(strains[active] / fail_thresh, 0.0, 1.0)
+
+                mask1 = ratios <= 0.5
+                ratio1 = ratios[mask1] / 0.5
+                c1 = np.zeros((len(ratio1), 4), dtype=np.uint8)
+                c1[:, 0] = (0 + 255 * ratio1).astype(np.uint8)
+                c1[:, 1] = (191 + (215 - 191) * ratio1).astype(np.uint8)
+                c1[:, 2] = (255 - 255 * ratio1).astype(np.uint8)
+                c1[:, 3] = 230
+
+                mask2 = ratios > 0.5
+                ratio2 = (ratios[mask2] - 0.5) / 0.5
+                c2 = np.zeros((len(ratio2), 4), dtype=np.uint8)
+                c2[:, 0] = (255 - (255 - 220) * ratio2).astype(np.uint8)
+                c2[:, 1] = (215 - (215 - 20) * ratio2).astype(np.uint8)
+                c2[:, 2] = (0 + 60 * ratio2).astype(np.uint8)
+                c2[:, 3] = 230
+
+                colors[active] = np.where(mask1[:, np.newaxis], c1, c2)
+
+                # Set alpha to 0 for springs in hidden layers
+                ply_indices = springs[:, 0] // self.n_nodes_per_layer
+                for ply_idx, visible in enumerate(self.layer_visibility):
+                    if not visible:
+                        colors[ply_indices == ply_idx, 3] = 0
+
+                self.mesh.cell_data["colors"] = colors
+                self.mesh.modified()
+
+                # Update projectile position in actor
+                self.proj_actor.position = self.proj_position
+
+                # Set camera look-at vectors using rotation matrix R
+                local_x = R[0, :]
+                local_y = R[1, :]
+                local_z = R[2, :]
+
+                focal_point = self.grid_center - self.pan_x * local_x - self.pan_y * local_y
+                camera_position = focal_point + self.distance * local_z
+
+                self.plotter.camera.position = camera_position
+                self.plotter.camera.focal_point = focal_point
+                self.plotter.camera.up = local_y
+
+                # Offscreen render
+                self.plotter.render()
+
+                # Read buffer image
+                img = self.plotter.image
+                if img.shape[2] == 3:
+                    rgba = np.empty((img.shape[0], img.shape[1], 4), dtype=np.float32)
+                    rgba[:, :, :3] = img.astype(np.float32) / 255.0
+                    rgba[:, :, 3] = 1.0
+                else:
+                    rgba = img.astype(np.float32) / 255.0
+
+                # Update DearPyGui dynamic texture
+                dpg.set_value("viewport_texture_data", rgba.ravel())
+
+                # Draw the dynamic texture image onto DPG canvas
+                dpg.delete_item(self.canvas_tag, children_only=True)
+                dpg.draw_image(
+                    texture_tag="viewport_texture_data",
+                    pmin=[0, 0],
+                    pmax=[700, 310],
+                    parent=self.canvas_tag,
+                )
+                return
+            except Exception:
+                # If VTK fails dynamically, fallback to DearPyGui draw loop
+                self.has_pyvista = False
+
+        # --- Native DearPyGui Fallback Loop ---
+        dpg.delete_item(self.canvas_tag, children_only=True)
+
+        # Rotate coordinates
+        nodes_rel = self.grid.nodes - self.grid_center
+        nodes_rotated = nodes_rel @ R.T
+
+        # Camera translations including horizontal/vertical pans
+        cam_x = nodes_rotated[:, 0] + self.pan_x
+        cam_y = nodes_rotated[:, 1] + self.pan_y
+        cam_z = np.maximum(nodes_rotated[:, 2] + self.distance, 1e-4)
+
+        # Project coordinates onto viewport canvas
+        scr_x = self.center_x + (self.focal_length * cam_x / cam_z)
+        scr_y = self.center_y - (self.focal_length * cam_y / cam_z)
+
+        for j in range(n_springs):
             u, v = springs[j, 0], springs[j, 1]
 
             # Map spring to ply layer index
@@ -320,12 +485,10 @@ class Viewport3D:
                 ratio = min(1.0, max(0.0, eps / fail_thresh))
 
                 if ratio <= 0.5:
-                    # Blue [0,191,255] to Yellow [255,215,0]
                     r = int(0 + (255 - 0) * (ratio / 0.5))
                     g = int(191 + (215 - 191) * (ratio / 0.5))
                     b = int(255 + (0 - 255) * (ratio / 0.5))
                 else:
-                    # Yellow [255,215,0] to Crimson [220,20,60]
                     r = int(255 + (220 - 255) * ((ratio - 0.5) / 0.5))
                     g = int(215 + (20 - 215) * ((ratio - 0.5) / 0.5))
                     b = int(0 + (60 - 0) * ((ratio - 0.5) / 0.5))
@@ -339,24 +502,17 @@ class Viewport3D:
                 )
 
     def update(self, positions: np.ndarray, failed: np.ndarray) -> None:
-        """Update node coordinate positions dynamically and trigger a redraw.
-
-        Parameters
-        ----------
-        positions : np.ndarray
-            Current dynamic 3D node coordinates, shape (n_nodes, 3).
-        failed : np.ndarray
-            Current boolean spring failure statuses, shape (n_springs,).
-        """
+        """Update node coordinate positions dynamically."""
         if self.grid is not None:
             self.grid.nodes = positions
             self.grid.failed = failed
-            self.redraw()
+            # We do NOT call self.redraw() here; it will be called by draw_projectile()
+            # to render the complete synchronized frame containing the projectile.
 
     def draw_projectile(
         self, position: np.ndarray, blade_width: float, edge_thickness: float
     ) -> None:
-        """Render a 3D wireframe box representing the striking metal projectile.
+        """Render the striking projectile, caching details and triggering a redraw.
 
         Parameters
         ----------
@@ -367,10 +523,21 @@ class Viewport3D:
         edge_thickness : float
             Thickness along Y axis (meters).
         """
+        self.proj_position = position
+        self.proj_blade_width = blade_width
+        self.proj_edge_thickness = edge_thickness
+
         if dpg is None or self.grid is None:  # pragma: no cover
             return
 
-        # Build 3D bounding vertices relative to center position
+        # If PyVista is active, redraw handles projectile actor rendering internally
+        if HAS_PYVISTA and self.has_pyvista:
+            self.redraw()
+            return
+
+        # --- Native DearPyGui Projectile Fallback ---
+        self.redraw()
+
         w_h = blade_width / 2.0
         t_h = edge_thickness / 2.0
         h_h = 0.005  # semi-height of bounding container
@@ -402,8 +569,7 @@ class Viewport3D:
 
         c_cam_x = c_rot[:, 0] + self.pan_x
         c_cam_y = c_rot[:, 1] + self.pan_y
-        c_cam_z = c_rot[:, 2] + self.distance
-        c_cam_z = np.maximum(c_cam_z, 1e-4)
+        c_cam_z = np.maximum(c_rot[:, 2] + self.distance, 1e-4)
 
         scr_x = self.center_x + (self.focal_length * c_cam_x / c_cam_z)
         scr_y = self.center_y - (self.focal_length * c_cam_y / c_cam_z)

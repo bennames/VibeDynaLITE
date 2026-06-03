@@ -36,6 +36,7 @@ compute = [
     "jax>=0.4",
     "jaxlib>=0.4",
     "numba>=0.59",
+    "taichi>=1.7.0",
 ]
 viz = [
     "pyvista>=0.43",

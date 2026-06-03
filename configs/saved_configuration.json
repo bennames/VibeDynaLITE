@@ -1,0 +1,45 @@
+{
+    "material": {
+        "name": "Kevlar 29",
+        "tensile_modulus_gpa": 71.0,
+        "failure_strain": 0.035999998450279236,
+        "tensile_strength_gpa": 2.9200000762939453,
+        "fiber_density_gcc": 1.440000057220459,
+        "areal_density_kgm2": 0.4699999988079071,
+        "shear_ratio": 0.00039999998989515007,
+        "crimp_factor": 0.10000000149011612,
+        "yarn_count": [
+            17,
+            17
+        ]
+    },
+    "grid": {
+        "nx": 100,
+        "ny": 100,
+        "dx": 0.009999999776482582,
+        "n_plies": 5,
+        "t_ply": 0.0010000000474974513,
+        "boundary_type": "infinite"
+    },
+    "projectile": {
+        "mass": 0.05000000074505806,
+        "velocity": [
+            0.0,
+            0.0,
+            400.0
+        ],
+        "position": [
+            0.0,
+            0.0,
+            -0.004999999888241291
+        ],
+        "blade_width": 0.019999999552965164,
+        "edge_thickness": 0.004999999888241291
+    },
+    "simulation": {
+        "duration": 0.0010000000474974513,
+        "cfl_factor": 0.800000011920929,
+        "damping_coefficient": 0.5,
+        "snapshot_interval": 100
+    }
+}

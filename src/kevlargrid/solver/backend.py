@@ -27,11 +27,18 @@ try:
 except ImportError:
     HAS_NUMBA = False
 
+try:
+    import taichi  # noqa: F401
+
+    HAS_TAICHI = True
+except ImportError:
+    HAS_TAICHI = False
+
 import os
 
 # Select backend with override support
 env_backend = os.environ.get("KEVLARGRID_BACKEND", "").lower()
-if env_backend in ("jax", "numba", "numpy"):
+if env_backend in ("jax", "numba", "numpy", "taichi"):
     BACKEND = env_backend
 else:
     if HAS_NUMBA:
@@ -46,7 +53,7 @@ def get_backend_name() -> str:
     """Get the active backend name.
 
     Returns:
-        str: 'jax', 'numba', or 'numpy'.
+        str: 'jax', 'numba', 'numpy', or 'taichi'.
     """
     return BACKEND
 
@@ -65,6 +72,15 @@ def get_active_device() -> str:
             return f"JAX GPU/Metal ({device.device_kind})"
         except Exception:
             return f"JAX CPU ({platform.machine()})"
+    elif BACKEND == "taichi" and HAS_TAICHI:
+        try:
+            import taichi as ti
+
+            # Safe runtime check for active GPU/Metal context
+            arch_name = ti.lang.impl.current_cfg().arch.name.upper()
+            return f"Taichi GPU/Metal ({arch_name}) with hardware acceleration"
+        except Exception:
+            return "Taichi GPU/Metal with hardware acceleration"
     elif BACKEND == "numba" and HAS_NUMBA:
         return f"CPU ({platform.machine()}) with Numba JIT"
     else:
