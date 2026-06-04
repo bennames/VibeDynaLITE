@@ -26,18 +26,7 @@ from kevlargrid.gui.plots import EnergyPlot, StrainPlot
 from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
 from kevlargrid.solver import (
-    backend,
-    compute_cfl_timestep,
-    compute_interply_contact_forces,
-    compute_kinetic_energy,
-    compute_strain_energy,
     generate_rectangular_grid,
-)
-from kevlargrid.solver.fused import fused_leapfrog_loop
-from kevlargrid.solver.projectile import (
-    Projectile,
-    distribute_contact_forces,
-    update_contact_zone,
 )
 from kevlargrid.utils import get_logger
 
@@ -50,6 +39,8 @@ class SimRunner:
     def __init__(self) -> None:
         self.lock = threading.Lock()
         self.active_thread: threading.Thread | None = None
+        self.active_process: Any | None = None
+        self.control_pipe_parent: Any | None = None
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
 
@@ -159,383 +150,173 @@ class SimRunner:
 
     def _run_loop(self, config: dict) -> None:
         """Main solver dynamic time integration worker loop."""
+        import multiprocessing
+        import traceback
+
+        from kevlargrid.solver.worker import run_solver_process
+
+        ctx = multiprocessing.get_context("spawn")
+        queue = ctx.Queue()
+        parent_conn, child_conn = ctx.Pipe()
+
+        self.control_pipe_parent = parent_conn
+
+        # Pre-initialize grid structure in parent process for GUI placeholders
         try:
-            logger.info(
-                "Initializing dynamic explicit solver. Compute Backend: %s, Hardware Device: %s",
-                backend.get_backend_name().upper(),
-                backend.get_active_device(),
-            )
-            # 1. Setup simulation components based on config
             mat = config["material"]
             grid_cfg = config["grid"]
-            proj_cfg = config["projectile"]
-            sim_cfg = config["simulation"]
-
             nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
             n_plies = grid_cfg["n_plies"]
             t_ply = grid_cfg["t_ply"]
-
-            # Build grid
+            # Build parent-side grid placeholder
             grid = generate_rectangular_grid(
                 nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
             )
-
-            # Build boundary mask S6.5.1
-            boundary_mask = np.zeros(grid.n_nodes, dtype=bool)
-            n_nodes_per_layer = nx * ny
-            # Only loop over physical layers in the grid to prevent IndexError in Mode A
-            n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
-            if grid_cfg["boundary_type"] == "fixed":
-                for ply in range(n_layers):
-                    offset = ply * n_nodes_per_layer
-                    for i in range(nx):
-                        for j in range(ny):
-                            if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                                boundary_mask[offset + i * ny + j] = True
-
-            # Calculate safe CFL timestep
-            k_penalty = 10.0 * np.mean(grid.stiffnesses)
-            k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
-            dt = compute_cfl_timestep(
-                np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
-            )
-
-            # Projectile setup
-            proj = Projectile(
-                mass=proj_cfg["mass"],
-                velocity=proj_cfg["velocity"],
-                position=proj_cfg["position"],
-                blade_width=proj_cfg["blade_width"],
-                edge_thickness=proj_cfg["edge_thickness"],
-            )
-
-            positions = grid.nodes.copy()
-            velocities = np.zeros_like(positions)
-
-            # Viscous damping parameter
-            damping_coeff = sim_cfg["damping_coefficient"]
-            duration = sim_cfg["duration"]
-
-            # Loop tracking
-            step = 0
-            t_sim = 0.0
-            last_time = time.time()
-            last_step = 0
-
-            # Store baseline snapshot at t=0
-            initial_ke = compute_kinetic_energy(velocities, grid.masses)
-            # Projectile initial kinetic energy S6.5.5
-            initial_proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
-            initial_se = 0.0
-            initial_damp = 0.0
-            self.history.append(
-                {
-                    "time": 0.0,
-                    "nodes": positions.copy(),
-                    "failed": grid.failed.copy(),
-                    "projectile_pos": proj.position.copy(),
-                    "ke": initial_ke,
-                    "se": initial_se,
-                    "damped": initial_damp,
-                    "contact": 0.0,
-                    "total": initial_ke + initial_proj_ke,
-                    "failed_count": 0,
-                    "peak_strain": 0.0,
-                    "proj_ke": initial_proj_ke,
-                }
-            )
-
-            # Peak deceleration recording
-            accel_history = []
-            damp_dissipated = 0.0
-
-            # Fused chunking loop S7
-            n_chunk = 100
-            save_interval = 10
-            jit_warmed = False
-
-            while t_sim < duration:
-                # Check stop signal
-                if self.stop_event.is_set():
-                    logger.info("Simulation loop aborted via stop event.")
-                    break
-
-                # Check pause signal
-                if self.pause_event.is_set():
-                    self.pause_event.wait(timeout=0.1)
-                    last_time = time.time()  # reset speed calc
-                    continue
-
-                # How many steps to run in this chunk?
-                steps_remaining = int(np.ceil((duration - t_sim) / dt))
-                current_steps = min(n_chunk, steps_remaining)
-
-                if current_steps <= 0:
-                    break
-
-                # JIT-Fused loop dispatching!
-                if not jit_warmed:
-                    logger.info(
-                        "Executing initial integrator chunk; JIT compilation warm-up triggered..."
-                    )
-                    t_start_warm = time.time()
-
-                if backend.get_backend_name() == "taichi":
-                    from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
-
-                    (
-                        positions,
-                        velocities,
-                        grid.failed,
-                        proj.position,
-                        proj.velocity,
-                        damp_dissipated,
-                        t_sim,
-                        hist_pos,
-                        hist_failed,
-                        hist_proj_pos,
-                        hist_time,
-                        hist_ke,
-                        hist_se,
-                        hist_proj_ke,
-                    ) = taichi_leapfrog_loop(
-                        positions,
-                        velocities,
-                        grid.springs,
-                        grid.stiffnesses,
-                        grid.rest_lengths,
-                        grid.failed,
-                        grid.masses,
-                        grid.tension_only,
-                        boundary_mask,
-                        proj.position,
-                        proj.velocity,
-                        proj.mass,
-                        proj.blade_width,
-                        proj.edge_thickness,
-                        n_layers,
-                        n_nodes_per_layer,
-                        t_ply if t_ply is not None else 0.002,
-                        dx,
-                        k_penalty,
-                        damping_coeff,
-                        mat["failure_strain"],
-                        dt,
-                        current_steps,
-                        save_interval,
-                        damp_dissipated,
-                        t_sim,
-                    )
-                else:
-                    (
-                        positions,
-                        velocities,
-                        grid.failed,
-                        proj.position,
-                        proj.velocity,
-                        damp_dissipated,
-                        t_sim,
-                        hist_pos,
-                        hist_failed,
-                        hist_proj_pos,
-                        hist_time,
-                        hist_ke,
-                        hist_se,
-                        hist_proj_ke,
-                    ) = fused_leapfrog_loop(
-                        positions,
-                        velocities,
-                        grid.springs,
-                        grid.stiffnesses,
-                        grid.rest_lengths,
-                        grid.failed,
-                        grid.masses,
-                        grid.tension_only,
-                        boundary_mask,
-                        proj.position,
-                        proj.velocity,
-                        proj.mass,
-                        proj.blade_width,
-                        proj.edge_thickness,
-                        n_layers,
-                        n_nodes_per_layer,
-                        t_ply if t_ply is not None else 0.002,
-                        dx,
-                        k_penalty,
-                        damping_coeff,
-                        mat["failure_strain"],
-                        dt,
-                        current_steps,
-                        save_interval,
-                        damp_dissipated,
-                        t_sim,
-                    )
-
-                if not jit_warmed:
-                    logger.info(
-                        "JIT compilation warm-up complete in %.2f seconds.",
-                        time.time() - t_start_warm,
-                    )
-                    jit_warmed = True
-
-                step += current_steps
-
-                # Check for numerical instability (NaN/inf values) S6.5.11
-                if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
-                    logger.error(
-                        "Numerical instability detected: coordinates have diverged to NaN."
-                    )
-                    raise ValueError(
-                        "Numerical instability detected: coordinates have diverged to NaN.\n"
-                        "Please reduce your CFL safety factor or increase spacing dx."
-                    )
-
-                # Store live metrics at chunk end
-                ke = compute_kinetic_energy(velocities, grid.masses)
-                diff = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
-                lengths = np.sqrt(np.sum(diff**2, axis=1))
-                strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-                se = compute_strain_energy(
-                    strains, grid.stiffnesses, grid.rest_lengths, grid.failed
-                )
-                proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
-                failed_count = int(np.sum(grid.failed))
-                peak_strain = float(np.max(strains)) if len(strains) > 0 else 0.0
-
-                # Compute deceleration from contact force at the end of chunk
-                update_contact_zone(proj, grid, proximity_threshold=dx * 2.0, positions=positions)
-                proj_forces = distribute_contact_forces(
-                    proj, grid, positions=positions, k_contact=k_penalty
-                )
-                proj_reaction_force = -np.sum(proj_forces, axis=0)
-                proj_accel = proj_reaction_force / proj.mass
-                accel_g = np.linalg.norm(proj_accel) / 9.81
-                accel_history.append(accel_g)
-
-                # Compute interply energy for mode B contact
-                interply_energy = 0.0
-                if n_plies > 1 and t_ply is not None:
-                    _, interply_energy = compute_interply_contact_forces(
-                        positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
-                    )
-
-                # Append JIT pre-allocated frames into our history list!
-                m_actual = current_steps // save_interval
-                for frame_idx in range(m_actual):
-                    p_pos = hist_proj_pos[frame_idx]
-                    f_ke = hist_ke[frame_idx]
-                    f_se = hist_se[frame_idx]
-                    f_p_ke = hist_proj_ke[frame_idx]
-                    f_failed_c = int(np.sum(hist_failed[frame_idx]))
-
-                    self.history.append(
-                        {
-                            "time": hist_time[frame_idx],
-                            "nodes": hist_pos[frame_idx].copy(),
-                            "failed": hist_failed[frame_idx].copy(),
-                            "projectile_pos": p_pos.copy(),
-                            "ke": f_ke,
-                            "se": f_se,
-                            "damped": damp_dissipated,
-                            "contact": interply_energy,
-                            "total": f_ke + f_se + damp_dissipated + interply_energy + f_p_ke,
-                            "failed_count": f_failed_c,
-                            "peak_strain": 0.0,
-                            "proj_ke": f_p_ke,
-                        }
-                    )
-
-                # Update live telemetry state protected by lock
-                now = time.time()
-                elapsed_real = now - last_time
-                if elapsed_real >= 0.05:
-                    steps_per_sec = (step - last_step) / elapsed_real
-                    last_time = now
-                    last_step = step
-                else:
-                    steps_per_sec = self.speed
-
-                # Estimate ETA
-                rem_steps = int((duration - t_sim) / dt)
-                eta = rem_steps / steps_per_sec if steps_per_sec > 0.0 else 0.0
-
-                with self.lock:
-                    self.elapsed_time = t_sim
-                    self.step = step
-                    self.speed = steps_per_sec
-                    self.eta = eta
-                    self.ke = ke
-                    self.se = se
-                    self.damp_dissipated = damp_dissipated
-                    self.peak_strain = peak_strain
-                    self.proj_ke = proj_ke
-                    self.failed_count = failed_count
-                    self.grid_nodes = positions.copy()
-                    self.grid_failed = grid.failed.copy()
-                    self.projectile_pos = proj.position.copy()
-
-                # Projectile arrest termination check
-                if proj.velocity[2] <= 0.0:
-                    break
-
-            # Simulation Completed: Generate post-run summary impact report
-            initial_v = np.linalg.norm(proj_cfg["velocity"])
-            final_v = np.linalg.norm(proj.velocity)
-
-            # Arrest check (did the projectile turn around before reaching panel boundary limits?)
-            arrested = proj.velocity[2] <= 0.0
-
-            peak_decel = max(accel_history) if accel_history else 0.0
-            tot_springs = len(grid.springs)
-            rupture_pct = (failed_count / tot_springs) * 100.0 if tot_springs > 0 else 0.0
-
-            # Find maximum layer perforated S6.5.1
-            max_ply_perf = -1
-            is_mode_b = t_ply is not None and n_plies > 1
-            if is_mode_b:
-                spring_layers = grid.springs[:, 0] // n_nodes_per_layer
-                for ply in range(n_plies):
-                    ply_springs = spring_layers == ply
-                    ply_failed = grid.failed[ply_springs]
-                    if (
-                        len(ply_failed) > 0 and np.mean(ply_failed) > 0.70
-                    ):  # 70% threshold is complete yarn failure
-                        max_ply_perf = ply
-
-            logger.info(
-                "Simulation completed successfully in %d steps. Projectile arrested: %s. "
-                "Peak deceleration: %.2f g. Rupture: %.2f%%. Max layer perforated: %d",
-                step,
-                arrested,
-                peak_decel,
-                rupture_pct,
-                max_ply_perf,
-            )
-
             with self.lock:
-                self.state = "completed"
-                self.results_report = {
-                    "arrested": arrested,
-                    "peak_deceleration_g": peak_decel,
-                    "yarn_rupture_percentage": rupture_pct,
-                    "residual_velocity_ms": float(final_v) if not arrested else 0.0,
-                    "energy_dissipation_efficiency": float(
-                        (initial_v**2 - final_v**2) / (initial_v**2)
-                    )
-                    if initial_v > 0
-                    else 0.0,
-                    "max_layer_perforated": max_ply_perf,
-                }
-                # Store final trajectory step
-                self.grid_nodes = positions.copy()
+                self.grid_nodes = grid.nodes.copy()
                 self.grid_failed = grid.failed.copy()
-                self.projectile_pos = proj.position.copy()
-
+                self.projectile_pos = np.array(config["projectile"]["position"], dtype=np.float64)
         except Exception as e:
-            logger.exception("Simulation execution crashed due to an unhandled exception: %s", e)
             with self.lock:
                 self.state = "error"
-                self.error_message = str(e)
+                self.error_message = f"Grid generation error: {e}"
+            return
+
+        # Start the solver process
+        p = ctx.Process(target=run_solver_process, args=(config, queue, child_conn), daemon=True)
+        self.active_process = p
+        p.start()
+        logger.info("Solver subprocess started with PID %s.", p.pid)
+
+        last_time = time.time()
+        last_step = 0
+        t_sim_total = config["simulation"]["duration"]
+
+        try:
+            while p.is_alive() or not queue.empty():
+                # Check if user requested stop via DPG button
+                if self.stop_event.is_set():
+                    parent_conn.send("stop")
+                    p.terminate()
+                    break
+
+                # Check if user requested pause/resume
+                if self.pause_event.is_set():
+                    # Send pause if not already sent
+                    with self.lock:
+                        if self.state == "running":
+                            self.state = "paused"
+                            parent_conn.send("pause")
+                else:
+                    with self.lock:
+                        if self.state == "paused":
+                            self.state = "running"
+                            parent_conn.send("resume")
+
+                # Read update from queue
+                try:
+                    # Timeout so we check stop/pause signals frequently
+                    msg = queue.get(timeout=0.05)
+                except Exception:
+                    continue
+
+                if msg["type"] == "init":
+                    logger.info(
+                        "Solver subprocess initialized. Device: %s, Nodes: %d, Springs: %d",
+                        msg["device"],
+                        msg["n_nodes"],
+                        msg["n_springs"],
+                    )
+                elif msg["type"] == "telemetry":
+                    # Extract metric updates
+                    with self.lock:
+                        self.elapsed_time = msg["t_sim"]
+                        self.step += msg["steps"]
+                        self.ke = msg["ke"]
+                        self.se = msg["se"]
+                        self.damp_dissipated = msg["damp_dissipated"]
+                        self.peak_strain = msg["peak_strain"]
+                        self.proj_ke = msg["proj_ke"]
+                        self.failed_count = msg["failed_count"]
+                        self.grid_nodes = msg["positions"]
+                        self.grid_failed = msg["failed"]
+                        self.projectile_pos = msg["projectile_pos"]
+
+                        # Append each frame in chunk history to self.history
+                        hist_pos = msg["hist_pos"]
+                        hist_failed = msg["hist_failed"]
+                        hist_proj_pos = msg["hist_proj_pos"]
+                        hist_time = msg["hist_time"]
+                        hist_ke = msg["hist_ke"]
+                        hist_se = msg["hist_se"]
+                        hist_proj_ke = msg["hist_proj_ke"]
+
+                        for idx in range(len(hist_time)):
+                            # Calculate total energy
+                            tot_energy = hist_ke[idx] + hist_se[idx] + hist_proj_ke[idx]
+                            # Count failed springs at that step
+                            failed_cnt_step = int(np.sum(hist_failed[idx]))
+                            self.history.append(
+                                {
+                                    "time": float(hist_time[idx]),
+                                    "nodes": hist_pos[idx],
+                                    "failed": hist_failed[idx],
+                                    "projectile_pos": hist_proj_pos[idx],
+                                    "ke": float(hist_ke[idx]),
+                                    "se": float(hist_se[idx]),
+                                    "damped": float(self.damp_dissipated),
+                                    "contact": 0.0,
+                                    "total": float(tot_energy),
+                                    "failed_count": failed_cnt_step,
+                                    "peak_strain": float(self.peak_strain),
+                                    "proj_ke": float(hist_proj_ke[idx]),
+                                }
+                            )
+
+                        # Calculate running speed/eta metrics
+                        now = time.time()
+                        dt_real = now - last_time
+                        if dt_real >= 1.0:
+                            steps_done = self.step - last_step
+                            self.speed = steps_done / dt_real
+                            last_time = now
+                            last_step = self.step
+                            if self.speed > 0:
+                                dt_sim = msg["dt"]
+                                steps_left = (t_sim_total - self.elapsed_time) / dt_sim
+                                self.eta = steps_left / self.speed
+                            else:
+                                self.eta = 0.0
+
+                elif msg["type"] == "completed":
+                    with self.lock:
+                        self.state = "completed"
+                        self.results_report = msg["report"]
+                    logger.info("Solver subprocess completed successfully.")
+                    break
+                elif msg["type"] == "error":
+                    with self.lock:
+                        self.state = "error"
+                        self.error_message = msg["message"]
+                    logger.error(
+                        "Solver subprocess crashed with error: %s\n%s",
+                        msg["message"],
+                        msg.get("traceback", ""),
+                    )
+                    break
+
+        except Exception as e:
+            logger.error("Error in runner listener thread: %s", traceback.format_exc())
+            with self.lock:
+                self.state = "error"
+                self.error_message = f"Listener error: {e}"
+        finally:
+            # Cleanup process
+            if p.is_alive():
+                p.terminate()
+                p.join(timeout=1.0)
+            self.active_process = None
+            self.control_pipe_parent = None
 
 
 # Global instances
@@ -1042,3 +823,7 @@ def _spawn_recovery_modal(config: dict) -> None:
         with dpg.group(horizontal=True):
             dpg.add_button(label="Yes, Restore", width=120, callback=_restore_session)
             dpg.add_button(label="No, Start Fresh", width=120, callback=_ignore_session)
+
+
+if __name__ == "__main__":
+    launch()

@@ -6,6 +6,7 @@ and math operations, dynamically selecting the best available backend.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -27,14 +28,9 @@ try:
 except ImportError:
     HAS_NUMBA = False
 
-try:
-    import taichi  # noqa: F401
+import importlib.util
 
-    HAS_TAICHI = True
-except ImportError:
-    HAS_TAICHI = False
-
-import os
+HAS_TAICHI = importlib.util.find_spec("taichi") is not None
 
 # Select backend with override support
 env_backend = os.environ.get("KEVLARGRID_BACKEND", "").lower()
@@ -73,14 +69,7 @@ def get_active_device() -> str:
         except Exception:
             return f"JAX CPU ({platform.machine()})"
     elif BACKEND == "taichi" and HAS_TAICHI:
-        try:
-            import taichi as ti
-
-            # Safe runtime check for active GPU/Metal context
-            arch_name = ti.lang.impl.current_cfg().arch.name.upper()
-            return f"Taichi GPU/Metal ({arch_name}) with hardware acceleration"
-        except Exception:
-            return "Taichi GPU/Metal with hardware acceleration"
+        return "Taichi GPU/Metal with hardware acceleration"
     elif BACKEND == "numba" and HAS_NUMBA:
         return f"CPU ({platform.machine()}) with Numba JIT"
     else:
