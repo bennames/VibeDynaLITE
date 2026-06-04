@@ -292,6 +292,8 @@ class Viewport3D:
                     line_width=2.5,
                     lighting=False,
                 )
+                # Show to initialize offscreen rendering context window
+                self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
 
                 self.has_pyvista = True
             except Exception as e:
@@ -400,7 +402,6 @@ class Viewport3D:
                         colors[ply_indices == ply_idx, 3] = 0
 
                 self.mesh.cell_data["colors"] = colors
-                self.mesh.modified()
 
                 # Update projectile position in actor
                 self.proj_actor.position = self.proj_position
