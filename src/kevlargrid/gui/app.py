@@ -182,6 +182,8 @@ class SimRunner:
                 self.error_message = f"Grid generation error: {e}"
             return
 
+        dt_sim = 1e-6
+
         # Start the solver process
         p = ctx.Process(target=run_solver_process, args=(config, queue, child_conn), daemon=True)
         self.active_process = p
@@ -227,6 +229,7 @@ class SimRunner:
                         msg["n_nodes"],
                         msg["n_springs"],
                     )
+                    dt_sim = msg["dt"]
                 elif msg["type"] == "telemetry":
                     # Extract metric updates
                     with self.lock:
@@ -282,7 +285,6 @@ class SimRunner:
                             last_time = now
                             last_step = self.step
                             if self.speed > 0:
-                                dt_sim = msg["dt"]
                                 steps_left = (t_sim_total - self.elapsed_time) / dt_sim
                                 self.eta = steps_left / self.speed
                             else:

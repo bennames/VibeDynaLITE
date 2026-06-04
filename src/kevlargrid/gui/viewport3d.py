@@ -28,6 +28,9 @@ except ImportError:
     HAS_PYVISTA = False
 
 from kevlargrid.solver.grid import Grid
+from kevlargrid.utils import get_logger
+
+logger = get_logger("gui.viewport3d")
 
 
 class Viewport3D:
@@ -291,7 +294,8 @@ class Viewport3D:
                 )
 
                 self.has_pyvista = True
-            except Exception:
+            except Exception as e:
+                logger.error(f"PyVista viewport reset failed: {e}", exc_info=True)
                 # Fall back to DearPyGui native draw_line loop
                 self.has_pyvista = False
         else:
@@ -369,21 +373,25 @@ class Viewport3D:
 
                 mask1 = ratios <= 0.5
                 ratio1 = ratios[mask1] / 0.5
-                c1 = np.zeros((len(ratio1), 4), dtype=np.uint8)
-                c1[:, 0] = (0 + 255 * ratio1).astype(np.uint8)
-                c1[:, 1] = (191 + (215 - 191) * ratio1).astype(np.uint8)
-                c1[:, 2] = (255 - 255 * ratio1).astype(np.uint8)
-                c1[:, 3] = 230
 
                 mask2 = ratios > 0.5
                 ratio2 = (ratios[mask2] - 0.5) / 0.5
-                c2 = np.zeros((len(ratio2), 4), dtype=np.uint8)
-                c2[:, 0] = (255 - (255 - 220) * ratio2).astype(np.uint8)
-                c2[:, 1] = (215 - (215 - 20) * ratio2).astype(np.uint8)
-                c2[:, 2] = (0 + 60 * ratio2).astype(np.uint8)
-                c2[:, 3] = 230
 
-                colors[active] = np.where(mask1[:, np.newaxis], c1, c2)
+                c_active = np.zeros((np.sum(active), 4), dtype=np.uint8)
+
+                # Write mask1 colors (Blue -> Yellow)
+                c_active[mask1, 0] = (0 + 255 * ratio1).astype(np.uint8)
+                c_active[mask1, 1] = (191 + (215 - 191) * ratio1).astype(np.uint8)
+                c_active[mask1, 2] = (255 - 255 * ratio1).astype(np.uint8)
+                c_active[mask1, 3] = 230
+
+                # Write mask2 colors (Yellow -> Crimson)
+                c_active[mask2, 0] = (255 - (255 - 220) * ratio2).astype(np.uint8)
+                c_active[mask2, 1] = (215 - (215 - 20) * ratio2).astype(np.uint8)
+                c_active[mask2, 2] = (0 + 60 * ratio2).astype(np.uint8)
+                c_active[mask2, 3] = 230
+
+                colors[active] = c_active
 
                 # Set alpha to 0 for springs in hidden layers
                 ply_indices = springs[:, 0] // self.n_nodes_per_layer
@@ -433,7 +441,8 @@ class Viewport3D:
                     parent=self.canvas_tag,
                 )
                 return
-            except Exception:
+            except Exception as e:
+                logger.error(f"PyVista viewport redraw failed: {e}", exc_info=True)
                 # If VTK fails dynamically, fallback to DearPyGui draw loop
                 self.has_pyvista = False
 
