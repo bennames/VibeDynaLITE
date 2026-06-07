@@ -44,7 +44,10 @@ VALID_CONFIG = {
     "simulation": {
         "duration": 0.001,
         "cfl_factor": 0.8,
-        "damping_coefficient": 1.5,
+        "damping_model": "rayleigh",
+        "damping_coefficient": 0.05,
+        "rayleigh_alpha": 0.0,
+        "rayleigh_beta": 0.0001,
     },
 }
 
@@ -164,6 +167,36 @@ class TestGUIWidgets:
         panel._on_mode_change(None, "Mode B (Checkout Stacking)")
         assert dpg.get_item_configuration(panel.grid_t_ply_group)["show"]
 
+    def test_damping_model_visibility_and_defaults(self) -> None:
+        """Verify damping widgets visibility toggles correctly and default values are stable."""
+        panel = ConfigPanel()
+        panel.build()
+
+        # Check default: Rayleigh Damping
+        assert dpg.get_value(panel.sim_damping_model) == "Rayleigh Damping"
+        assert dpg.get_value(panel.sim_damping_coeff) == pytest.approx(0.05)
+        assert dpg.get_value(panel.sim_rayleigh_alpha) == pytest.approx(0.0)
+        assert dpg.get_value(panel.sim_rayleigh_beta) == pytest.approx(1e-9)
+
+        # Check initial visibility (Rayleigh shown, Viscous hidden)
+        assert not dpg.get_item_configuration(panel.row_damping_coeff)["show"]
+        assert dpg.get_item_configuration(panel.row_rayleigh_alpha)["show"]
+        assert dpg.get_item_configuration(panel.row_rayleigh_beta)["show"]
+
+        # Switch to Viscous Damping
+        dpg.set_value(panel.sim_damping_model, "Viscous Damping")
+        panel._on_damping_change(None, "Viscous Damping")
+        assert dpg.get_item_configuration(panel.row_damping_coeff)["show"]
+        assert not dpg.get_item_configuration(panel.row_rayleigh_alpha)["show"]
+        assert not dpg.get_item_configuration(panel.row_rayleigh_beta)["show"]
+
+        # Switch back to Rayleigh Damping
+        dpg.set_value(panel.sim_damping_model, "Rayleigh Damping")
+        panel._on_damping_change(None, "Rayleigh Damping")
+        assert not dpg.get_item_configuration(panel.row_damping_coeff)["show"]
+        assert dpg.get_item_configuration(panel.row_rayleigh_alpha)["show"]
+        assert dpg.get_item_configuration(panel.row_rayleigh_beta)["show"]
+
     def test_boundary_rmin_autocalc(self) -> None:
         """Verify Infinite boundary computes R_min dynamically."""
         panel = ConfigPanel()
@@ -216,8 +249,15 @@ class TestGUIWidgets:
         assert retrieved["projectile"]["velocity"][2] == pytest.approx(
             VALID_CONFIG["projectile"]["velocity"][2]
         )
+        assert retrieved["simulation"]["damping_model"] == VALID_CONFIG["simulation"]["damping_model"]
         assert retrieved["simulation"]["damping_coefficient"] == pytest.approx(
             VALID_CONFIG["simulation"]["damping_coefficient"]
+        )
+        assert retrieved["simulation"]["rayleigh_alpha"] == pytest.approx(
+            VALID_CONFIG["simulation"]["rayleigh_alpha"]
+        )
+        assert retrieved["simulation"]["rayleigh_beta"] == pytest.approx(
+            VALID_CONFIG["simulation"]["rayleigh_beta"]
         )
         assert retrieved["simulation"]["snapshot_interval"] == 100
 
@@ -262,6 +302,27 @@ class TestGUIWidgets:
             return val
 
         assert parse_kb(size_str_10) > parse_kb(size_str_25)
+
+    def test_viewport_mouse_down_button_extraction(self, monkeypatch) -> None:
+        """Verify that _on_mouse_down correctly extracts button ID from list/tuple payloads."""
+        view = Viewport3D()
+        view.build()
+
+        monkeypatch.setattr(dpg, "is_item_hovered", lambda tag: True)
+        monkeypatch.setattr(dpg, "get_mouse_pos", lambda local: [100.0, 100.0])
+
+        # 1. Test single integer app_data
+        view._on_mouse_down("test_sender", 0)
+        assert view.drag_button == 0
+        assert view.is_dragging is True
+
+        # Reset dragging state to allow subsequent calls to process S7.10
+        view.is_dragging = False
+
+        # 2. Test list/tuple app_data [button_id, hold_time]
+        view._on_mouse_down("test_sender", [1, 0.5])
+        assert view.drag_button == 1
+        assert view.is_dragging is True
 
 
 class TestControlsWidget:

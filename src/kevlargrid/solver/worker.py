@@ -13,7 +13,7 @@ from kevlargrid.solver import backend
 from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
 from kevlargrid.solver.fused import fused_leapfrog_loop
 from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.projectile import Projectile
+from kevlargrid.solver.projectile import Projectile, update_contact_zone, check_termination
 from kevlargrid.solver.timestep import compute_cfl_timestep
 
 
@@ -73,13 +73,28 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             edge_thickness=proj_cfg["edge_thickness"],
         )
 
+        # Determine strike direction based on initial velocity Z-component
+        strike_direction = -1.0 if proj_cfg["velocity"][2] < 0.0 else 1.0
+
         positions = grid.nodes.copy()
         velocities = np.zeros_like(positions)
-        damping_coeff = sim_cfg["damping_coefficient"]
+        damping_model = sim_cfg.get("damping_model", "rayleigh")
+        if damping_model == "viscous":
+            rayleigh_alpha = sim_cfg.get("damping_coefficient", 0.05)
+            rayleigh_beta = 0.0
+        else:
+            rayleigh_alpha = sim_cfg.get("rayleigh_alpha", 0.0)
+            rayleigh_beta = sim_cfg.get("rayleigh_beta", 1e-9)
         duration = sim_cfg["duration"]
+
+        failure_strain = mat["failure_strain"]
+        damage_onset_strain = mat.get("damage_onset_strain", 0.6 * failure_strain)
+        fracture_energy_multiplier = mat.get("fracture_energy_multiplier", 1.5)
 
         t_sim = 0.0
         damp_dissipated = 0.0
+        failure_dissipated = 0.0
+        clamp_dissipated = 0.0
 
         # Send configuration metadata back to GUI process
         queue.put(
@@ -133,6 +148,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 proj.position,
                 proj.velocity,
                 damp_dissipated,
+                failure_dissipated,
+                clamp_dissipated,
                 t_sim,
                 hist_pos,
                 hist_failed,
@@ -161,13 +178,24 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 t_ply if t_ply is not None else 0.002,
                 dx,
                 k_penalty,
-                damping_coeff,
-                mat["failure_strain"],
+                rayleigh_alpha,
+                rayleigh_beta,
+                failure_strain,
+                damage_onset_strain,
+                fracture_energy_multiplier,
                 dt,
                 current_steps,
                 save_interval,
                 damp_dissipated,
+                failure_dissipated,
+                clamp_dissipated,
                 t_sim,
+                strike_direction,
+                grid.initial_spring_counts,
+                grid.node_spring_offsets,
+                grid.node_spring_ids,
+                grid.node_spring_signs,
+                use_viscous=(damping_model == "viscous"),
             )
 
             # Check for numerical instability (NaN/inf values)
@@ -188,29 +216,47 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             peak_strain = float(np.max(strains)) if len(strains) > 0 else 0.0
 
             # Send telemetry snapshot chunk back to parent GUI process
+            # Convert JAX arrays to standard NumPy arrays for DPG/PyVista compatibility S7.6.1
             queue.put(
                 {
                     "type": "telemetry",
                     "steps": current_steps,
-                    "t_sim": t_sim,
-                    "positions": positions.copy(),
-                    "failed": grid.failed.copy(),
-                    "projectile_pos": proj.position.copy(),
-                    "ke": ke,
-                    "se": se,
-                    "damp_dissipated": damp_dissipated,
-                    "peak_strain": peak_strain,
-                    "proj_ke": proj_ke,
-                    "failed_count": failed_count,
-                    "hist_pos": hist_pos,
-                    "hist_failed": hist_failed,
-                    "hist_proj_pos": hist_proj_pos,
-                    "hist_time": hist_time,
-                    "hist_ke": hist_ke,
-                    "hist_se": hist_se,
-                    "hist_proj_ke": hist_proj_ke,
+                    "t_sim": float(t_sim),
+                    "positions": np.asarray(positions).copy(),
+                    "failed": np.asarray(grid.failed).copy(),
+                    "projectile_pos": np.asarray(proj.position).copy(),
+                    "ke": float(ke),
+                    "se": float(se),
+                    "damp_dissipated": float(damp_dissipated),
+                    "failure_dissipated": float(failure_dissipated),
+                    "clamp_dissipated": float(clamp_dissipated),
+                    "peak_strain": float(peak_strain),
+                    "proj_ke": float(proj_ke),
+                    "failed_count": int(failed_count),
+                    "hist_pos": np.asarray(hist_pos),
+                    "hist_failed": np.asarray(hist_failed),
+                    "hist_proj_pos": np.asarray(hist_proj_pos),
+                    "hist_time": np.asarray(hist_time),
+                    "hist_ke": np.asarray(hist_ke),
+                    "hist_se": np.asarray(hist_se),
+                    "hist_proj_ke": np.asarray(hist_proj_ke),
                 }
             )
+
+            # Check for termination condition S7.6.1
+            proximity_threshold = dx * 2.0
+            positions_np = np.asarray(positions)
+            update_contact_zone(proj, grid, proximity_threshold, positions=positions_np)
+            reason = check_termination(
+                proj,
+                grid,
+                positions_np,
+                t_sim,
+                duration,
+                proj_cfg["velocity"][2],
+            )
+            if reason is not None:
+                break
 
         # Calculate final reports
         # Compute final velocity and kinetic energy
@@ -226,6 +272,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             "failed_springs": int(np.sum(grid.failed)),
             "peak_strain": float(np.max(strains)) if len(strains) > 0 else 0.0,
             "damp_dissipated": float(damp_dissipated),
+            "failure_dissipated": float(failure_dissipated),
+            "clamp_dissipated": float(clamp_dissipated),
         }
 
         queue.put(
