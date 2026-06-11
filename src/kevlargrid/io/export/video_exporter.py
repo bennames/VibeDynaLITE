@@ -209,9 +209,20 @@ class VideoExporter:
                 anim.save(filepath, writer="pillow", fps=fps)
         else:
             if animation.FFMpegWriter.isAvailable():
-                writer = animation.FFMpegWriter(fps=fps, bitrate=1800)
+                writer = animation.FFMpegWriter(
+                    fps=fps,
+                    codec="h264",
+                    bitrate=1800,
+                    extra_args=["-pix_fmt", "yuv420p"]
+                )
                 anim.save(filepath, writer=writer)
             else:
-                anim.save(filepath, writer="ffmpeg", fps=fps)
+                anim.save(
+                    filepath,
+                    writer="ffmpeg",
+                    fps=fps,
+                    codec="h264",
+                    extra_args=["-pix_fmt", "yuv420p"]
+                )
 
         plt.close(fig)
