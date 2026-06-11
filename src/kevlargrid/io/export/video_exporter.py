@@ -202,19 +202,16 @@ class VideoExporter:
         # Compile and save
         ext = os.path.splitext(filepath)[1].lower()
         if ext == ".gif":
-            gif_writer = (
-                animation.ImageMagickWriter(fps=fps)
-                if animation.ImageMagickWriter.isAvailable()
-                else "pillow"
-            )
-            anim.save(filepath, writer=gif_writer, fps=fps)
+            if animation.ImageMagickWriter.isAvailable():
+                writer = animation.ImageMagickWriter(fps=fps)
+                anim.save(filepath, writer=writer)
+            else:
+                anim.save(filepath, writer="pillow", fps=fps)
         else:
-            # Enforce MP4 via FFMpegWriter or default fallback
-            mp4_writer = (
-                animation.FFMpegWriter(fps=fps, bitrate=1800)
-                if animation.FFMpegWriter.isAvailable()
-                else "ffmpeg"
-            )
-            anim.save(filepath, writer=mp4_writer, fps=fps)
+            if animation.FFMpegWriter.isAvailable():
+                writer = animation.FFMpegWriter(fps=fps, bitrate=1800)
+                anim.save(filepath, writer=writer)
+            else:
+                anim.save(filepath, writer="ffmpeg", fps=fps)
 
         plt.close(fig)
