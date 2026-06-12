@@ -57,7 +57,8 @@ def dummy_simulation_data() -> tuple[dict[str, Any], dict[str, Any], list[dict[s
         "simulation": {
             "duration": 0.001,
             "cfl_factor": 0.8,
-            "damping_coefficient": 0.5,
+            "rayleigh_alpha": 0.5,
+            "rayleigh_beta": 0.0,
             "snapshot_interval": 10,
         },
     }
@@ -226,3 +227,33 @@ def test_video_animation_exporter_mock(dummy_simulation_data) -> None:
 
     assert exporter.nx == 5
     assert len(exporter.history) == 5
+
+
+def test_video_animation_exporter_compile(dummy_simulation_data) -> None:
+    """Verify video anim compile actually renders and saves output to disk."""
+    config, _, history = dummy_simulation_data
+
+    exporter = VideoExporter(
+        config=config,
+        history=history,
+        nx=5,
+        ny=5,
+        n_plies=1,
+        n_nodes_per_layer=25,
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 1. Test GIF
+        gif_filepath = os.path.join(tmpdir, "test_animation.gif")
+        exporter.compile(gif_filepath, fps=5)
+        assert os.path.exists(gif_filepath)
+        assert os.path.getsize(gif_filepath) > 1024
+
+        # 2. Test MP4 (if ffmpeg is available)
+        import matplotlib.animation as animation
+        if animation.FFMpegWriter.isAvailable() or animation.writers.is_available("ffmpeg"):
+            mp4_filepath = os.path.join(tmpdir, "test_animation.mp4")
+            exporter.compile(mp4_filepath, fps=5)
+            assert os.path.exists(mp4_filepath)
+            assert os.path.getsize(mp4_filepath) > 1024
+

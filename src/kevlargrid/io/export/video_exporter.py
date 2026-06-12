@@ -6,6 +6,7 @@ representing the impact event, utilizing standard matplotlib Agg backend.
 
 from __future__ import annotations
 
+import math
 import os
 from typing import Any
 
@@ -16,6 +17,13 @@ matplotlib.use("Agg")
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
+
+try:
+    import pyvista as pv
+    HAS_PYVISTA = True
+except ImportError:
+    pv = None
+    HAS_PYVISTA = False
 
 
 class VideoExporter:
@@ -64,9 +72,6 @@ class VideoExporter:
             raise ValueError("No history frames loaded to export video.")
 
         # Detect the actual number of renderable plies from the history data.
-        # In Mode A (Sizing Multiplier), the solver uses only 1 layer of nodes
-        # but scales mass/stiffness by n_plies. In Mode B (Checkout Stacking),
-        # each ply has its own physical layer of nodes.
         actual_n_nodes = len(self.history[0]["nodes"])
         render_plies = max(1, actual_n_nodes // self.n_nodes_per_layer)
 
@@ -93,98 +98,241 @@ class VideoExporter:
         springs = np.array(springs_list, dtype=np.int32)
         n_springs_per_ply = len(springs_list) // render_plies
 
-        # 1. Setup Matplotlib 3D Canvas
-        fig = plt.figure(figsize=(7, 5), dpi=dpi)
-        ax = fig.add_subplot(111, projection="3d")
+        # Vectorized rest lengths calculation
+        dx = self.config.get("grid", {}).get("dx", 0.01)
+        diag_len = dx * np.sqrt(2)
+        rest_lengths = np.zeros(len(springs))
+        n_ortho = int(2 * n_springs_per_ply / 3)
+        for k in range(render_plies):
+            offset = k * n_springs_per_ply
+            rest_lengths[offset : offset + n_ortho] = dx
+            rest_lengths[offset + n_ortho : offset + n_springs_per_ply] = diag_len
 
-        # Determine strict spatial bounds across all history for tight viewport box
+        # Determine spatial bounds across all history for tight viewport box (used by both paths)
         all_nodes = np.vstack([f["nodes"] for f in self.history])
         x_min, x_max = np.min(all_nodes[:, 0]), np.max(all_nodes[:, 0])
         y_min, y_max = np.min(all_nodes[:, 1]), np.max(all_nodes[:, 1])
         z_min, z_max = np.min(all_nodes[:, 2]) - 0.01, np.max(all_nodes[:, 2]) + 0.01
 
-        # Render 3D scene elements list
-        spring_lines: list[Any] = []
-        for _ in range(len(springs)):
-            (line,) = ax.plot([], [], [], color="blue", linewidth=0.5)
-            spring_lines.append(line)
+        fail_thresh = 0.036
 
-        # Projectile wireframe container lines
-        (proj_line,) = ax.plot([], [], [], color="red", linewidth=2.0)
+        # Try PyVista Off-screen GPU Renderer path first
+        use_pyvista = False
+        if HAS_PYVISTA and pv is not None:
+            try:
+                plotter = pv.Plotter(off_screen=True, window_size=[700, 500])
+                plotter.background_color = "black"
 
-        # Style Viewport
-        ax.set_xlim3d(x_min, x_max)
-        ax.set_ylim3d(y_min, y_max)
-        ax.set_zlim3d(z_min, z_max)
-        ax.set_title("KevlarGrid 3D Woven Fabric Impact Telemetry")
-        ax.view_init(elev=pitch, azim=yaw)
+                # Build PolyData mesh
+                lines = np.empty(len(springs) * 3, dtype=np.int32)
+                lines[0::3] = 2
+                lines[1::3] = springs[:, 0]
+                lines[2::3] = springs[:, 1]
+                mesh = pv.PolyData(self.history[0]["nodes"], lines=lines)
 
-        ax.set_xlabel("X (m)")
-        ax.set_ylabel("Y (m)")
-        ax.set_zlabel("Z (m)")
+                # Initialize cell colors (RGBA uint8)
+                mesh_colors = np.zeros((len(springs), 4), dtype=np.uint8)
+                mesh.cell_data["colors"] = mesh_colors
 
-        def init() -> list[Any]:
-            for line in spring_lines:
-                line.set_data_3d([], [], [])
-            proj_line.set_data_3d([], [], [])
-            return [*spring_lines, proj_line]
+                # Add mesh to plotter
+                mesh_actor = plotter.add_mesh(
+                    mesh,
+                    scalars="colors",
+                    rgba=True,
+                    line_width=1.5,
+                    show_scalar_bar=False,
+                    lighting=False,
+                )
 
-        def update(frame_idx: int) -> list[Any]:
-            frame = self.history[frame_idx]
-            nodes = frame["nodes"]
-            failed = frame["failed"]
-            p_pos = frame["projectile_pos"]
+                # Add projectile wireframe box
+                pw = self.config.get("projectile", {}).get("blade_width", 0.02)
+                pt = self.config.get("projectile", {}).get("edge_thickness", 0.005)
+                ph = 0.005
+                proj_mesh = pv.Box(bounds=[-pw / 2, pw / 2, -pt / 2, pt / 2, -ph, ph])
+                proj_actor = plotter.add_mesh(
+                    proj_mesh,
+                    color=[230, 230, 250],
+                    style="wireframe",
+                    line_width=2.5,
+                    lighting=False,
+                )
 
-            # Draw Springs
-            # Live strain coloring limit
-            fail_thresh = 0.036
+                # Position camera precisely
+                yaw_rad = math.radians(yaw)
+                pitch_rad = math.radians(pitch)
+                cy, sy = math.cos(yaw_rad), math.sin(yaw_rad)
+                cp, sp = math.cos(pitch_rad), math.sin(pitch_rad)
+                R = np.array([
+                    [cy, 0.0, -sy],
+                    [-sy * sp, cp, -cy * sp],
+                    [sy * cp, sp, cy * cp]
+                ])
+                local_y = R[1, :]
+                local_z = R[2, :]
 
-            p1 = nodes[springs[:, 0]]
-            p2 = nodes[springs[:, 1]]
-            lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                grid_center = np.mean(self.history[0]["nodes"][:self.n_nodes_per_layer], axis=0)
+                x_span = x_max - x_min
+                y_span = y_max - y_min
+                distance = max(x_span, y_span) * 2.5
 
-            # Simple orthogonal and diagonal rest length arrays
-            rest_lengths = np.zeros(len(springs))
-            for k in range(render_plies):
-                offset = k * n_springs_per_ply
-                for j in range(n_springs_per_ply):
-                    idx_s = offset + j
-                    # Orthogonal connects idx, idx+ny or idx, idx+1. Distances are dx (0.01 or similar)
-                    rest_lengths[idx_s] = 0.01 if j < 2 * n_springs_per_ply / 3 else 0.01414
+                focal_point = grid_center
+                camera_position = focal_point + distance * local_z
 
-            strains = (lengths - rest_lengths) / rest_lengths
+                plotter.camera.position = camera_position
+                plotter.camera.focal_point = focal_point
+                plotter.camera.up = local_y
 
-            # The solver's failed array may have a different length than the
-            # exporter's local spring list (e.g. Mode A vs Mode B topology).
-            n_failed = len(failed)
+                plotter.show(auto_close=False, interactive=False, interactive_update=True)
+                use_pyvista = True
+            except Exception:
+                # Silently fall back to optimized Matplotlib path if anything fails
+                use_pyvista = False
 
-            for j in range(len(springs)):
-                u, v = springs[j, 0], springs[j, 1]
-                x_pts = [nodes[u, 0], nodes[v, 0]]
-                y_pts = [nodes[u, 1], nodes[v, 1]]
-                z_pts = [nodes[u, 2], nodes[v, 2]]
-                line = spring_lines[j]
+        if use_pyvista:
+            # RENDER USING PYVISTA + MATPLOTLIB 2D IMSHOW
+            fig, ax = plt.subplots(figsize=(7, 5), dpi=dpi)
+            ax.axis("off")
+            fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
-                line.set_data_3d(x_pts, y_pts, z_pts)
+            # Draw initial frame
+            plotter.render()
+            img = plotter.image
+            im = ax.imshow(img)
 
-                if j < n_failed and failed[j]:
-                    line.set_color([0.5, 0.0, 0.0, 0.15])  # Faded brick red
-                    line.set_linewidth(0.4)
-                else:
-                    ratio = min(1.0, max(0.0, strains[j] / fail_thresh))
-                    # Blue -> Green -> Red interpolation
-                    r = ratio
-                    g = 1.0 - ratio
-                    b = 0.5 * (1.0 - ratio)
-                    line.set_color((r, g, b, 0.8))
-                    line.set_linewidth(0.8)
+            def init() -> list[Any]:
+                return [im]
 
-            # Draw Projectile Wireframe
-            pw = 0.02
-            pt = 0.005
-            ph = 0.005
-            p_offsets = np.array(
-                [
+            def update(frame_idx: int) -> list[Any]:
+                frame = self.history[frame_idx]
+                nodes = frame["nodes"]
+                failed = frame["failed"]
+                p_pos = frame["projectile_pos"]
+
+                # Update mesh positions
+                mesh.points = nodes
+
+                # Update projectile position
+                proj_actor.position = p_pos
+
+                # Calculate strains
+                p1 = nodes[springs[:, 0]]
+                p2 = nodes[springs[:, 1]]
+                lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                strains = (lengths - rest_lengths) / rest_lengths
+
+                # Update cell colors vectorised
+                colors = np.zeros((len(springs), 4), dtype=np.uint8)
+                n_failed = len(failed)
+                failed_mask = np.zeros(len(springs), dtype=bool)
+                failed_mask[:n_failed] = failed
+
+                # Ruptured springs: transparent brick red
+                colors[failed_mask] = [139, 0, 0, 45]
+
+                # Active springs: Blue -> Yellow -> Crimson
+                active = ~failed_mask
+                ratios = np.clip(strains[active] / fail_thresh, 0.0, 1.0)
+
+                mask1 = ratios <= 0.5
+                ratio1 = ratios[mask1] / 0.5
+                mask2 = ratios > 0.5
+                ratio2 = (ratios[mask2] - 0.5) / 0.5
+
+                c_active = np.zeros((np.sum(active), 4), dtype=np.uint8)
+                c_active[mask1, 0] = (0 + 255 * ratio1).astype(np.uint8)
+                c_active[mask1, 1] = (191 + (215 - 191) * ratio1).astype(np.uint8)
+                c_active[mask1, 2] = (255 - 255 * ratio1).astype(np.uint8)
+                c_active[mask1, 3] = 230
+
+                c_active[mask2, 0] = (255 - (255 - 220) * ratio2).astype(np.uint8)
+                c_active[mask2, 1] = (215 - (215 - 20) * ratio2).astype(np.uint8)
+                c_active[mask2, 2] = (0 + 60 * ratio2).astype(np.uint8)
+                c_active[mask2, 3] = 230
+
+                colors[active] = c_active
+                mesh.cell_data["colors"] = colors
+
+                # Render and update imshow artist
+                plotter.render()
+                im.set_array(plotter.image)
+                return [im]
+
+            anim = animation.FuncAnimation(
+                fig,
+                update,
+                frames=len(self.history),
+                init_func=init,
+                blit=True,
+            )
+
+        else:
+            # FALLBACK PATH: OPTIMIZED MATPLOTLIB 3D LINE3DCOLLECTION
+            fig = plt.figure(figsize=(7, 5), dpi=dpi)
+            ax = fig.add_subplot(111, projection="3d")
+
+            # Style Viewport
+            ax.set_xlim3d(x_min, x_max)
+            ax.set_ylim3d(y_min, y_max)
+            ax.set_zlim3d(z_min, z_max)
+            ax.set_title("KevlarGrid 3D Woven Fabric Impact Telemetry")
+            ax.view_init(elev=pitch, azim=yaw)
+
+            ax.set_xlabel("X (m)")
+            ax.set_ylabel("Y (m)")
+            ax.set_zlabel("Z (m)")
+
+            # Line3DCollection is 100x faster than plotting each spring as a separate Line3D
+            from mpl_toolkits.mplot3d.art3d import Line3DCollection
+            lines_collection = Line3DCollection([], linewidths=0.8)
+            ax.add_collection3d(lines_collection)
+
+            # Projectile wireframe container (kept as single Line3D)
+            (proj_line,) = ax.plot([], [], [], color="red", linewidth=2.0)
+
+            def init() -> list[Any]:
+                lines_collection.set_segments([])
+                proj_line.set_data_3d([], [], [])
+                return [lines_collection, proj_line]
+
+            def update(frame_idx: int) -> list[Any]:
+                frame = self.history[frame_idx]
+                nodes = frame["nodes"]
+                failed = frame["failed"]
+                p_pos = frame["projectile_pos"]
+
+                p1 = nodes[springs[:, 0]]
+                p2 = nodes[springs[:, 1]]
+                lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                strains = (lengths - rest_lengths) / rest_lengths
+
+                # Update segment geometries in-place
+                segments = np.stack([p1, p2], axis=1)
+                lines_collection.set_segments(segments)
+
+                # Vectorized color mapping
+                colors = np.zeros((len(springs), 4))
+                n_failed = len(failed)
+                failed_mask = np.zeros(len(springs), dtype=bool)
+                failed_mask[:n_failed] = failed
+
+                # Transparent brick red for ruptured springs
+                colors[failed_mask] = [0.5, 0.0, 0.0, 0.15]
+
+                # Active springs color interpolation
+                active = ~failed_mask
+                ratios = np.clip(strains[active] / fail_thresh, 0.0, 1.0)
+                colors[active, 0] = ratios
+                colors[active, 1] = 1.0 - ratios
+                colors[active, 2] = 0.5 * (1.0 - ratios)
+                colors[active, 3] = 0.8
+
+                lines_collection.set_color(colors)
+
+                # Update projectile wireframe
+                pw = 0.02
+                pt = 0.005
+                ph = 0.005
+                p_offsets = np.array([
                     [-pw / 2, -pt / 2, -ph / 2],
                     [pw / 2, -pt / 2, -ph / 2],
                     [pw / 2, pt / 2, -ph / 2],
@@ -193,22 +341,20 @@ class VideoExporter:
                     [pw / 2, -pt / 2, ph / 2],
                     [pw / 2, pt / 2, ph / 2],
                     [-pw / 2, pt / 2, ph / 2],
-                ]
+                ])
+                corners = p_pos + p_offsets
+                loop = [0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3]
+                proj_line.set_data_3d(corners[loop, 0], corners[loop, 1], corners[loop, 2])
+
+                return [lines_collection, proj_line]
+
+            anim = animation.FuncAnimation(
+                fig,
+                update,
+                frames=len(self.history),
+                init_func=init,
+                blit=True,
             )
-            corners = p_pos + p_offsets
-            # Connect loop corners
-            loop = [0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3]
-            proj_line.set_data_3d(corners[loop, 0], corners[loop, 1], corners[loop, 2])
-
-            return [*spring_lines, proj_line]
-
-        anim = animation.FuncAnimation(
-            fig,
-            update,
-            frames=len(self.history),
-            init_func=init,
-            blit=False,
-        )
 
         # Compile and save
         ext = os.path.splitext(filepath)[1].lower()
@@ -237,6 +383,8 @@ class VideoExporter:
                 )
 
         plt.close(fig)
+        if use_pyvista:
+            plotter.close()
 
         # Validate output: an empty/corrupt MP4 is typically < 1 KB
         file_size = os.path.getsize(filepath)
