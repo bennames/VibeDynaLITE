@@ -63,9 +63,16 @@ class VideoExporter:
         if not self.history:
             raise ValueError("No history frames loaded to export video.")
 
+        # Detect the actual number of renderable plies from the history data.
+        # In Mode A (Sizing Multiplier), the solver uses only 1 layer of nodes
+        # but scales mass/stiffness by n_plies. In Mode B (Checkout Stacking),
+        # each ply has its own physical layer of nodes.
+        actual_n_nodes = len(self.history[0]["nodes"])
+        render_plies = max(1, actual_n_nodes // self.n_nodes_per_layer)
+
         # Build spring indexes to draw lines
         springs_list = []
-        for ply in range(self.n_plies):
+        for ply in range(render_plies):
             offset = ply * self.n_nodes_per_layer
             for i in range(self.nx):
                 for j in range(self.ny):
@@ -84,7 +91,7 @@ class VideoExporter:
                         springs_list.append((idx, idx + self.ny - 1))
 
         springs = np.array(springs_list, dtype=np.int32)
-        n_springs_per_ply = len(springs_list) // self.n_plies
+        n_springs_per_ply = len(springs_list) // render_plies
 
         # 1. Setup Matplotlib 3D Canvas
         fig = plt.figure(figsize=(7, 5), dpi=dpi)
@@ -138,7 +145,7 @@ class VideoExporter:
 
             # Simple orthogonal and diagonal rest length arrays
             rest_lengths = np.zeros(len(springs))
-            for k in range(self.n_plies):
+            for k in range(render_plies):
                 offset = k * n_springs_per_ply
                 for j in range(n_springs_per_ply):
                     idx_s = offset + j
@@ -146,6 +153,10 @@ class VideoExporter:
                     rest_lengths[idx_s] = 0.01 if j < 2 * n_springs_per_ply / 3 else 0.01414
 
             strains = (lengths - rest_lengths) / rest_lengths
+
+            # The solver's failed array may have a different length than the
+            # exporter's local spring list (e.g. Mode A vs Mode B topology).
+            n_failed = len(failed)
 
             for j in range(len(springs)):
                 u, v = springs[j, 0], springs[j, 1]
@@ -156,7 +167,7 @@ class VideoExporter:
 
                 line.set_data_3d(x_pts, y_pts, z_pts)
 
-                if failed[j]:
+                if j < n_failed and failed[j]:
                     line.set_color([0.5, 0.0, 0.0, 0.15])  # Faded brick red
                     line.set_linewidth(0.4)
                 else:
@@ -226,3 +237,12 @@ class VideoExporter:
                 )
 
         plt.close(fig)
+
+        # Validate output: an empty/corrupt MP4 is typically < 1 KB
+        file_size = os.path.getsize(filepath)
+        if file_size < 1024:
+            raise RuntimeError(
+                f"Video export failed: output file '{filepath}' is only "
+                f"{file_size} bytes (expected at least several KB). "
+                f"This usually means frame rendering encountered an error."
+            )
