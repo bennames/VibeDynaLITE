@@ -33,10 +33,11 @@ class ResultsDashboard:
         self.runner: Any = None
         self.config_panel: Any = None
 
-    def set_references(self, runner: Any, config_panel: Any) -> None:
+    def set_references(self, runner: Any, config_panel: Any, viewport3d: Any = None) -> None:
         """Connect global thread runner and config panel to enable live data exporting."""
         self.runner = runner
         self.config_panel = config_panel
+        self.viewport3d = viewport3d
 
     def build(self) -> None:
         """Construct the results dashboard DearPyGui widgets."""
@@ -219,6 +220,7 @@ class ResultsDashboard:
     def _compile_video(self, sender: str, app_data: Any) -> None:
         import os
         import threading
+        import math
 
         from kevlargrid.io.export.video_exporter import VideoExporter
 
@@ -230,6 +232,19 @@ class ResultsDashboard:
             "Rendering 3D frames in background thread...\nPlease wait.",
             has_button=False,
         )
+
+        current_yaw = 45.0
+        current_pitch = 30.0
+        current_distance = None
+        current_pan_x = None
+        current_pan_y = None
+
+        if hasattr(self, "viewport3d") and self.viewport3d is not None:
+            current_yaw = float(math.degrees(self.viewport3d.yaw))
+            current_pitch = float(math.degrees(self.viewport3d.pitch))
+            current_distance = float(self.viewport3d.distance)
+            current_pan_x = float(self.viewport3d.pan_x)
+            current_pan_y = float(self.viewport3d.pan_y)
 
         def _thread_task():
             try:
@@ -248,7 +263,15 @@ class ResultsDashboard:
                     n_plies=n_plies,
                     n_nodes_per_layer=nx * ny,
                 )
-                exporter.compile(filepath, yaw=45.0, pitch=30.0, fps=30)
+                exporter.compile(
+                    filepath,
+                    yaw=current_yaw,
+                    pitch=current_pitch,
+                    fps=30,
+                    distance=current_distance,
+                    pan_x=current_pan_x,
+                    pan_y=current_pan_y,
+                )
 
                 if dpg.does_item_exist("popup_modal_dashboard_message"):
                     dpg.delete_item("popup_modal_dashboard_message")

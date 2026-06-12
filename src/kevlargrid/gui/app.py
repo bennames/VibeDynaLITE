@@ -328,8 +328,8 @@ controls = SimulationControls()
 strain_plot = StrainPlot()
 energy_plot = EnergyPlot()
 dashboard = ResultsDashboard()
-dashboard.set_references(runner, config_panel)
 viewport3d = Viewport3D()
+dashboard.set_references(runner, config_panel, viewport3d)
 
 # Playback controls state
 playback_active = False
@@ -380,11 +380,11 @@ def launch() -> None:
     with (
         dpg.window(
             label="KevlarGrid Workspace",
-            width=1260,
+            width=1300,
             height=760,
             no_title_bar=True,
             no_move=True,
-            no_resize=True,
+            no_resize=False,
         ),
         dpg.group(horizontal=True),
     ):
@@ -405,57 +405,57 @@ def launch() -> None:
                 with dpg.tab(label="3D Viewport Visualization", tag="tab_viewport"):
                     viewport3d.build()
 
-                    # Post-simulation playback widgets row toolbar
-                    with dpg.group(tag="playback_group", show=False, horizontal=True):
-                        dpg.add_button(
-                            label="Play",
-                            tag="pb_play_btn",
-                            width=65,
-                            callback=lambda: _toggle_playback(True),
-                        )
-                        dpg.add_button(
-                            label="Pause",
-                            tag="pb_pause_btn",
-                            width=65,
-                            callback=lambda: _toggle_playback(False),
-                        )
-                        dpg.add_button(
-                            label="Step <<", width=65, callback=lambda: _step_playback(-1)
-                        )
-                        dpg.add_button(
-                            label="Step >>", width=65, callback=lambda: _step_playback(1)
-                        )
-                        dpg.add_slider_int(
-                            label="Timeline",
-                            tag="pb_slider",
-                            width=220,
-                            min_value=0,
-                            max_value=100,
-                            default_value=0,
-                            callback=_on_playback_slider_drag,
-                        )
-                        dpg.add_combo(
-                            label="Speed",
-                            tag="pb_speed_combo",
-                            width=80,
-                            items=["0.25x", "0.5x", "1.0x", "2.0x", "5.0x"],
-                            default_value="1.0x",
-                            callback=_on_playback_speed_change,
-                        )
-
                 # Tab 2: Dynamic 2D Telemetry Plots
                 with (
                     dpg.tab(label="Dynamic Analytics Traces", tag="tab_plots"),
                     dpg.group(horizontal=True),
                 ):
-                    with dpg.group(width=410):
+                    with dpg.group(width=410, tag="strain_plot_group"):
                         strain_plot.build()
-                    with dpg.group(width=410):
+                    with dpg.group(width=410, tag="energy_plot_group"):
                         energy_plot.build()
 
                 # Tab 3: Dynamic Results Pass/Fail Dashboard
                 with dpg.tab(label="Impact Results Summary", tag="tab_dashboard"):
                     dashboard.build()
+
+            # Post-simulation playback widgets row toolbar (globally visible below the tabs)
+            with dpg.group(tag="playback_group", show=False, horizontal=True):
+                dpg.add_button(
+                    label="Play",
+                    tag="pb_play_btn",
+                    width=65,
+                    callback=lambda: _toggle_playback(True),
+                )
+                dpg.add_button(
+                    label="Pause",
+                    tag="pb_pause_btn",
+                    width=65,
+                    callback=lambda: _toggle_playback(False),
+                )
+                dpg.add_button(
+                    label="Step <<", width=65, callback=lambda: _step_playback(-1)
+                )
+                dpg.add_button(
+                    label="Step >>", width=65, callback=lambda: _step_playback(1)
+                )
+                dpg.add_slider_int(
+                    label="Timeline",
+                    tag="pb_slider",
+                    width=220,
+                    min_value=0,
+                    max_value=100,
+                    default_value=0,
+                    callback=_on_playback_slider_drag,
+                )
+                dpg.add_combo(
+                    label="Speed",
+                    tag="pb_speed_combo",
+                    width=80,
+                    items=["0.25x", "0.5x", "1.0x", "2.0x", "5.0x"],
+                    default_value="1.0x",
+                    callback=_on_playback_speed_change,
+                )
 
     # Core Thread-Safe Control Callbacks
     def _on_start_btn():
@@ -476,6 +476,13 @@ def launch() -> None:
                 grid=dummy_grid,
                 n_plies=cfg["grid"]["n_plies"],
                 n_nodes_per_layer=cfg["grid"]["nx"] * cfg["grid"]["ny"],
+                blade_width=cfg["projectile"]["blade_width"],
+                edge_thickness=cfg["projectile"]["edge_thickness"],
+            )
+            viewport3d.draw_projectile(
+                np.array(cfg["projectile"]["position"], dtype=np.float64),
+                cfg["projectile"]["blade_width"],
+                cfg["projectile"]["edge_thickness"],
             )
 
             # Reset plots
@@ -524,7 +531,16 @@ def launch() -> None:
             n_plies=reset_cfg["grid"]["n_plies"],
             t_ply=reset_cfg["grid"]["t_ply"],
         )
-        viewport3d.reset(blank_grid)
+        viewport3d.reset(
+            blank_grid,
+            blade_width=reset_cfg["projectile"]["blade_width"],
+            edge_thickness=reset_cfg["projectile"]["edge_thickness"],
+        )
+        viewport3d.draw_projectile(
+            np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
+            reset_cfg["projectile"]["blade_width"],
+            reset_cfg["projectile"]["edge_thickness"],
+        )
 
     # Bind controls callbacks
     controls.start_callback = lambda: (
@@ -538,8 +554,70 @@ def launch() -> None:
     config_panel.load_callback = _menu_load_config
     config_panel.save_callback = _menu_save_config
 
+    _last_resize_size = (0, 0)
+    _resize_pending = False
+    _resize_time = 0.0
+    _pending_right_width = 0
+    _pending_tab_height = 0
+
+    def _on_viewport_resize(sender, app_data):
+        nonlocal _last_resize_size, _resize_pending, _resize_time, _pending_right_width, _pending_tab_height
+        W_view, H_view = app_data[0], app_data[1]
+        
+        # Debounce identical resize calls S7.10
+        if (W_view, H_view) == _last_resize_size:
+            return
+        _last_resize_size = (W_view, H_view)
+        
+        # Configure workspace window
+        if dpg.does_item_exist("KevlarGrid Workspace"):
+            dpg.configure_item("KevlarGrid Workspace", width=W_view, height=H_view - 40)
+        
+        left_width = int(W_view * 0.3)
+        left_width = max(420, min(500, left_width))
+        right_width = W_view - left_width - 30
+        
+        # Dynamically resize sidebar inputs, controls, tabs, and viewport
+        if dpg.does_item_exist(config_panel.group_tag):
+            dpg.configure_item(config_panel.group_tag, width=left_width, height=H_view - 60)
+        if dpg.does_item_exist(controls.group_tag):
+            dpg.configure_item(controls.group_tag, width=right_width)
+        
+        playback_visible = dpg.is_item_shown("playback_group") if dpg.does_item_exist("playback_group") else False
+        playback_height = 40 if playback_visible else 0
+        tab_height = H_view - 385 - playback_height
+        
+        if dpg.does_item_exist(viewport3d.group_tag):
+            dpg.configure_item(viewport3d.group_tag, width=right_width, height=tab_height)
+        if dpg.does_item_exist(dashboard.group_tag):
+            dpg.configure_item(dashboard.group_tag, width=right_width, height=tab_height)
+        
+        # Resize plots and plot groups
+        plot_width = int((right_width - 20) / 2)
+        if dpg.does_item_exist("strain_plot_group"):
+            dpg.configure_item("strain_plot_group", width=plot_width)
+        if dpg.does_item_exist("energy_plot_group"):
+            dpg.configure_item("energy_plot_group", width=plot_width)
+        
+        # Defer expensive viewport resize and plot height configuration S7.10
+        _resize_pending = True
+        _resize_time = time.time()
+        _pending_right_width = right_width
+        _pending_tab_height = tab_height
+
+    dpg.set_viewport_resize_callback(_on_viewport_resize)
+
     dpg.setup_dearpygui()
     dpg.show_viewport()
+
+    # Force initial resize immediately AFTER show_viewport to sync dimensions correctly S7.10
+    _on_viewport_resize(None, [1280, 830])
+    _resize_pending = False
+    if dpg.does_item_exist(strain_plot.plot_tag):
+        dpg.configure_item(strain_plot.plot_tag, height=_pending_tab_height - 60)
+    if dpg.does_item_exist(energy_plot.plot_tag):
+        dpg.configure_item(energy_plot.plot_tag, height=_pending_tab_height - 60)
+    viewport3d.resize(_pending_right_width - 20, _pending_tab_height - 60)
 
     # --- S4.9 Session Auto-Recovery Check ---
     if os.path.exists(AUTOSAVE_PATH):
@@ -563,11 +641,29 @@ def launch() -> None:
         n_plies=initial_cfg["grid"]["n_plies"],
         t_ply=initial_cfg["grid"]["t_ply"],
     )
-    viewport3d.reset(init_grid)
+    viewport3d.reset(
+        init_grid,
+        blade_width=initial_cfg["projectile"]["blade_width"],
+        edge_thickness=initial_cfg["projectile"]["edge_thickness"],
+    )
+    viewport3d.draw_projectile(
+        np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
+        initial_cfg["projectile"]["blade_width"],
+        initial_cfg["projectile"]["edge_thickness"],
+    )
 
     last_grid_key = None
 
     while dpg.is_dearpygui_running():
+        # Process pending deferred viewport and plot resize once settled S7.10
+        if _resize_pending and (time.time() - _resize_time > 0.15):
+            _resize_pending = False
+            if dpg.does_item_exist(strain_plot.plot_tag):
+                dpg.configure_item(strain_plot.plot_tag, height=_pending_tab_height - 60)
+            if dpg.does_item_exist(energy_plot.plot_tag):
+                dpg.configure_item(energy_plot.plot_tag, height=_pending_tab_height - 60)
+            viewport3d.resize(_pending_right_width - 20, _pending_tab_height - 60)
+
         # Update metrics from solver thread
         tel = runner.get_telemetry()
         state = tel["state"]
@@ -583,6 +679,9 @@ def launch() -> None:
                 cfg["grid"]["t_ply"],
                 cfg["grid"]["boundary_type"],
                 cfg["material"].get("material_name", ""),
+                cfg["projectile"]["blade_width"],
+                cfg["projectile"]["edge_thickness"],
+                tuple(cfg["projectile"]["position"]),
             )
             if current_grid_key != last_grid_key:
                 last_grid_key = current_grid_key
@@ -595,7 +694,16 @@ def launch() -> None:
                         n_plies=cfg["grid"]["n_plies"],
                         t_ply=cfg["grid"]["t_ply"],
                     )
-                    viewport3d.reset(preview_grid)
+                    viewport3d.reset(
+                        preview_grid,
+                        blade_width=cfg["projectile"]["blade_width"],
+                        edge_thickness=cfg["projectile"]["edge_thickness"],
+                    )
+                    viewport3d.draw_projectile(
+                        np.array(cfg["projectile"]["position"], dtype=np.float64),
+                        cfg["projectile"]["blade_width"],
+                        cfg["projectile"]["edge_thickness"],
+                    )
                 except Exception:
                     pass
 
@@ -682,6 +790,11 @@ def launch() -> None:
                 save_config(active_cfg, AUTOSAVE_PATH)
             except Exception:
                 pass
+
+        # Deferred 3D viewport redraw processing to avoid event backlog S7.10
+        if getattr(viewport3d, "_needs_redraw", False):
+            viewport3d.redraw(force=True)
+            viewport3d._needs_redraw = False
 
         dpg.render_dearpygui_frame()
 

@@ -52,6 +52,9 @@ class VideoExporter:
         pitch: float = 30.0,
         fps: int = 30,
         dpi: int = 100,
+        distance: float | None = None,
+        pan_x: float | None = None,
+        pan_y: float | None = None,
     ) -> None:
         """Render trajectory history frames and compile an MP4 or GIF file.
 
@@ -67,6 +70,12 @@ class VideoExporter:
             Frames per second of the exported video.
         dpi : int
             DPI resolution scale of the video canvas.
+        distance : float, optional
+            Camera zoom/distance.
+        pan_x : float, optional
+            Horizontal camera panning translation.
+        pan_y : float, optional
+            Vertical camera panning translation.
         """
         if not self.history:
             raise ValueError("No history frames loaded to export video.")
@@ -96,17 +105,14 @@ class VideoExporter:
                         springs_list.append((idx, idx + self.ny - 1))
 
         springs = np.array(springs_list, dtype=np.int32)
-        n_springs_per_ply = len(springs_list) // render_plies
 
-        # Vectorized rest lengths calculation
-        dx = self.config.get("grid", {}).get("dx", 0.01)
-        diag_len = dx * np.sqrt(2)
-        rest_lengths = np.zeros(len(springs))
-        n_ortho = int(2 * n_springs_per_ply / 3)
-        for k in range(render_plies):
-            offset = k * n_springs_per_ply
-            rest_lengths[offset : offset + n_ortho] = dx
-            rest_lengths[offset + n_ortho : offset + n_springs_per_ply] = diag_len
+        # Compute exact rest lengths from the initial reference coordinates in frame 0
+        init_nodes = self.history[0]["nodes"]
+        p1 = init_nodes[springs[:, 0]]
+        p2 = init_nodes[springs[:, 1]]
+        rest_lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+        # Guard against zero rest lengths to prevent division by zero in unphysical/dummy test meshes
+        rest_lengths = np.where(rest_lengths == 0.0, 1.0, rest_lengths)
 
         # Determine spatial bounds across all history for tight viewport box (used by both paths)
         all_nodes = np.vstack([f["nodes"] for f in self.history])
@@ -167,16 +173,24 @@ class VideoExporter:
                     [-sy * sp, cp, -cy * sp],
                     [sy * cp, sp, cy * cp]
                 ])
+                local_x = R[0, :]
                 local_y = R[1, :]
                 local_z = R[2, :]
 
                 grid_center = np.mean(self.history[0]["nodes"][:self.n_nodes_per_layer], axis=0)
-                x_span = x_max - x_min
-                y_span = y_max - y_min
-                distance = max(x_span, y_span) * 2.5
-
-                focal_point = grid_center
-                camera_position = focal_point + distance * local_z
+                
+                # Apply custom camera distance / pan if provided
+                if distance is not None:
+                    px = pan_x if pan_x is not None else 0.0
+                    py = pan_y if pan_y is not None else 0.0
+                    focal_point = grid_center - px * local_x - py * local_y
+                    camera_position = focal_point + distance * local_z
+                else:
+                    x_span = x_max - x_min
+                    y_span = y_max - y_min
+                    distance_calc = max(x_span, y_span) * 2.5
+                    focal_point = grid_center
+                    camera_position = focal_point + distance_calc * local_z
 
                 plotter.camera.position = camera_position
                 plotter.camera.focal_point = focal_point
@@ -271,9 +285,35 @@ class VideoExporter:
             ax = fig.add_subplot(111, projection="3d")
 
             # Style Viewport
-            ax.set_xlim3d(x_min, x_max)
-            ax.set_ylim3d(y_min, y_max)
-            ax.set_zlim3d(z_min, z_max)
+            if distance is not None:
+                x_span = x_max - x_min
+                y_span = y_max - y_min
+                max_span = max(x_span, y_span)
+                default_dist = max_span * 2.5
+                zoom = default_dist / distance
+                
+                cx = (x_min + x_max) / 2.0
+                cy = (y_min + y_max) / 2.0
+                cz = (z_min + z_max) / 2.0
+                
+                px = pan_x if pan_x is not None else 0.0
+                py = pan_y if pan_y is not None else 0.0
+                
+                dx_lim = (x_span / 2.0) / zoom
+                dy_lim = (y_span / 2.0) / zoom
+                dz_lim = ((z_max - z_min) / 2.0) / zoom
+                
+                cx_shifted = cx - px
+                cy_shifted = cy - py
+                
+                ax.set_xlim3d(cx_shifted - dx_lim, cx_shifted + dx_lim)
+                ax.set_ylim3d(cy_shifted - dy_lim, cy_shifted + dy_lim)
+                ax.set_zlim3d(cz - dz_lim, cz + dz_lim)
+            else:
+                ax.set_xlim3d(x_min, x_max)
+                ax.set_ylim3d(y_min, y_max)
+                ax.set_zlim3d(z_min, z_max)
+
             ax.set_title("KevlarGrid 3D Woven Fabric Impact Telemetry")
             ax.view_init(elev=pitch, azim=yaw)
 
