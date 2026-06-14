@@ -248,23 +248,20 @@ def check_termination(
 
     if has_passed:
         contact_nodes = projectile.contact_nodes
+        failed_np = np.asarray(grid.failed)
         if len(contact_nodes) > 0:
-            # Find springs connected to these contact nodes
-            # Check if all springs that connect to at least one contact node are failed
-            contact_nodes_set = set(contact_nodes)
-            contact_springs_failed = True
-            found_springs = False
-            for u, v, f in zip(grid.springs[:, 0], grid.springs[:, 1], grid.failed, strict=True):
-                if u in contact_nodes_set or v in contact_nodes_set:
-                    found_springs = True
-                    if not f:
-                        contact_springs_failed = False
-                        break
-            if found_springs and contact_springs_failed:
-                return "penetration"
+            # Vectorized check: build boolean mask of contact nodes S7.6.1
+            contact_mask = np.zeros(grid.n_nodes, dtype=bool)
+            contact_mask[contact_nodes] = True
+            
+            # Find springs connected to at least one contact node
+            connected_to_contact = contact_mask[grid.springs[:, 0]] | contact_mask[grid.springs[:, 1]]
+            if np.any(connected_to_contact):
+                if np.all(failed_np[connected_to_contact]):
+                    return "penetration"
         else:
             # No contact nodes but has passed? If all grid is ruptured, it's a penetration
-            if np.all(grid.failed):
+            if np.all(failed_np):
                 return "penetration"
 
     return None

@@ -45,6 +45,10 @@ class Grid:
     tension_only: np.ndarray
     n_nodes: int
     n_springs: int
+    initial_spring_counts: np.ndarray
+    node_spring_offsets: np.ndarray
+    node_spring_ids: np.ndarray
+    node_spring_signs: np.ndarray
 
     def __init__(
         self,
@@ -55,6 +59,7 @@ class Grid:
         rest_lengths: np.ndarray,
         failed: np.ndarray,
         tension_only: np.ndarray,
+        initial_spring_counts: np.ndarray | None = None,
     ) -> None:
         self.nodes = nodes
         self.springs = springs
@@ -65,6 +70,43 @@ class Grid:
         self.tension_only = tension_only
         self.n_nodes = len(nodes)
         self.n_springs = len(springs)
+
+        # Count how many springs connect to each node
+        node_counts = np.zeros(self.n_nodes, dtype=np.int32)
+        if self.n_springs > 0:
+            np.add.at(node_counts, springs[:, 0], 1)
+            np.add.at(node_counts, springs[:, 1], 1)
+
+        if initial_spring_counts is None:
+            self.initial_spring_counts = node_counts
+        else:
+            self.initial_spring_counts = initial_spring_counts
+
+        # Build CSR node-to-spring adjacency
+        node_spring_offsets = np.zeros(self.n_nodes + 1, dtype=np.int32)
+        node_spring_offsets[1:] = np.cumsum(node_counts)
+
+        current_offset = node_spring_offsets[:-1].copy()
+        node_spring_ids = np.zeros(2 * self.n_springs, dtype=np.int32)
+        node_spring_signs = np.zeros(2 * self.n_springs, dtype=np.float64)
+
+        for j in range(self.n_springs):
+            n0 = springs[j, 0]
+            n1 = springs[j, 1]
+
+            offset_0 = current_offset[n0]
+            node_spring_ids[offset_0] = j
+            node_spring_signs[offset_0] = 1.0
+            current_offset[n0] += 1
+
+            offset_1 = current_offset[n1]
+            node_spring_ids[offset_1] = j
+            node_spring_signs[offset_1] = -1.0
+            current_offset[n1] += 1
+
+        self.node_spring_offsets = node_spring_offsets
+        self.node_spring_ids = node_spring_ids
+        self.node_spring_signs = node_spring_signs
 
 
 def generate_rectangular_grid(

@@ -18,6 +18,9 @@ except ImportError:  # pragma: no cover
 from kevlargrid.materials.library import MATERIALS, get_material
 from kevlargrid.solver import backend
 from kevlargrid.solver.boundary import compute_min_radius
+from kevlargrid.utils import get_logger
+
+logger = get_logger("gui.config_panel")
 
 
 class ConfigPanel:
@@ -36,6 +39,7 @@ class ConfigPanel:
         self.mat_areal_density = "mat_areal_density"
         self.mat_shear_ratio = "mat_shear_ratio"
         self.mat_crimp = "mat_crimp"
+        self.mat_fracture_multiplier = "mat_fracture_multiplier"
 
         # Configuration file callbacks S6.5.9
         self.load_callback: Callable[[], None] | None = None
@@ -54,6 +58,9 @@ class ConfigPanel:
         self.grid_boundary = "grid_boundary"
         self.grid_rmin_display = "grid_rmin_display"
         self.grid_rmin_group = "grid_rmin_group"
+        self.grid_ideal_length_display = "grid_ideal_length_display"
+        self.grid_actual_length_display = "grid_actual_length_display"
+        self.grid_boundary_status = "grid_boundary_status"
 
         # Projectile section tags
         self.proj_mass = "proj_mass"
@@ -70,237 +77,200 @@ class ConfigPanel:
         # Simulation section tags
         self.sim_duration = "sim_duration"
         self.sim_cfl = "sim_cfl"
-        self.sim_damping = "sim_damping"
+        self.sim_damping_model = "sim_damping_model"
+        self.sim_damping_coeff = "sim_damping_coeff"
+        self.sim_rayleigh_alpha = "sim_rayleigh_alpha"
+        self.sim_rayleigh_beta = "sim_rayleigh_beta"
         self.sim_snapshot_interval = "sim_snapshot_interval"
         self.sim_file_size_display = "sim_file_size_display"
         self.compute_backend = "compute_backend"
         self.hardware_device = "hardware_device"
+        
+        self.row_damping_coeff = "row_damping_coeff"
+        self.row_rayleigh_alpha = "row_rayleigh_alpha"
+        self.row_rayleigh_beta = "row_rayleigh_beta"
 
     def build(self) -> None:
         """Construct the panel's DearPyGui widgets."""
         if dpg is None:  # pragma: no cover
             return
 
-        with dpg.child_window(tag=self.group_tag, width=380, border=True):
+        with dpg.child_window(tag=self.group_tag, width=400, border=True):
             dpg.add_text("Simulation Configuration", color=[0, 191, 255])
             dpg.add_separator()
 
             # --- MATERIAL LIBRARY SECTION ---
             with dpg.collapsing_header(label="Material Properties", default_open=True):
-                dpg.add_combo(
-                    label="Material Preset",
-                    items=[*MATERIALS.keys(), "Custom"],
-                    default_value="Kevlar 29",
-                    tag=self.mat_combo,
-                    callback=self._on_material_change,
-                )
-                dpg.add_input_float(
-                    label="Modulus (GPa)", tag=self.mat_modulus, default_value=71.0, enabled=False
-                )
-                dpg.add_input_float(
-                    label="Failure Strain", tag=self.mat_strain, default_value=0.036, enabled=False
-                )
-                dpg.add_input_float(
-                    label="Strength (GPa)", tag=self.mat_strength, default_value=2.92, enabled=False
-                )
-                dpg.add_input_float(
-                    label="Fiber Density (g/cc)",
-                    tag=self.mat_fiber_density,
-                    default_value=1.44,
-                    enabled=False,
-                )
-                dpg.add_input_float(
-                    label="Areal Density (kg/m2)",
-                    tag=self.mat_areal_density,
-                    default_value=0.47,
-                    enabled=False,
-                )
-                dpg.add_input_float(
-                    label="Shear Stiffness Ratio",
-                    tag=self.mat_shear_ratio,
-                    default_value=0.0004,
-                    enabled=False,
-                )
-                dpg.add_input_float(
-                    label="Crimp Factor", tag=self.mat_crimp, default_value=0.10, enabled=False
-                )
-                dpg.add_input_int(
-                    label="Yarn X (Warp Count/in)",
-                    tag=self.mat_yarn_count_x,
-                    default_value=17,
-                    enabled=False,
-                )
-                dpg.add_input_int(
-                    label="Yarn Y (Weft Count/in)",
-                    tag=self.mat_yarn_count_y,
-                    default_value=17,
-                    enabled=False,
-                )
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
+                    
+                    with dpg.table_row():
+                        dpg.add_text("Material Preset")
+                        dpg.add_combo(
+                            items=[*MATERIALS.keys(), "Custom"],
+                            default_value="Kevlar 29",
+                            tag=self.mat_combo,
+                            callback=self._on_material_change,
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Modulus (GPa)")
+                        dpg.add_input_float(tag=self.mat_modulus, default_value=71.0, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Failure Strain")
+                        dpg.add_input_float(tag=self.mat_strain, default_value=0.036, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Strength (GPa)")
+                        dpg.add_input_float(tag=self.mat_strength, default_value=2.92, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Fiber Density (g/cc)")
+                        dpg.add_input_float(tag=self.mat_fiber_density, default_value=1.44, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Areal Density (kg/m2)")
+                        dpg.add_input_float(tag=self.mat_areal_density, default_value=0.47, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Shear Stiffness Ratio")
+                        dpg.add_input_float(tag=self.mat_shear_ratio, default_value=0.0004, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Crimp Factor")
+                        dpg.add_input_float(tag=self.mat_crimp, default_value=0.10, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Fracture Multiplier")
+                        dpg.add_input_float(tag=self.mat_fracture_multiplier, default_value=1.5, enabled=False, format="%.2f", width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Yarn X (Warp Count/in)")
+                        dpg.add_input_int(tag=self.mat_yarn_count_x, default_value=17, enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Yarn Y (Weft Count/in)")
+                        dpg.add_input_int(tag=self.mat_yarn_count_y, default_value=17, enabled=False, width=-1)
 
             # --- GRID GEOMETRY SECTION ---
             with dpg.collapsing_header(label="Grid Geometry & Boundaries", default_open=True):
-                dpg.add_input_int(
-                    label="Nodes Nx",
-                    tag=self.grid_nx,
-                    default_value=11,
-                    callback=self._update_file_size_estimate_cb,
-                )
-                dpg.add_input_int(
-                    label="Nodes Ny",
-                    tag=self.grid_ny,
-                    default_value=11,
-                    callback=self._update_file_size_estimate_cb,
-                )
-                dpg.add_input_float(
-                    label="Spacing dx (m)",
-                    tag=self.grid_dx,
-                    default_value=0.01,
-                    format="%.4f",
-                    callback=self._update_file_size_estimate_cb,
-                )
-                dpg.add_combo(
-                    label="Analysis Mode",
-                    items=["Mode A (Sizing Multiplier)", "Mode B (Checkout Stacking)"],
-                    default_value="Mode A (Sizing Multiplier)",
-                    tag=self.grid_mode,
-                    callback=self._on_mode_change,
-                )
-                dpg.add_input_int(
-                    label="Number of Plies",
-                    tag=self.grid_n_plies,
-                    default_value=1,
-                    callback=self._update_file_size_estimate_cb,
-                )
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
+                    
+                    with dpg.table_row():
+                        dpg.add_text("Nodes Nx")
+                        dpg.add_input_int(tag=self.grid_nx, default_value=11, callback=self._update_file_size_estimate_cb, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Nodes Ny")
+                        dpg.add_input_int(tag=self.grid_ny, default_value=11, callback=self._update_file_size_estimate_cb, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Spacing dx (m)")
+                        dpg.add_input_float(tag=self.grid_dx, default_value=0.01, format="%.4f", callback=self._update_file_size_estimate_cb, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Analysis Mode")
+                        dpg.add_combo(items=["Mode A (Sizing Multiplier)", "Mode B (Checkout Stacking)"], default_value="Mode A (Sizing Multiplier)", tag=self.grid_mode, callback=self._on_mode_change, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Number of Plies")
+                        dpg.add_input_int(tag=self.grid_n_plies, default_value=1, callback=self._update_file_size_estimate_cb, width=-1)
+                
                 with dpg.group(tag=self.grid_t_ply_group, show=False):
-                    dpg.add_input_float(
-                        label="Spacing t_ply (m)",
-                        tag=self.grid_t_ply,
-                        default_value=0.001,
-                        format="%.4f",
-                        callback=self._update_file_size_estimate_cb,
-                    )
-                dpg.add_combo(
-                    label="Boundary Condition",
-                    items=["Fixed Clamped Edges", "Infinite Grid (Auto)"],
-                    default_value="Fixed Clamped Edges",
-                    tag=self.grid_boundary,
-                    callback=self._on_boundary_change,
-                )
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Spacing t_ply (m)")
+                            dpg.add_input_float(tag=self.grid_t_ply, default_value=0.001, format="%.4f", callback=self._update_file_size_estimate_cb, width=-1)
+                            
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
+                    with dpg.table_row():
+                        dpg.add_text("Boundary Condition")
+                        dpg.add_combo(items=["Fixed Clamped Edges", "Infinite Grid (Auto)"], default_value="Fixed Clamped Edges", tag=self.grid_boundary, callback=self._on_boundary_change, width=-1)
+                
                 with dpg.group(tag=self.grid_rmin_group, show=False):
-                    dpg.add_input_float(
-                        label="Auto Radius R_min (m)",
-                        tag=self.grid_rmin_display,
-                        default_value=0.0,
-                        enabled=False,
-                    )
-                    dpg.add_button(
-                        label="Apply Infinite Boundary Dimensions",
-                        callback=self._apply_infinite_boundary_dims,
-                        tag="btn_apply_infinite_dims",
-                        width=250,
-                    )
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Auto Radius R_min (m)")
+                            dpg.add_input_float(tag=self.grid_rmin_display, default_value=0.0, enabled=False, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Idealized Length (m)")
+                            dpg.add_input_float(tag=self.grid_ideal_length_display, default_value=0.0, enabled=False, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Actual Length (m)")
+                            dpg.add_input_float(tag=self.grid_actual_length_display, default_value=0.0, enabled=False, width=-1)
+                    
+                    with dpg.group(horizontal=True):
+                        dpg.add_text("Status: ")
+                        dpg.add_text("✗ Insufficient — reflections likely", tag=self.grid_boundary_status, color=[255, 80, 80])
+                    dpg.add_button(label="Apply Infinite Boundary Dimensions", callback=self._apply_infinite_boundary_dims, tag="btn_apply_infinite_dims", width=250)
 
             # --- PROJECTILE GEOMETRY SECTION ---
             with dpg.collapsing_header(label="Projectile Parameters", default_open=True):
-                dpg.add_input_float(
-                    label="Mass (kg)",
-                    tag=self.proj_mass,
-                    default_value=0.05,
-                    callback=self._on_projectile_change,
-                )
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
+                    with dpg.table_row():
+                        dpg.add_text("Mass (kg)")
+                        dpg.add_input_float(tag=self.proj_mass, default_value=0.05, callback=self._on_projectile_change, width=-1)
+                
                 dpg.add_text("Initial Velocity (m/s):")
                 with dpg.group(horizontal=True):
-                    dpg.add_input_float(
-                        label="Vx",
-                        width=70,
-                        tag=self.proj_vx,
-                        default_value=0.0,
-                        callback=self._on_projectile_change,
-                    )
-                    dpg.add_input_float(
-                        label="Vy",
-                        width=70,
-                        tag=self.proj_vy,
-                        default_value=0.0,
-                        callback=self._on_projectile_change,
-                    )
-                    dpg.add_input_float(
-                        label="Vz",
-                        width=70,
-                        tag=self.proj_vz,
-                        default_value=400.0,
-                        callback=self._on_projectile_change,
-                    )
+                    dpg.add_input_float(label="Vx", width=70, tag=self.proj_vx, default_value=0.0, callback=self._on_projectile_change)
+                    dpg.add_input_float(label="Vy", width=70, tag=self.proj_vy, default_value=0.0, callback=self._on_projectile_change)
+                    dpg.add_input_float(label="Vz", width=70, tag=self.proj_vz, default_value=400.0, callback=self._on_projectile_change)
+                
                 dpg.add_text("Initial Position (m):")
                 with dpg.group(horizontal=True):
                     dpg.add_input_float(label="X0", width=70, tag=self.proj_px, default_value=0.0)
                     dpg.add_input_float(label="Y0", width=70, tag=self.proj_py, default_value=0.0)
-                    dpg.add_input_float(
-                        label="Z0", width=70, tag=self.proj_pz, default_value=-0.005
-                    )
-                dpg.add_input_float(
-                    label="Blade Width (m)", tag=self.proj_width, default_value=0.02
-                )
-                dpg.add_input_float(
-                    label="Edge Thickness (m)", tag=self.proj_thickness, default_value=0.005
-                )
-                dpg.add_separator()
-                dpg.add_text("Live Kinetic Energy Display:")
-                dpg.add_input_float(
-                    label="KE (Joules)",
-                    tag=self.proj_ke_display,
-                    default_value=4000.0,
-                    enabled=False,
-                )
+                    dpg.add_input_float(label="Z0", width=70, tag=self.proj_pz, default_value=-0.005)
+                
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
+                    with dpg.table_row():
+                        dpg.add_text("Blade Width (m)")
+                        dpg.add_input_float(tag=self.proj_width, default_value=0.02, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Edge Thickness (m)")
+                        dpg.add_input_float(tag=self.proj_thickness, default_value=0.005, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("KE (Joules)")
+                        dpg.add_input_float(tag=self.proj_ke_display, default_value=4000.0, enabled=False, width=-1)
 
             # --- SIMULATION & SOLVER CONTROLS SECTION ---
             with dpg.collapsing_header(label="Solver Settings", default_open=True):
-                dpg.add_input_float(
-                    label="Sim Duration (s)",
-                    tag=self.sim_duration,
-                    default_value=0.001,
-                    format="%.5f",
-                    callback=self._on_boundary_change,
-                )
-                dpg.add_input_float(
-                    label="CFL safety factor",
-                    tag=self.sim_cfl,
-                    default_value=0.8,
-                    callback=self._update_file_size_estimate_cb,
-                )
-                dpg.add_input_float(
-                    label="Viscous Damping (N.s/m)", tag=self.sim_damping, default_value=0.5
-                )
-                dpg.add_input_int(
-                    label="Snapshot Interval",
-                    tag=self.sim_snapshot_interval,
-                    default_value=100,
-                    min_value=1,
-                    max_value=1000,
-                    callback=self._update_file_size_estimate_cb,
-                )
-                dpg.add_spacer(height=5)
-                dpg.add_text("Estimated HDF5 File Size:")
-                dpg.add_input_text(
-                    tag=self.sim_file_size_display,
-                    default_value="0.0 KB",
-                    enabled=False,
-                )
-                dpg.add_spacer(height=5)
-                dpg.add_combo(
-                    label="Compute Backend",
-                    items=["Numba", "JAX", "NumPy"],
-                    default_value=backend.get_backend_name().capitalize(),
-                    tag=self.compute_backend,
-                    callback=self._on_backend_change,
-                )
-                dpg.add_text("Active Hardware Device:")
-                dpg.add_input_text(
-                    tag=self.hardware_device,
-                    default_value=backend.get_active_device(),
-                    enabled=False,
-                )
-                dpg.add_spacer(height=5)
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
+                    with dpg.table_row():
+                        dpg.add_text("Sim Duration (s)")
+                        dpg.add_input_float(tag=self.sim_duration, default_value=0.001, format="%.5f", callback=self._on_boundary_change, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("CFL safety factor")
+                        dpg.add_input_float(tag=self.sim_cfl, default_value=0.8, callback=self._update_file_size_estimate_cb, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Damping Model")
+                        dpg.add_combo(items=["Rayleigh Damping", "Viscous Damping"], default_value="Rayleigh Damping", tag=self.sim_damping_model, callback=self._on_damping_change, width=-1)
+                    
+                    with dpg.table_row(tag=self.row_damping_coeff):
+                        dpg.add_text("Viscous Damping Coeff")
+                        dpg.add_input_float(tag=self.sim_damping_coeff, default_value=0.05, format="%.4f", width=-1)
+                    with dpg.table_row(tag=self.row_rayleigh_alpha):
+                        dpg.add_text("Rayleigh α (mass-prop)")
+                        dpg.add_input_float(tag=self.sim_rayleigh_alpha, default_value=0.0, format="%.4f", width=-1)
+                    with dpg.table_row(tag=self.row_rayleigh_beta):
+                        dpg.add_text("Rayleigh β (stiff-prop)")
+                        dpg.add_input_float(tag=self.sim_rayleigh_beta, default_value=1e-9, format="%.9f", width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Snapshot Interval")
+                        dpg.add_input_int(tag=self.sim_snapshot_interval, default_value=100, min_value=1, max_value=1000, callback=self._update_file_size_estimate_cb, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Est HDF5 File Size")
+                        dpg.add_input_text(tag=self.sim_file_size_display, default_value="0.0 KB", enabled=False, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Compute Backend")
+                        dpg.add_combo(items=["Numba", "JAX", "NumPy", "Taichi"], default_value=backend.get_backend_name().capitalize(), tag=self.compute_backend, callback=self._on_backend_change, width=-1)
+                    with dpg.table_row():
+                        dpg.add_text("Active Hardware")
+                        dpg.add_input_text(tag=self.hardware_device, default_value=backend.get_active_device(), enabled=False, width=-1)
 
             # --- CONFIGURATION PROFILES SECTION S6.5.9 ---
             with (
@@ -324,6 +294,7 @@ class ConfigPanel:
             # Initialize dynamic values
             self._on_material_change(None, dpg.get_value(self.mat_combo))
             self._on_projectile_change(None, None)
+            self._on_damping_change(None, dpg.get_value(self.sim_damping_model))
 
     def _on_material_change(self, sender: str | None, app_data: str) -> None:
         """Triggered when selected material preset is changed."""
@@ -339,6 +310,7 @@ class ConfigPanel:
         dpg.configure_item(self.mat_areal_density, enabled=is_custom)
         dpg.configure_item(self.mat_shear_ratio, enabled=is_custom)
         dpg.configure_item(self.mat_crimp, enabled=is_custom)
+        dpg.configure_item(self.mat_fracture_multiplier, enabled=is_custom)
         dpg.configure_item(self.mat_yarn_count_x, enabled=is_custom)
         dpg.configure_item(self.mat_yarn_count_y, enabled=is_custom)
 
@@ -351,6 +323,7 @@ class ConfigPanel:
             dpg.set_value(self.mat_areal_density, mat.get("areal_density_kgm2", 0.47))
             dpg.set_value(self.mat_shear_ratio, mat.get("shear_ratio", 0.0004))
             dpg.set_value(self.mat_crimp, mat.get("crimp_factor", 0.10))
+            dpg.set_value(self.mat_fracture_multiplier, mat.get("fracture_energy_multiplier", 1.5))
             yc = mat.get("yarn_count", (17, 17))
             if isinstance(yc, (list, tuple)):
                 dpg.set_value(self.mat_yarn_count_x, yc[0])
@@ -399,6 +372,18 @@ class ConfigPanel:
             r_min = compute_min_radius(c_transverse, sim_duration, 1.5)
             dpg.set_value(self.grid_rmin_display, r_min)
 
+            ideal_length = 2.0 * r_min
+            nx = dpg.get_value(self.grid_nx)
+            actual_length = (nx - 1) * dx
+            dpg.set_value(self.grid_ideal_length_display, ideal_length)
+            dpg.set_value(self.grid_actual_length_display, actual_length)
+            is_sufficient = actual_length >= ideal_length
+            dpg.configure_item(
+                self.grid_boundary_status,
+                default_value="✓ Sufficient" if is_sufficient else "✗ Insufficient — reflections likely",
+                color=[0, 200, 0] if is_sufficient else [255, 80, 80],
+            )
+
         self._update_file_size_estimate()
 
     def _on_projectile_change(self, sender: str | None, app_data: str | None) -> None:
@@ -427,6 +412,8 @@ class ConfigPanel:
             dpg.add_text("Young's modulus of fiber material (GPa)")
         with dpg.tooltip(self.mat_strain):
             dpg.add_text("Axial strain value at which spring rupture irreversibly occurs")
+        with dpg.tooltip(self.mat_fracture_multiplier):
+            dpg.add_text("Fracture energy multiplier factor (dimensionless, typical Kevlar default = 1.5)")
         with dpg.tooltip(self.mat_yarn_count_x):
             dpg.add_text(
                 "Warp Yarn Count: Number of longitudinal yarns per inch of Kevlar fabric construction."
@@ -461,8 +448,10 @@ class ConfigPanel:
             dpg.add_text("Total physical simulation window duration (seconds)")
         with dpg.tooltip(self.sim_cfl):
             dpg.add_text("CFL stability safety factor multiplier (must be <= 1.0)")
-        with dpg.tooltip(self.sim_damping):
-            dpg.add_text("Viscous velocity-damping coefficient per node (N.s/m)")
+        with dpg.tooltip(self.sim_rayleigh_alpha):
+            dpg.add_text("Rayleigh mass-proportional damping coefficient α (1/s)")
+        with dpg.tooltip(self.sim_rayleigh_beta):
+            dpg.add_text("Rayleigh stiffness-proportional damping coefficient β (seconds)")
         with dpg.tooltip(self.grid_dx):
             dpg.add_text(
                 "Spacing dx: Grid physical nodal mesh resolution.\nWarning: For stable contact mechanics, dx should be <= projectile edge thickness."
@@ -472,7 +461,7 @@ class ConfigPanel:
 
     def _update_file_size_estimate_cb(self, sender: str | None, app_data: Any) -> None:
         """DearPyGui callback proxy to trigger file size recalculation."""
-        self._update_file_size_estimate()
+        self._on_boundary_change(None, None)
 
     def _update_file_size_estimate(self) -> None:
         """Calculate and display the estimated HDF5 file size in real-time."""
@@ -581,6 +570,7 @@ class ConfigPanel:
                 "areal_density_kgm2": dpg.get_value(self.mat_areal_density),
                 "shear_ratio": dpg.get_value(self.mat_shear_ratio),
                 "crimp_factor": dpg.get_value(self.mat_crimp),
+                "fracture_energy_multiplier": dpg.get_value(self.mat_fracture_multiplier),
                 "yarn_count": [
                     dpg.get_value(self.mat_yarn_count_x),
                     dpg.get_value(self.mat_yarn_count_y),
@@ -612,7 +602,10 @@ class ConfigPanel:
             "simulation": {
                 "duration": dpg.get_value(self.sim_duration),
                 "cfl_factor": dpg.get_value(self.sim_cfl),
-                "damping_coefficient": dpg.get_value(self.sim_damping),
+                "damping_model": "viscous" if dpg.get_value(self.sim_damping_model) == "Viscous Damping" else "rayleigh",
+                "damping_coefficient": dpg.get_value(self.sim_damping_coeff),
+                "rayleigh_alpha": dpg.get_value(self.sim_rayleigh_alpha),
+                "rayleigh_beta": dpg.get_value(self.sim_rayleigh_beta),
                 "snapshot_interval": dpg.get_value(self.sim_snapshot_interval)
                 if dpg.does_item_exist(self.sim_snapshot_interval)
                 else 100,
@@ -646,6 +639,7 @@ class ConfigPanel:
         dpg.set_value(self.mat_areal_density, mat.get("areal_density_kgm2", 0.47))
         dpg.set_value(self.mat_shear_ratio, mat.get("shear_ratio", 0.0004))
         dpg.set_value(self.mat_crimp, mat.get("crimp_factor", 0.10))
+        dpg.set_value(self.mat_fracture_multiplier, mat.get("fracture_energy_multiplier", 1.5))
         yc = mat.get("yarn_count", [17, 17])
         dpg.set_value(self.mat_yarn_count_x, yc[0])
         dpg.set_value(self.mat_yarn_count_y, yc[1])
@@ -691,7 +685,22 @@ class ConfigPanel:
         sim = config["simulation"]
         dpg.set_value(self.sim_duration, sim.get("duration", 0.001))
         dpg.set_value(self.sim_cfl, sim.get("cfl_factor", 0.8))
-        dpg.set_value(self.sim_damping, sim.get("damping_coefficient", 0.5))
+        # Determine damping model and set widgets
+        model = sim.get("damping_model")
+        if model is None:
+            if "rayleigh_beta" in sim and sim["rayleigh_beta"] > 0.0:
+                model = "rayleigh"
+            elif "damping_coefficient" in sim:
+                model = "viscous"
+            else:
+                model = "rayleigh"
+
+        dpg.set_value(self.sim_damping_model, "Viscous Damping" if model == "viscous" else "Rayleigh Damping")
+        self._on_damping_change(None, "Viscous Damping" if model == "viscous" else "Rayleigh Damping")
+
+        dpg.set_value(self.sim_damping_coeff, sim.get("damping_coefficient", 0.05))
+        dpg.set_value(self.sim_rayleigh_alpha, sim.get("rayleigh_alpha", 0.0))
+        dpg.set_value(self.sim_rayleigh_beta, sim.get("rayleigh_beta", 1e-9))
         if "snapshot_interval" in sim and dpg.does_item_exist(self.sim_snapshot_interval):
             dpg.set_value(self.sim_snapshot_interval, sim["snapshot_interval"])
 
@@ -710,10 +719,12 @@ class ConfigPanel:
             if nx % 2 == 0:
                 nx += 1
             # Clamp to a safe max to avoid system freezing before sprint 7 parallelization
-            nx = max(11, min(101, nx))
+            nx = max(11, min(501, nx))
+            if nx > 201:
+                logger.warning(f"Large grid size selected ({nx}x{nx}). This may cause slow simulation runs.")
             dpg.set_value(self.grid_nx, nx)
             dpg.set_value(self.grid_ny, nx)
-            self._update_file_size_estimate()
+            self._on_boundary_change(None, None)
 
     def _menu_load_config_cb(self, sender: str, app_data: Any) -> None:
         """Forward sidebar Load trigger S6.5.9."""
@@ -733,3 +744,12 @@ class ConfigPanel:
         os.environ["KEVLARGRID_BACKEND"] = str(app_data).lower()
         if dpg is not None:
             dpg.set_value(self.hardware_device, backend.get_active_device())
+
+    def _on_damping_change(self, sender: Any, app_data: str) -> None:
+        """Toggle visibility of damping parameter inputs based on selected model."""
+        if dpg is None:
+            return
+        is_viscous = app_data == "Viscous Damping"
+        dpg.configure_item(self.row_damping_coeff, show=is_viscous)
+        dpg.configure_item(self.row_rayleigh_alpha, show=not is_viscous)
+        dpg.configure_item(self.row_rayleigh_beta, show=not is_viscous)

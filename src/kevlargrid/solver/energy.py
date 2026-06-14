@@ -31,8 +31,8 @@ def compute_kinetic_energy(
     float
         Total kinetic energy (Joules).
     """
-    v_sq = np.sum(velocities**2, axis=1)
-    return float(np.sum(0.5 * masses * v_sq))
+    v_sq = backend.sum(velocities**2, axis=1)
+    return backend.sum(0.5 * masses * v_sq)
 
 
 @backend.jit
@@ -41,6 +41,7 @@ def compute_strain_energy(
     stiffnesses: np.ndarray,
     rest_lengths: np.ndarray,
     failed: np.ndarray | None = None,
+    damage: np.ndarray | None = None,
 ) -> float:
     """Compute the total elastic strain energy stored in all springs.
 
@@ -54,46 +55,62 @@ def compute_strain_energy(
         Natural (rest) length per spring, shape ``(n_springs,)``.
     failed : np.ndarray, optional
         Boolean failure flags per spring, shape ``(n_springs,)``.
+    damage : np.ndarray, optional
+        Damage fraction per spring, shape ``(n_springs,)``.
 
     Returns
     -------
     float
         Total strain energy (Joules).
     """
-    # SE = 0.5 * k * dx^2 = 0.5 * k * (strain * L0)^2
-    se_springs = 0.5 * stiffnesses * (np.maximum(0.0, strains) * rest_lengths) ** 2
+    # SE = 0.5 * k * (1 - D) * dx^2 = 0.5 * k_eff * (strain * L0)^2
+    eff_k = stiffnesses
+    if damage is not None:
+        eff_k = stiffnesses * (1.0 - damage)
+    se_springs = 0.5 * eff_k * (backend.maximum(0.0, strains) * rest_lengths) ** 2
     if failed is not None:
-        se_springs = np.where(failed, 0.0, se_springs)
-    return float(np.sum(se_springs))
+        se_springs = backend.where(failed, 0.0, se_springs)
+    return backend.sum(se_springs)
 
 
 def compute_energy_balance(
     ke: float,
     se: float,
     damped: float,
+    failure_dissipated: float = 0.0,
+    clamp_dissipated: float = 0.0,
+    proj_ke: float = 0.0,
 ) -> dict:
     """Return a summary dictionary of the energy balance.
 
     Parameters
     ----------
     ke : float
-        Kinetic energy (Joules).
+        Fabric kinetic energy (Joules).
     se : float
-        Strain energy (Joules).
+        Fabric strain energy (Joules).
     damped : float
         Cumulative energy dissipated by damping (Joules).
+    failure_dissipated : float, optional
+        Cumulative energy dissipated by spring fracture (Joules).
+    clamp_dissipated : float, optional
+        Cumulative energy dissipated by velocity clamping (Joules).
+    proj_ke : float, optional
+        Projectile kinetic energy (Joules).
 
     Returns
     -------
     dict
-        Dictionary with keys ``"kinetic"``, ``"strain"``, ``"damped"``,
-        and ``"total"``.
+        Dictionary of energy components and the total system energy.
     """
-    total = ke + se + damped
+    total = ke + se + damped + failure_dissipated + clamp_dissipated + proj_ke
     return {
         "kinetic": float(ke),
         "strain": float(se),
         "damped": float(damped),
+        "failure_dissipated": float(failure_dissipated),
+        "clamp_dissipated": float(clamp_dissipated),
+        "projectile_kinetic": float(proj_ke),
         "total": float(total),
     }
 
@@ -145,6 +162,7 @@ def compute_layer_strain_energy(
     n_nodes_per_layer: int,
     n_plies: int,
     failed: np.ndarray | None = None,
+    damage: np.ndarray | None = None,
 ) -> np.ndarray:
     """Compute the elastic strain energy per fabric layer.
 
@@ -164,6 +182,8 @@ def compute_layer_strain_energy(
         Number of discrete plies.
     failed : np.ndarray, optional
         Boolean failure flags per spring, shape ``(n_springs,)``.
+    damage : np.ndarray, optional
+        Damage fraction per spring, shape ``(n_springs,)``.
 
     Returns
     -------
@@ -171,7 +191,10 @@ def compute_layer_strain_energy(
         Strain energy per layer, shape ``(n_plies,)``.
     """
     se_layers = np.zeros(n_plies, dtype=np.float64)
-    se_springs = 0.5 * stiffnesses * (np.maximum(0.0, strains) * rest_lengths) ** 2
+    eff_k = stiffnesses
+    if damage is not None:
+        eff_k = stiffnesses * (1.0 - damage)
+    se_springs = 0.5 * eff_k * (np.maximum(0.0, strains) * rest_lengths) ** 2
     if failed is not None:
         se_springs = np.where(failed, 0.0, se_springs)
 

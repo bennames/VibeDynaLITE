@@ -65,6 +65,22 @@ def test_taichi_step_consistency() -> None:
     damping_coeff = 0.1
     failure_strain = 0.05
 
+    node_initial_springs = np.zeros(n_nodes, dtype=np.int32)
+    if n_springs > 0:
+        np.add.at(node_initial_springs, grid_springs[:, 0], 1)
+        np.add.at(node_initial_springs, grid_springs[:, 1], 1)
+
+    # Build CSR arrays using dummy Grid for CPU
+    dummy_grid = Grid(
+        nodes=positions,
+        springs=grid_springs,
+        masses=grid_masses,
+        stiffnesses=grid_stiffnesses,
+        rest_lengths=grid_rest_lengths,
+        failed=grid_failed,
+        tension_only=grid_tension_only,
+    )
+
     # 1. Run CPU JIT fused loop
     (
         pos_cpu,
@@ -73,6 +89,8 @@ def test_taichi_step_consistency() -> None:
         proj_pos_cpu,
         proj_vel_cpu,
         damp_cpu,
+        failure_cpu,
+        clamp_cpu,
         t_sim_cpu,
         hist_pos_cpu,
         hist_failed_cpu,
@@ -91,6 +109,7 @@ def test_taichi_step_consistency() -> None:
         grid_masses.copy(),
         grid_tension_only.copy(),
         boundary_mask.copy(),
+        np.zeros((n_nodes, 3)),
         proj_pos.copy(),
         proj_vel.copy(),
         proj_mass,
@@ -101,13 +120,23 @@ def test_taichi_step_consistency() -> None:
         0.002,  # t_ply
         0.05,  # dx
         k_penalty,
-        damping_coeff,
+        damping_coeff,  # rayleigh_alpha
+        0.0001,  # rayleigh_beta
         failure_strain,
+        0.03,  # damage_onset_strain
+        1.5,  # fracture_energy_multiplier
         dt,
         n_steps,
         save_interval,
         0.0,  # damp_dissipated_init
+        0.0,  # failure_dissipated_init
+        0.0,  # clamp_dissipated_init
         0.0,  # t_sim_init
+        0.0,  # strike_direction
+        node_initial_springs,
+        dummy_grid.node_spring_offsets,
+        dummy_grid.node_spring_ids,
+        dummy_grid.node_spring_signs,
     )
 
     # 2. Run GPU Taichi loop
@@ -118,6 +147,8 @@ def test_taichi_step_consistency() -> None:
         proj_pos_gpu,
         proj_vel_gpu,
         damp_gpu,
+        failure_gpu,
+        clamp_gpu,
         t_sim_gpu,
         hist_pos_gpu,
         hist_failed_gpu,
@@ -136,6 +167,7 @@ def test_taichi_step_consistency() -> None:
         grid_masses.copy(),
         grid_tension_only.copy(),
         boundary_mask.copy(),
+        np.zeros((n_nodes, 3)),
         proj_pos.copy(),
         proj_vel.copy(),
         proj_mass,
@@ -146,13 +178,23 @@ def test_taichi_step_consistency() -> None:
         0.002,  # t_ply
         0.05,  # dx
         k_penalty,
-        damping_coeff,
+        damping_coeff,  # rayleigh_alpha
+        0.0001,  # rayleigh_beta
         failure_strain,
+        0.03,  # damage_onset_strain
+        1.5,  # fracture_energy_multiplier
         dt,
         n_steps,
         save_interval,
         0.0,  # damp_dissipated_init
+        0.0,  # failure_dissipated_init
+        0.0,  # clamp_dissipated_init
         0.0,  # t_sim_init
+        0.0,  # strike_direction
+        node_initial_springs,
+        dummy_grid.node_spring_offsets,
+        dummy_grid.node_spring_ids,
+        dummy_grid.node_spring_signs,
     )
 
     # Assert outputs are mathematically close (allow for float32 precision limits)
@@ -162,6 +204,8 @@ def test_taichi_step_consistency() -> None:
     assert np.allclose(proj_pos_cpu, proj_pos_gpu, atol=1e-4, rtol=1e-4)
     assert np.allclose(proj_vel_cpu, proj_vel_gpu, atol=1e-4, rtol=1e-4)
     assert np.allclose(damp_cpu, damp_gpu, atol=1e-4, rtol=1e-4)
+    assert np.allclose(failure_cpu, failure_gpu, atol=1e-4, rtol=1e-4)
+    assert np.allclose(clamp_cpu, clamp_gpu, atol=1e-4, rtol=1e-4)
     assert np.allclose(t_sim_cpu, t_sim_gpu, atol=1e-4, rtol=1e-4)
 
     # Check history metrics

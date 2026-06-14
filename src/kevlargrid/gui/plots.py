@@ -27,6 +27,7 @@ class StrainPlot:
         self.y_data: list[float] = []
         self.threshold_val = 0.036
         self.marker_tag = "strain_playback_marker"
+        self._update_count = 0
 
     def build(self) -> None:
         """Construct the DearPyGui peak strain plot."""
@@ -95,6 +96,7 @@ class StrainPlot:
         self.x_data.clear()
         self.y_data.clear()
         self.threshold_val = threshold
+        self._update_count = 0
 
         if dpg is None:  # pragma: no cover
             return
@@ -124,10 +126,24 @@ class StrainPlot:
             return
 
         if dpg.does_item_exist(self.series_tag):
-            dpg.set_value(self.series_tag, [self.x_data, self.y_data])
-            # Auto-fit the axes ranges smoothly
-            dpg.fit_axis_data(self.x_axis)
-            dpg.fit_axis_data(self.y_axis)
+            self._update_count += 1
+            if self._update_count == 1 or self._update_count % 4 == 0:
+                x_plot = self.x_data
+                y_plot = self.y_data
+                n_points = len(x_plot)
+                if n_points > 2000:
+                    stride = n_points // 1000
+                    x_plot = self.x_data[::stride]
+                    y_plot = self.y_data[::stride]
+                    if x_plot[-1] != self.x_data[-1]:
+                        x_plot.append(self.x_data[-1])
+                        y_plot.append(self.y_data[-1])
+
+                dpg.set_value(self.series_tag, [x_plot, y_plot])
+                
+                if self._update_count == 1 or self._update_count % 12 == 0:
+                    dpg.fit_axis_data(self.x_axis)
+                    dpg.fit_axis_data(self.y_axis)
 
         # Sync threshold line length to exceed current time
         if dpg.does_item_exist(self.threshold_tag):
@@ -154,6 +170,7 @@ class EnergyPlot:
         self.proj_ke_series = "energy_proj_ke_series"
         self.se_series = "energy_se_series"
         self.damp_series = "energy_damp_series"
+        self.failure_series = "energy_failure_series"
         self.contact_series = "energy_contact_series"
         self.total_series = "energy_total_series"
         self.marker_tag = "energy_playback_cursor"
@@ -164,8 +181,10 @@ class EnergyPlot:
         self.proj_ke_data: list[float] = []
         self.se_data: list[float] = []
         self.damp_data: list[float] = []
+        self.failure_data: list[float] = []
         self.contact_data: list[float] = []
         self.total_data: list[float] = []
+        self._update_count = 0
 
     def build(self) -> None:
         """Construct the DearPyGui energy balance plot."""
@@ -198,6 +217,10 @@ class EnergyPlot:
                 dpg.add_line_series(
                     self.x_data, self.damp_data, label="Damping Energy", tag=self.damp_series
                 )
+                # 3.5 Fiber breakage/rupture dissipated energy S7.14 (crimson red)
+                dpg.add_line_series(
+                    self.x_data, self.failure_data, label="Rupture Energy", tag=self.failure_series
+                )
                 # 4. Projectile + Inter-ply Contact Energy (pink)
                 dpg.add_line_series(
                     self.x_data,
@@ -222,6 +245,7 @@ class EnergyPlot:
         self._style_trace(self.proj_ke_series, [255, 69, 0])  # Orange Red S6.5.5
         self._style_trace(self.se_series, [30, 144, 255])  # Dodger Blue
         self._style_trace(self.damp_series, [138, 43, 226])  # Blue Violet
+        self._style_trace(self.failure_series, [220, 20, 60])  # Crimson Red S7.14
         self._style_trace(self.contact_series, [255, 105, 180])  # Hot Pink
         self._style_trace(self.total_series, [50, 205, 50])  # Lime Green
 
@@ -249,8 +273,10 @@ class EnergyPlot:
         self.proj_ke_data.clear()
         self.se_data.clear()
         self.damp_data.clear()
+        self.failure_data.clear()
         self.contact_data.clear()
         self.total_data.clear()
+        self._update_count = 0
 
         if dpg is None:  # pragma: no cover
             return
@@ -260,6 +286,7 @@ class EnergyPlot:
             self.proj_ke_series,
             self.se_series,
             self.damp_series,
+            self.failure_series,
             self.contact_series,
             self.total_series,
             self.marker_tag,
@@ -275,13 +302,14 @@ class EnergyPlot:
         time : float
             Current simulated elapsed time (seconds).
         energies : dict of str to float
-            Dictionary with keys 'kinetic', 'strain', 'damped', 'contact', and 'total'.
+            Dictionary with keys 'kinetic', 'strain', 'damped', 'failure_dissipated', 'contact', and 'total'.
         """
         self.x_data.append(time)
         self.ke_data.append(energies.get("kinetic", 0.0))
         self.proj_ke_data.append(energies.get("proj_ke", 0.0))
         self.se_data.append(energies.get("strain", 0.0))
         self.damp_data.append(energies.get("damped", 0.0))
+        self.failure_data.append(energies.get("failure_dissipated", 0.0))
         self.contact_data.append(energies.get("contact", 0.0))
         self.total_data.append(energies.get("total", 0.0))
 
@@ -289,16 +317,50 @@ class EnergyPlot:
             return
 
         if dpg.does_item_exist(self.ke_series):
-            dpg.set_value(self.ke_series, [self.x_data, self.ke_data])
-            dpg.set_value(self.proj_ke_series, [self.x_data, self.proj_ke_data])
-            dpg.set_value(self.se_series, [self.x_data, self.se_data])
-            dpg.set_value(self.damp_series, [self.x_data, self.damp_data])
-            dpg.set_value(self.contact_series, [self.x_data, self.contact_data])
-            dpg.set_value(self.total_series, [self.x_data, self.total_data])
+            self._update_count += 1
+            if self._update_count == 1 or self._update_count % 4 == 0:
+                x_plot = self.x_data
+                ke_plot = self.ke_data
+                proj_ke_plot = self.proj_ke_data
+                se_plot = self.se_data
+                damp_plot = self.damp_data
+                failure_plot = self.failure_data
+                contact_plot = self.contact_data
+                total_plot = self.total_data
 
-            # Auto-fit the axes ranges smoothly
-            dpg.fit_axis_data(self.x_axis)
-            dpg.fit_axis_data(self.y_axis)
+                n_points = len(x_plot)
+                if n_points > 2000:
+                    stride = n_points // 1000
+                    x_plot = self.x_data[::stride]
+                    ke_plot = self.ke_data[::stride]
+                    proj_ke_plot = self.proj_ke_data[::stride]
+                    se_plot = self.se_data[::stride]
+                    damp_plot = self.damp_data[::stride]
+                    failure_plot = self.failure_data[::stride]
+                    contact_plot = self.contact_data[::stride]
+                    total_plot = self.total_data[::stride]
+
+                    if x_plot[-1] != self.x_data[-1]:
+                        x_plot.append(self.x_data[-1])
+                        ke_plot.append(self.ke_data[-1])
+                        proj_ke_plot.append(self.proj_ke_data[-1])
+                        se_plot.append(self.se_data[-1])
+                        damp_plot.append(self.damp_data[-1])
+                        failure_plot.append(self.failure_data[-1])
+                        contact_plot.append(self.contact_data[-1])
+                        total_plot.append(self.total_data[-1])
+
+                dpg.set_value(self.ke_series, [x_plot, ke_plot])
+                dpg.set_value(self.proj_ke_series, [x_plot, proj_ke_plot])
+                dpg.set_value(self.se_series, [x_plot, se_plot])
+                dpg.set_value(self.damp_series, [x_plot, damp_plot])
+                dpg.set_value(self.failure_series, [x_plot, failure_plot])
+                dpg.set_value(self.contact_series, [x_plot, contact_plot])
+                dpg.set_value(self.total_series, [x_plot, total_plot])
+
+                if self._update_count == 1 or self._update_count % 12 == 0:
+                    dpg.fit_axis_data(self.x_axis)
+                    dpg.fit_axis_data(self.y_axis)
 
     def set_playback_marker(self, time: float, max_energy: float) -> None:
         """Update the position of the vertical time cursor S6.5.4."""

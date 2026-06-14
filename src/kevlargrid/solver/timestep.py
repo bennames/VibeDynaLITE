@@ -11,7 +11,6 @@ import numpy as np
 from kevlargrid.solver import backend
 
 
-@backend.jit
 def compute_cfl_timestep(
     stiffnesses: np.ndarray,
     masses: np.ndarray,

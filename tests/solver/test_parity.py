@@ -62,8 +62,11 @@ def test_fused_step_consistency() -> None:
     n_steps = 20
     save_interval = 10
     k_penalty = 1e6
-    damping_coeff = 0.1
+    rayleigh_alpha = 0.1
+    rayleigh_beta = 0.001
     failure_strain = 0.05
+    damage_onset_strain = 0.03
+    fracture_energy_multiplier = 1.5
 
     # 1. Run step-by-step sequentially
     pos_seq = positions.copy()
@@ -72,6 +75,8 @@ def test_fused_step_consistency() -> None:
     p_pos_seq = proj_pos.copy()
     p_vel_seq = proj_vel.copy()
     damp_diss_seq = 0.0
+    failure_diss_seq = 0.0
+    clamp_diss_seq = 0.0
     t_sim_seq = 0.0
 
     class MockProj:
@@ -94,18 +99,65 @@ def test_fused_step_consistency() -> None:
 
     mock_proj = MockProj()
     mock_grid = MockGrid()
+    node_initial_springs = np.zeros(n_nodes, dtype=np.int32)
+    np.add.at(node_initial_springs, grid_springs[:, 0], 1)
+    np.add.at(node_initial_springs, grid_springs[:, 1], 1)
 
+    # Build CSR adjacency for JIT loop (from grid.py)
+    node_counts = np.zeros(n_nodes, dtype=np.int32)
+    np.add.at(node_counts, grid_springs[:, 0], 1)
+    np.add.at(node_counts, grid_springs[:, 1], 1)
+    node_spring_offsets = np.zeros(n_nodes + 1, dtype=np.int32)
+    node_spring_offsets[1:] = np.cumsum(node_counts)
+    current_offset = node_spring_offsets[:-1].copy()
+    node_spring_ids = np.zeros(2 * n_springs, dtype=np.int32)
+    node_spring_signs = np.zeros(2 * n_springs, dtype=np.float64)
+    for j in range(n_springs):
+        n0 = grid_springs[j, 0]
+        n1 = grid_springs[j, 1]
+        offset_0 = current_offset[n0]
+        node_spring_ids[offset_0] = j
+        node_spring_signs[offset_0] = 1.0
+        current_offset[n0] += 1
+        offset_1 = current_offset[n1]
+        node_spring_ids[offset_1] = j
+        node_spring_signs[offset_1] = -1.0
+        current_offset[n1] += 1
+
+    dx_param = 0.05
     for _ in range(n_steps):
+        # 0. Irreversible failure updates FIRST
+        p1 = pos_seq[grid_springs[:, 0]]
+        p2 = pos_seq[grid_springs[:, 1]]
+        diff = p2 - p1
+        lengths = np.sqrt(np.sum(diff**2, axis=1))
+        strains = (lengths - grid_rest_lengths) / grid_rest_lengths
+        newly_failed = (~failed_seq) & (strains > failure_strain)
+        
+        # Track fracture energy
+        fracture_se = np.where(newly_failed, 0.5 * grid_stiffnesses * (strains * grid_rest_lengths)**2, 0.0)
+        failure_diss_seq += np.sum(fracture_se) * fracture_energy_multiplier
+        failed_seq = failed_seq | newly_failed
+        mock_grid.failed = failed_seq.copy()
+
         # projectile contact
         update_contact_zone(mock_proj, mock_grid, proximity_threshold=0.05 * 2.0, positions=pos_seq)
         proj_forces = distribute_contact_forces(
             mock_proj, mock_grid, positions=pos_seq, k_contact=k_penalty
         )
+        
+        # Scale the contact force by the fraction of remaining active springs S7.6.1
+        active_springs = np.where(failed_seq, 0, 1)
+        active_counts = np.zeros(n_nodes, dtype=np.int32)
+        np.add.at(active_counts, grid_springs[:, 0], active_springs)
+        np.add.at(active_counts, grid_springs[:, 1], active_springs)
+        scale_factor = np.where(node_initial_springs > 0, active_counts / node_initial_springs, 0.0)
+        proj_forces = proj_forces * scale_factor[:, np.newaxis]
 
         # interply contact (1 ply -> zeros)
         interply_forces = np.zeros_like(pos_seq)
 
-        # spring forces
+        # spring forces with progressive damage model
         spring_forces = compute_spring_forces(
             pos_seq,
             grid_springs,
@@ -113,12 +165,33 @@ def test_fused_step_consistency() -> None:
             grid_rest_lengths,
             failed_seq,
             tension_only=grid_tension_only,
+            damage_onset_strain=damage_onset_strain,
+            failure_strain=failure_strain,
         )
 
-        # damping
-        damp_forces = -damping_coeff * vel_seq
-        p_damp = np.sum(damp_forces * vel_seq)
-        damp_diss_seq += -p_damp * dt
+        # Rayleigh damping forces
+        f_mass_damp = -rayleigh_alpha * grid_masses[:, np.newaxis] * vel_seq
+        
+        lengths_safe = np.where(lengths == 0.0, 1.0, lengths)
+        v1 = vel_seq[grid_springs[:, 0]]
+        v2 = vel_seq[grid_springs[:, 1]]
+        v_rel = v2 - v1
+        unit_axes = diff / lengths_safe[:, np.newaxis]
+        v_proj = np.sum(v_rel * unit_axes, axis=1)
+        stiff_damp_mag = rayleigh_beta * grid_stiffnesses * v_proj
+        stiff_damp_mag = np.where(failed_seq, 0.0, stiff_damp_mag)
+        stiff_damp_vecs = stiff_damp_mag[:, np.newaxis] * unit_axes
+        
+        f_stiff_damp = np.zeros_like(vel_seq)
+        np.add.at(f_stiff_damp, grid_springs[:, 0], stiff_damp_vecs)
+        np.add.at(f_stiff_damp, grid_springs[:, 1], -stiff_damp_vecs)
+        
+        damp_forces = f_mass_damp + f_stiff_damp
+        
+        # Dissipated energy power
+        p_mass_damp = np.sum(f_mass_damp * vel_seq)
+        stiff_damp_power = np.sum(stiff_damp_mag * v_proj)
+        damp_diss_seq += (-p_mass_damp + stiff_damp_power) * dt
 
         # net forces
         net_forces = spring_forces + proj_forces + interply_forces + damp_forces
@@ -127,6 +200,16 @@ def test_fused_step_consistency() -> None:
 
         pos_seq, vel_seq = leapfrog_step(pos_seq, vel_seq, net_forces, grid_masses, dt)
 
+        # CFL velocity clamping
+        v_mag = np.sqrt(np.sum(vel_seq**2, axis=1))
+        v_max = dx_param / dt
+        scale = np.where(v_mag > v_max, v_max / np.maximum(v_mag, 1e-30), 1.0)
+        excess_ke = np.sum(0.5 * grid_masses * (v_mag**2) * (1.0 - scale**2))
+        clamp_diss_seq += excess_ke
+        vel_seq = vel_seq * scale[:, np.newaxis]
+        
+        vel_seq[boundary_mask] = 0.0
+
         # projectile motion
         proj_reaction_force = -np.sum(proj_forces, axis=0)
         proj_accel = proj_reaction_force / proj_mass
@@ -134,15 +217,6 @@ def test_fused_step_consistency() -> None:
         p_pos_seq += p_vel_seq * dt
         mock_proj.velocity = p_vel_seq.copy()
         mock_proj.position = p_pos_seq.copy()
-
-        # check failures
-        p1 = pos_seq[grid_springs[:, 0]]
-        p2 = pos_seq[grid_springs[:, 1]]
-        diff = p2 - p1
-        lengths = np.sqrt(np.sum(diff**2, axis=1))
-        strains = (lengths - grid_rest_lengths) / grid_rest_lengths
-        check_failures(strains, failed_seq, failure_strain)
-        mock_grid.failed = failed_seq.copy()
 
         t_sim_seq += dt
 
@@ -154,6 +228,8 @@ def test_fused_step_consistency() -> None:
         p_pos_fused,
         p_vel_fused,
         damp_diss_fused,
+        failure_diss_fused,
+        clamp_diss_fused,
         t_sim_fused,
         hist_pos,
         hist_failed,
@@ -172,6 +248,7 @@ def test_fused_step_consistency() -> None:
         grid_masses.copy(),
         grid_tension_only.copy(),
         boundary_mask.copy(),
+        np.zeros((n_nodes, 3)),
         proj_pos.copy(),
         proj_vel.copy(),
         proj_mass,
@@ -180,15 +257,25 @@ def test_fused_step_consistency() -> None:
         n_plies=1,
         n_nodes_per_layer=n_nodes,
         t_ply=0.002,
-        dx=0.05,
+        dx=dx_param,
         k_penalty=k_penalty,
-        damping_coeff=damping_coeff,
+        rayleigh_alpha=rayleigh_alpha,
+        rayleigh_beta=rayleigh_beta,
         failure_strain=failure_strain,
+        damage_onset_strain=damage_onset_strain,
+        fracture_energy_multiplier=fracture_energy_multiplier,
         dt=dt,
         n_steps=n_steps,
         save_interval=save_interval,
         damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
         t_sim_init=0.0,
+        strike_direction=0.0,
+        node_initial_springs=node_initial_springs,
+        node_spring_offsets=node_spring_offsets,
+        node_spring_ids=node_spring_ids,
+        node_spring_signs=node_spring_signs,
     )
 
     # Assert exact/very high-precision mathematical consistency
@@ -198,6 +285,8 @@ def test_fused_step_consistency() -> None:
     assert np.allclose(p_pos_fused, p_pos_seq)
     assert np.allclose(p_vel_fused, p_vel_seq)
     assert damp_diss_fused == pytest.approx(damp_diss_seq)
+    assert failure_diss_fused == pytest.approx(failure_diss_seq)
+    assert clamp_diss_fused == pytest.approx(clamp_diss_seq)
     assert t_sim_fused == pytest.approx(t_sim_seq)
 
     # Check history shape and correctness S7 Verification
@@ -212,6 +301,7 @@ def test_fused_step_consistency() -> None:
 
 def test_fused_mode_a_multi_ply_compilation() -> None:
     """Verify that fused_leapfrog_loop runs without crash in Mode A (1 physical layer) with nominal n_plies > 1."""
+    from kevlargrid.solver.grid import Grid
     n_nodes = 4
     positions = np.array(
         [[0.0, 0.0, 0.0], [0.05, 0.0, 0.0], [0.0, 0.05, 0.0], [0.05, 0.05, 0.0]], dtype=np.float64
@@ -229,6 +319,20 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
     proj_pos = np.array([0.025, 0.025, 0.01], dtype=np.float64)
     proj_vel = np.array([0.0, 0.0, -10.0], dtype=np.float64)
 
+    node_initial_springs = np.zeros(n_nodes, dtype=np.int32)
+    np.add.at(node_initial_springs, grid_springs[:, 0], 1)
+    np.add.at(node_initial_springs, grid_springs[:, 1], 1)
+
+    dummy_grid = Grid(
+        nodes=positions,
+        springs=grid_springs,
+        masses=grid_masses,
+        stiffnesses=grid_stiffnesses,
+        rest_lengths=grid_rest_lengths,
+        failed=grid_failed,
+        tension_only=grid_tension_only,
+    )
+
     # This should execute cleanly because we pass n_plies = 1 internally to avoid interply contacts.
     res = fused_leapfrog_loop(
         positions.copy(),
@@ -240,6 +344,7 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
         grid_masses.copy(),
         grid_tension_only.copy(),
         boundary_mask.copy(),
+        np.zeros((n_nodes, 3)),
         proj_pos.copy(),
         proj_vel.copy(),
         proj_mass=0.05,
@@ -250,15 +355,25 @@ def test_fused_mode_a_multi_ply_compilation() -> None:
         t_ply=0.002,
         dx=0.05,
         k_penalty=1e5,
-        damping_coeff=0.1,
+        rayleigh_alpha=0.1,
+        rayleigh_beta=0.0001,
         failure_strain=0.05,
+        damage_onset_strain=0.03,
+        fracture_energy_multiplier=1.5,
         dt=1e-5,
         n_steps=2,
         save_interval=2,
         damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
         t_sim_init=0.0,
+        strike_direction=0.0,
+        node_initial_springs=node_initial_springs,
+        node_spring_offsets=dummy_grid.node_spring_offsets,
+        node_spring_ids=dummy_grid.node_spring_ids,
+        node_spring_signs=dummy_grid.node_spring_signs,
     )
-    assert len(res) == 14
+    assert len(res) == 16
 
 
 def test_fused_mode_b_multiply_parity() -> None:
@@ -321,6 +436,8 @@ def test_fused_mode_b_multiply_parity() -> None:
         p_pos_fused,
         p_vel_fused,
         damp_diss_fused,
+        failure_diss_fused,
+        clamp_diss_fused,
         t_sim_fused,
         hist_pos,
         hist_failed,
@@ -339,6 +456,7 @@ def test_fused_mode_b_multiply_parity() -> None:
         grid.masses.copy(),
         grid.tension_only.copy(),
         boundary_mask.copy(),
+        np.zeros((n_nodes, 3)),
         proj_pos.copy(),
         proj_vel.copy(),
         proj_mass,
@@ -349,13 +467,23 @@ def test_fused_mode_b_multiply_parity() -> None:
         t_ply=t_ply,
         dx=dx,
         k_penalty=k_penalty,
-        damping_coeff=damping_coeff,
+        rayleigh_alpha=damping_coeff,
+        rayleigh_beta=0.0001,
         failure_strain=failure_strain,
+        damage_onset_strain=0.03,
+        fracture_energy_multiplier=1.5,
         dt=dt,
         n_steps=n_steps,
         save_interval=save_interval,
         damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
         t_sim_init=0.0,
+        strike_direction=0.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
     )
 
     # Assert return shapes are correct
@@ -421,6 +549,7 @@ def test_fused_contact_force_nonzero() -> None:
         grid.masses.copy(),
         grid.tension_only.copy(),
         boundary_mask,
+        np.zeros((grid.n_nodes, 3)),
         proj_pos.copy(),
         proj_vel.copy(),
         proj_mass=0.01,  # Light projectile to see clear deceleration
@@ -431,13 +560,23 @@ def test_fused_contact_force_nonzero() -> None:
         t_ply=0.002,
         dx=dx,
         k_penalty=5e6,
-        damping_coeff=0.1,
+        rayleigh_alpha=0.1,
+        rayleigh_beta=0.0,
         failure_strain=0.05,
+        damage_onset_strain=0.03,
+        fracture_energy_multiplier=1.5,
         dt=1e-6,
         n_steps=20,
         save_interval=10,
         damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
         t_sim_init=0.0,
+        strike_direction=0.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
     )
 
     # Projectile was moving at -100 m/s. It should slow down because of contact forces.
@@ -484,6 +623,7 @@ def test_fused_proximity_threshold_correctness() -> None:
         grid.masses.copy(),
         grid.tension_only.copy(),
         boundary_mask,
+        np.zeros((grid.n_nodes, 3)),
         proj_pos.copy(),
         np.array([0.0, 0.0, -10.0]),
         proj_mass=0.1,
@@ -494,13 +634,23 @@ def test_fused_proximity_threshold_correctness() -> None:
         t_ply=0.002,
         dx=dx,
         k_penalty=1e6,
-        damping_coeff=0.0,
+        rayleigh_alpha=0.0,
+        rayleigh_beta=0.0,
         failure_strain=0.05,
+        damage_onset_strain=0.03,
+        fracture_energy_multiplier=1.5,
         dt=1e-7,
         n_steps=1,
         save_interval=1,
         damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
         t_sim_init=0.0,
+        strike_direction=0.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
     )
 
     # If the proximity threshold was computed correctly as dx * 2 = 0.02,

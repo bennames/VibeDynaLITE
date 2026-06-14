@@ -8,7 +8,7 @@ from kevlargrid.solver import backend
 def test_backend_detection() -> None:
     """Verify that backend detection returns a valid name."""
     name = backend.get_backend_name()
-    assert name in ("jax", "numba", "numpy")
+    assert name in ("jax", "numba", "numpy", "taichi")
 
 
 def test_array_creation_zeros() -> None:

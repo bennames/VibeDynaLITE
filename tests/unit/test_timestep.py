@@ -49,3 +49,32 @@ class TestCFLTimestep:
 
         with pytest.raises(ValueError, match="CFL safety factor"):
             compute_cfl_timestep(stiffnesses, masses, dx, -0.5)
+
+    def test_dynamic_nodal_cfl_timestep(self) -> None:
+        """Verify that the dynamic nodal stiffness JIT helpers compute the expected values."""
+        from kevlargrid.solver.fused import numba_compute_effective_k, numba_sum_nodal_k_springs
+        
+        positions = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
+        springs = np.array([[0, 1]], dtype=np.int32)
+        stiffnesses = np.array([1000.0], dtype=np.float64)
+        rest_lengths = np.array([1.0], dtype=np.float64)
+        failed = np.zeros(1, dtype=bool)
+        
+        # Stretched past damage onset but before failure:
+        # strain = 0.4, damage = (0.4 - 0.3) / 0.2 = 0.5
+        positions_degraded = np.array([[0.0, 0.0, 0.0], [1.4, 0.0, 0.0]], dtype=np.float64)
+        
+        eff_k = numba_compute_effective_k(
+            positions_degraded, springs, stiffnesses, rest_lengths, failed, 0.3, 0.5
+        )
+        # Expected: 1000 * (1.0 - 0.5) = 500.0
+        assert np.abs(eff_k[0] - 500.0) < 1e-7
+        
+        # Nodal spring stiffness summation:
+        node_spring_offsets = np.array([0, 1, 2], dtype=np.int32)
+        node_spring_ids = np.array([0, 0], dtype=np.int32)
+        nodal_k = numba_sum_nodal_k_springs(eff_k, node_spring_offsets, node_spring_ids)
+        
+        # Both nodes are connected to spring 0, so both get stiffness 500.0
+        assert np.abs(nodal_k[0] - 500.0) < 1e-7
+        assert np.abs(nodal_k[1] - 500.0) < 1e-7

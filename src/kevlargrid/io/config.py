@@ -113,6 +113,11 @@ def validate_config(config: dict) -> bool:
         if not isinstance(cf, (int, float)) or cf < 0.0:
             raise ValidationError(f"crimp_factor must be non-negative (got {cf}).")
 
+    if "fracture_energy_multiplier" in mat:
+        fem = mat["fracture_energy_multiplier"]
+        if not isinstance(fem, (int, float)) or fem < 1.0:
+            raise ValidationError(f"fracture_energy_multiplier must be a number >= 1.0 (got {fem}).")
+
     if "yarn_count" in mat:
         yc = mat["yarn_count"]
         if (
@@ -174,7 +179,24 @@ def validate_config(config: dict) -> bool:
 
     # 5. Simulation validation
     sim = config["simulation"]
-    for key in ["duration", "cfl_factor", "damping_coefficient"]:
+    model = sim.get("damping_model")
+    if model is None:
+        if "rayleigh_beta" in sim and sim["rayleigh_beta"] > 0.0:
+            model = "rayleigh"
+        elif "damping_coefficient" in sim:
+            model = "viscous"
+        else:
+            model = "rayleigh"
+    sim["damping_model"] = model
+
+    if "damping_coefficient" not in sim:
+        sim["damping_coefficient"] = 0.05
+    if "rayleigh_alpha" not in sim:
+        sim["rayleigh_alpha"] = 0.0
+    if "rayleigh_beta" not in sim:
+        sim["rayleigh_beta"] = 1e-9
+
+    for key in ["duration", "cfl_factor", "damping_model", "damping_coefficient", "rayleigh_alpha", "rayleigh_beta"]:
         if key not in sim:
             raise ValidationError(f"Simulation section missing required key: '{key}'")
 
@@ -189,10 +211,28 @@ def validate_config(config: dict) -> bool:
             f"Simulation parameter 'cfl_factor' must be in the range (0.0, 1.0] (got {cfl})."
         )
 
-    damp = sim["damping_coefficient"]
-    if not isinstance(damp, (int, float)) or damp < 0.0:
+    damp_model = sim["damping_model"]
+    if damp_model not in ["rayleigh", "viscous"]:
         raise ValidationError(
-            f"Simulation parameter 'damping_coefficient' must be a non-negative number (got {damp})."
+            f"Simulation parameter 'damping_model' must be 'rayleigh' or 'viscous' (got '{damp_model}')."
+        )
+
+    coeff = sim["damping_coefficient"]
+    if not isinstance(coeff, (int, float)) or coeff < 0.0:
+        raise ValidationError(
+            f"Simulation parameter 'damping_coefficient' must be a non-negative number (got {coeff})."
+        )
+
+    alpha = sim["rayleigh_alpha"]
+    if not isinstance(alpha, (int, float)) or alpha < 0.0:
+        raise ValidationError(
+            f"Simulation parameter 'rayleigh_alpha' must be a non-negative number (got {alpha})."
+        )
+
+    beta = sim["rayleigh_beta"]
+    if not isinstance(beta, (int, float)) or beta < 0.0:
+        raise ValidationError(
+            f"Simulation parameter 'rayleigh_beta' must be a non-negative number (got {beta})."
         )
 
     logger.info("Configuration validation succeeded.")

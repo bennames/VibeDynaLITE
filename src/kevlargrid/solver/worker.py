@@ -57,6 +57,12 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                         if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
                             boundary_mask[offset + i * ny + j] = True
 
+        # Nodal external forces setup
+        if "nodal_external_forces" in config:
+            nodal_external_forces = np.array(config["nodal_external_forces"], dtype=np.float64)
+        else:
+            nodal_external_forces = np.zeros((grid.n_nodes, 3), dtype=np.float64)
+
         # Calculate timestep
         k_penalty = 10.0 * np.mean(grid.stiffnesses)
         k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
@@ -168,6 +174,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 grid.masses,
                 grid.tension_only,
                 boundary_mask,
+                nodal_external_forces,
                 proj.position,
                 proj.velocity,
                 proj.mass,
@@ -196,6 +203,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 grid.node_spring_ids,
                 grid.node_spring_signs,
                 use_viscous=(damping_model == "viscous"),
+                cfl_factor=sim_cfg["cfl_factor"],
             )
 
             # Check for numerical instability (NaN/inf values)
@@ -210,10 +218,34 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
             lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
             strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-            se = compute_strain_energy(strains, grid.stiffnesses, grid.rest_lengths, grid.failed)
+            
+            # Compute progressive damage fraction for active-only/degraded strain energy calculation S7.14
+            denom = failure_strain - damage_onset_strain
+            denom_safe = denom if denom != 0.0 else 1.0
+            damage = np.minimum(np.maximum((strains - damage_onset_strain) / denom_safe, 0.0), 1.0)
+            se = compute_strain_energy(strains, grid.stiffnesses, grid.rest_lengths, grid.failed, damage)
+            
             proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
             failed_count = int(np.sum(grid.failed))
-            peak_strain = float(np.max(strains)) if len(strains) > 0 else 0.0
+            
+            # Compute peak strain only on active (non-failed) springs S7.14
+            active_strains = strains[~grid.failed]
+            peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
+
+            # Calculate frame-by-frame history of active-only peak strain S7.14
+            hist_pos_np = np.asarray(hist_pos)
+            hist_failed_np = np.asarray(hist_failed)
+            hist_peak_strain_list = []
+            for idx in range(len(hist_time)):
+                f_pos = hist_pos_np[idx]
+                f_failed = hist_failed_np[idx]
+                f_diff = f_pos[grid.springs[:, 1]] - f_pos[grid.springs[:, 0]]
+                f_lens = np.sqrt(np.sum(f_diff**2, axis=1))
+                f_strains = (f_lens - grid.rest_lengths) / grid.rest_lengths
+                f_active = f_strains[~f_failed]
+                f_peak = float(np.max(f_active)) if len(f_active) > 0 else 0.0
+                hist_peak_strain_list.append(f_peak)
+            hist_peak_strain = np.array(hist_peak_strain_list, dtype=np.float32)
 
             # Send telemetry snapshot chunk back to parent GUI process
             # Convert JAX arrays to standard NumPy arrays for DPG/PyVista compatibility S7.6.1
@@ -233,13 +265,14 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "peak_strain": float(peak_strain),
                     "proj_ke": float(proj_ke),
                     "failed_count": int(failed_count),
-                    "hist_pos": np.asarray(hist_pos),
-                    "hist_failed": np.asarray(hist_failed),
+                    "hist_pos": hist_pos_np,
+                    "hist_failed": hist_failed_np,
                     "hist_proj_pos": np.asarray(hist_proj_pos),
                     "hist_time": np.asarray(hist_time),
                     "hist_ke": np.asarray(hist_ke),
                     "hist_se": np.asarray(hist_se),
                     "hist_proj_ke": np.asarray(hist_proj_ke),
+                    "hist_peak_strain": hist_peak_strain,
                 }
             )
 
@@ -265,12 +298,15 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             1.0 - (proj_ke / (0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)))
         )
 
+        active_strains = strains[~grid.failed]
+        final_peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
+
         report = {
             "penetrated": bool(final_velocity_z < -0.1 and proj.position[2] < 0.0),
             "final_velocity": float(np.linalg.norm(proj.velocity)),
             "energy_loss_pct": float(e_loss_pct),
             "failed_springs": int(np.sum(grid.failed)),
-            "peak_strain": float(np.max(strains)) if len(strains) > 0 else 0.0,
+            "peak_strain": final_peak_strain,
             "damp_dissipated": float(damp_dissipated),
             "failure_dissipated": float(failure_dissipated),
             "clamp_dissipated": float(clamp_dissipated),

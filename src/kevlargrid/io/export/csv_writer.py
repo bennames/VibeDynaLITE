@@ -31,6 +31,8 @@ def export_to_csv(history: list[dict[str, Any]], filepath: str) -> None:
         "Damping Energy (J)",
         "Projectile Z Position (m)",
         "Projectile Velocity (m/s)",
+        "Rupture Energy (J)",
+        "Clamping Energy (J)",
     ]
 
     with open(filepath, "w", newline="", encoding="utf-8") as f:
@@ -43,6 +45,8 @@ def export_to_csv(history: list[dict[str, Any]], filepath: str) -> None:
             ke = frame.get("ke", 0.0)
             se = frame.get("se", 0.0)
             damped = frame.get("damped", 0.0)
+            rupture = frame.get("failure_dissipated", 0.0)
+            clamp = frame.get("clamp_dissipated", 0.0)
 
             # Projectile details
             proj_z = frame["projectile_pos"][2]
@@ -58,5 +62,7 @@ def export_to_csv(history: list[dict[str, Any]], filepath: str) -> None:
                     f"{damped:.4f}",
                     f"{proj_z:.6f}",
                     f"{proj_vz:.4f}",
+                    f"{rupture:.4f}",
+                    f"{clamp:.4f}",
                 ]
             )

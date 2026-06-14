@@ -202,3 +202,37 @@ class TestProjectile:
         assert report["exit_velocity_m_s"] == 40.0
         assert report["residual_ke_j"] == 0.5 * 0.2 * 40.0**2  # 160 J
         assert report["energy_absorbed_j"] == initial_ke - 160.0
+
+    def test_check_termination_jax_compatibility(self) -> None:
+        """Verify check_termination with JAX arrays for failed springs."""
+        try:
+            import jax.numpy as jnp
+        except ImportError:
+            return
+
+        from kevlargrid.solver.projectile import check_termination
+
+        nx, ny, dx = 5, 5, 0.01
+        grid = generate_rectangular_grid(nx, ny, dx, MOCK_MATERIAL)
+        positions = grid.nodes.copy()
+
+        # Projectile past Z=0
+        proj = Projectile(
+            mass=0.1,
+            velocity=[0.0, 0.0, 50.0],
+            position=[0.0, 0.0, 0.005],
+            blade_width=0.02,
+            edge_thickness=0.005,
+        )
+
+        # Set contact nodes
+        proj.contact_nodes = np.array([12], dtype=np.int32)
+
+        # Simulate JAX device array for failed flags
+        grid.failed = jnp.ones(len(grid.failed), dtype=bool)
+
+        res = check_termination(
+            proj, grid, positions, t_current=0.001, t_max=0.01, initial_velocity_z=50.0
+        )
+        assert res == "penetration"
+

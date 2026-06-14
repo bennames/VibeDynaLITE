@@ -11,6 +11,7 @@ import numpy as np
 from kevlargrid.solver import backend
 from kevlargrid.solver.backend import (
     maximum,
+    minimum,
     min,
     scatter_add,
     sqrt,
@@ -21,7 +22,87 @@ from kevlargrid.solver.backend import (
 )
 
 
-@backend.jit
+try:
+    import numba
+except ImportError:
+    numba = None
+
+
+@backend.jit(parallel=True, fastmath=True)
+def numba_gather_spring_forces(
+    positions: np.ndarray,
+    springs: np.ndarray,
+    stiffnesses: np.ndarray,
+    rest_lengths: np.ndarray,
+    failed: np.ndarray,
+    tension_only: np.ndarray,
+    node_spring_offsets: np.ndarray,
+    node_spring_ids: np.ndarray,
+    node_spring_signs: np.ndarray,
+    damage_onset_strain: float,
+    failure_strain: float,
+) -> np.ndarray:
+    n_springs = len(springs)
+    n_nodes = len(positions)
+    force_vecs = np.zeros((n_springs, 3), dtype=positions.dtype)
+
+    for i in numba.prange(n_springs):
+        n0 = springs[i, 0]
+        n1 = springs[i, 1]
+
+        dx = positions[n1, 0] - positions[n0, 0]
+        dy = positions[n1, 1] - positions[n0, 1]
+        dz = positions[n1, 2] - positions[n0, 2]
+
+        length = np.sqrt(dx*dx + dy*dy + dz*dz)
+        length_safe = length if length != 0.0 else 1.0
+
+        strain = (length - rest_lengths[i]) / rest_lengths[i]
+
+        # Progressive damage model
+        denom = failure_strain - damage_onset_strain
+        denom_safe = denom if denom != 0.0 else 1.0
+        val = (strain - damage_onset_strain) / denom_safe
+        damage = 0.0
+        if val > 0.0:
+            damage = val if val < 1.0 else 1.0
+
+        effective_k = stiffnesses[i] * (1.0 - damage)
+        f_mag = effective_k * strain * rest_lengths[i]
+
+        # Tension-only check
+        if tension_only[i] and strain < 0.0:
+            f_mag = 0.0
+
+        if failed[i]:
+            f_mag = 0.0
+
+        f_coeff = f_mag / length_safe
+        force_vecs[i, 0] = f_coeff * dx
+        force_vecs[i, 1] = f_coeff * dy
+        force_vecs[i, 2] = f_coeff * dz
+
+    forces = np.zeros((n_nodes, 3), dtype=positions.dtype)
+    for i in numba.prange(n_nodes):
+        start = node_spring_offsets[i]
+        end = node_spring_offsets[i+1]
+        f_x = 0.0
+        f_y = 0.0
+        f_z = 0.0
+        for idx in range(start, end):
+            sp_id = node_spring_ids[idx]
+            sign = node_spring_signs[idx]
+            f_x += sign * force_vecs[sp_id, 0]
+            f_y += sign * force_vecs[sp_id, 1]
+            f_z += sign * force_vecs[sp_id, 2]
+        forces[i, 0] = f_x
+        forces[i, 1] = f_y
+        forces[i, 2] = f_z
+
+    return forces
+
+
+@backend.jit(parallel=False, static_argnames=("damage_onset_strain", "failure_strain"))
 def compute_spring_forces(
     positions: np.ndarray,
     springs: np.ndarray,
@@ -29,6 +110,11 @@ def compute_spring_forces(
     rest_lengths: np.ndarray,
     failed: np.ndarray,
     tension_only: np.ndarray | None = None,
+    node_spring_offsets: np.ndarray | None = None,
+    node_spring_ids: np.ndarray | None = None,
+    node_spring_signs: np.ndarray | None = None,
+    damage_onset_strain: float = 0.9,
+    failure_strain: float = 1.0,
 ) -> np.ndarray:
     """Compute the net nodal force vector from all active springs.
 
@@ -49,12 +135,46 @@ def compute_spring_forces(
         Boolean failure flags per spring, shape ``(n_springs,)``.
     tension_only : np.ndarray, optional
         Boolean flags marking orthogonal springs, shape ``(n_springs,)``.
+    node_spring_offsets : np.ndarray, optional
+        CSR adjacency offsets array for parallel gather.
+    node_spring_ids : np.ndarray, optional
+        CSR adjacency ids array for parallel gather.
+    node_spring_signs : np.ndarray, optional
+        CSR adjacency signs array for parallel gather.
+    damage_onset_strain : float, optional
+        Onset strain for stiffness degradation (progressive damage).
+    failure_strain : float, optional
+        Strain at complete failure.
 
     Returns
     -------
     np.ndarray
         Net force on each node, shape ``(n_nodes, 3)``.
     """
+    if tension_only is not None:
+        t_only = tension_only
+    else:
+        # Fallback: springs close to min rest length are considered orthogonal
+        min_l0 = min(rest_lengths)
+        t_only = rest_lengths < 1.1 * min_l0
+
+    if backend.BACKEND == "numba" and backend.HAS_NUMBA:
+        if node_spring_offsets is not None and node_spring_ids is not None and node_spring_signs is not None:
+            return numba_gather_spring_forces(
+                positions,
+                springs,
+                stiffnesses,
+                rest_lengths,
+                failed,
+                t_only,
+                node_spring_offsets,
+                node_spring_ids,
+                node_spring_signs,
+                damage_onset_strain,
+                failure_strain,
+            )
+
+    # Vectorized fallback
     p1 = positions[springs[:, 0]]
     p2 = positions[springs[:, 1]]
     diff = p2 - p1
@@ -64,17 +184,17 @@ def compute_spring_forces(
     lengths_safe = where(lengths == 0.0, 1.0, lengths)
     strains = (lengths - rest_lengths) / rest_lengths
 
+    # Progressive damage model
+    denom = failure_strain - damage_onset_strain
+    denom_safe = where(denom == 0.0, 1.0, denom)
+    damage = minimum(maximum((strains - damage_onset_strain) / denom_safe, 0.0), 1.0)
+    effective_k = stiffnesses * (1.0 - damage)
+
     # Spring force magnitude: F = k * strain * L_rest
-    f_mag = stiffnesses * strains * rest_lengths
+    f_mag = effective_k * strains * rest_lengths
 
     # Orthogonal springs are tension-only
-    if tension_only is not None:
-        f_mag = where(tension_only & (strains < 0.0), 0.0, f_mag)
-    else:
-        # Fallback: springs close to min rest length are considered orthogonal
-        min_l0 = min(rest_lengths)
-        is_ortho = rest_lengths < 1.1 * min_l0
-        f_mag = where(is_ortho & (strains < 0.0), 0.0, f_mag)
+    f_mag = where(t_only & (strains < 0.0), 0.0, f_mag)
 
     # Failed springs carry zero load
     f_mag = where(failed, 0.0, f_mag)
@@ -122,13 +242,14 @@ def compute_spring_strains(
     return (lengths - rest_lengths) / rest_lengths  # type: ignore[no-any-return]
 
 
-@backend.jit
+@backend.jit(static_argnames=("n_nodes_per_layer", "n_plies"))
 def compute_interply_contact_forces(
     positions: np.ndarray,
     n_nodes_per_layer: int,
     n_plies: int,
     t_ply: float,
     k_penalty: float,
+    active_counts: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float]:
     """Compute vectorised inter-ply penalty contact forces and potential energy.
 
@@ -148,6 +269,8 @@ def compute_interply_contact_forces(
         Inter-ply spacing (metres).
     k_penalty : float
         Penalty contact stiffness.
+    active_counts : np.ndarray, optional
+        Number of active springs per node, shape ``(n_nodes,)``.
 
     Returns
     -------
@@ -174,6 +297,12 @@ def compute_interply_contact_forces(
         delta = z_n - z_n1 + t_ply
         penetration = maximum(0.0, delta)
 
+        if active_counts is not None:
+            active_n = active_counts[start_idx:end_idx] > 0
+            active_n1 = active_counts[end_idx : end_idx + n_nodes_per_layer] > 0
+            both_active = active_n & active_n1
+            penetration = where(both_active, penetration, 0.0)
+
         # Force magnitude
         f_mag = k_penalty * penetration
 
@@ -188,6 +317,6 @@ def compute_interply_contact_forces(
         forces = scatter_add(forces, indices_n1, forces_n1)
 
         # Potential energy: 0.5 * k * x^2
-        total_energy += float(sum(0.5 * k_penalty * penetration**2))
+        total_energy += sum(0.5 * k_penalty * penetration**2)
 
     return forces, total_energy

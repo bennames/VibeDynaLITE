@@ -53,6 +53,8 @@ class SimRunner:
         self.ke = 0.0
         self.se = 0.0
         self.damp_dissipated = 0.0
+        self.failure_dissipated = 0.0
+        self.clamp_dissipated = 0.0
         self.peak_strain = 0.0
         self.proj_ke = 0.0
         self.failed_count = 0
@@ -115,6 +117,8 @@ class SimRunner:
             self.ke = 0.0
             self.se = 0.0
             self.damp_dissipated = 0.0
+            self.failure_dissipated = 0.0
+            self.clamp_dissipated = 0.0
             self.peak_strain = 0.0
             self.proj_ke = 0.0
             self.failed_count = 0
@@ -137,6 +141,8 @@ class SimRunner:
                 "ke": self.ke,
                 "se": self.se,
                 "damp_dissipated": self.damp_dissipated,
+                "failure_dissipated": self.failure_dissipated,
+                "clamp_dissipated": self.clamp_dissipated,
                 "peak_strain": self.peak_strain,
                 "proj_ke": self.proj_ke,
                 "failed_count": self.failed_count,
@@ -233,11 +239,17 @@ class SimRunner:
                 elif msg["type"] == "telemetry":
                     # Extract metric updates
                     with self.lock:
+                        prev_damp = self.damp_dissipated
+                        prev_failure = self.failure_dissipated
+                        prev_clamp = self.clamp_dissipated
+
                         self.elapsed_time = msg["t_sim"]
                         self.step += msg["steps"]
                         self.ke = msg["ke"]
                         self.se = msg["se"]
                         self.damp_dissipated = msg["damp_dissipated"]
+                        self.failure_dissipated = msg["failure_dissipated"]
+                        self.clamp_dissipated = msg["clamp_dissipated"]
                         self.peak_strain = msg["peak_strain"]
                         self.proj_ke = msg["proj_ke"]
                         self.failed_count = msg["failed_count"]
@@ -253,12 +265,32 @@ class SimRunner:
                         hist_ke = msg["hist_ke"]
                         hist_se = msg["hist_se"]
                         hist_proj_ke = msg["hist_proj_ke"]
+                        hist_peak_strain = msg.get("hist_peak_strain", None)
 
-                        for idx in range(len(hist_time)):
-                            # Calculate total energy
-                            tot_energy = hist_ke[idx] + hist_se[idx] + hist_proj_ke[idx]
+                        n_frames = len(hist_time)
+                        for idx in range(n_frames):
+                            # Interpolate cumulative dissipated energies linearly across the chunk S7.14
+                            t_factor = (idx + 1) / n_frames if n_frames > 0 else 1.0
+                            damp_val = prev_damp + (self.damp_dissipated - prev_damp) * t_factor
+                            fail_val = prev_failure + (self.failure_dissipated - prev_failure) * t_factor
+                            clamp_val = prev_clamp + (self.clamp_dissipated - prev_clamp) * t_factor
+
+                            # Calculate conserved total energy including all components S7.14
+                            tot_energy = (
+                                hist_ke[idx]
+                                + hist_se[idx]
+                                + hist_proj_ke[idx]
+                                + damp_val
+                                + fail_val
+                                + clamp_val
+                            )
+
                             # Count failed springs at that step
                             failed_cnt_step = int(np.sum(hist_failed[idx]))
+
+                            # Read accurate peak strain frame-by-frame
+                            p_strain = float(hist_peak_strain[idx]) if hist_peak_strain is not None else float(self.peak_strain)
+
                             self.history.append(
                                 {
                                     "time": float(hist_time[idx]),
@@ -267,11 +299,13 @@ class SimRunner:
                                     "projectile_pos": hist_proj_pos[idx],
                                     "ke": float(hist_ke[idx]),
                                     "se": float(hist_se[idx]),
-                                    "damped": float(self.damp_dissipated),
+                                    "damped": float(damp_val),
+                                    "failure_dissipated": float(fail_val),
+                                    "clamp_dissipated": float(clamp_val),
                                     "contact": 0.0,
                                     "total": float(tot_energy),
                                     "failed_count": failed_cnt_step,
-                                    "peak_strain": float(self.peak_strain),
+                                    "peak_strain": p_strain,
                                     "proj_ke": float(hist_proj_ke[idx]),
                                 }
                             )
@@ -727,8 +761,16 @@ def launch() -> None:
                     "proj_ke": tel["proj_ke"],
                     "strain": tel["se"],
                     "damped": tel["damp_dissipated"],
+                    "failure_dissipated": tel["failure_dissipated"],
                     "contact": 0.0,
-                    "total": tel["ke"] + tel["se"] + tel["damp_dissipated"] + tel["proj_ke"],
+                    "total": (
+                        tel["ke"]
+                        + tel["se"]
+                        + tel["damp_dissipated"]
+                        + tel["failure_dissipated"]
+                        + tel["clamp_dissipated"]
+                        + tel["proj_ke"]
+                    ),
                 },
             )
 

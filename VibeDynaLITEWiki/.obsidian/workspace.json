@@ -1,0 +1,208 @@
+{
+  "main": {
+    "id": "54d0e0382cbf8b56",
+    "type": "split",
+    "children": [
+      {
+        "id": "8afa86babbb52de2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d59632654c37cd81",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "CFL Stability Condition.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "CFL Stability Condition"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "aff5a94939135d0b",
+    "type": "split",
+    "children": [
+      {
+        "id": "44f5a2a1be1992a8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cfc3a5e1a5b5c7e2",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "0f1038cf71082205",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "bdde1185c1ba0892",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "cc1745551a6e4352",
+    "type": "split",
+    "children": [
+      {
+        "id": "d5206d29c1b6ca71",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "51aa0d039c797e88",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Welcome.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Welcome"
+            }
+          },
+          {
+            "id": "d67a00a488e97cc3",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Welcome.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Welcome"
+            }
+          },
+          {
+            "id": "e32388b09ab99f72",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "796b9be15e4e8664",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "033b519183ecd5e2",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Welcome.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Welcome"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "d59632654c37cd81",
+  "lastOpenFiles": [
+    "Changelog.md",
+    "Spring Failure Mechanics.md",
+    "Physics-Based Benchmarks.md",
+    "Mass Scaling.md",
+    "Kevlar Material Properties.md",
+    "Infinite Boundary Conditions.md",
+    "Home.md",
+    "Grid Sizing and Mesh Resolution.md",
+    "Energy Conservation.md",
+    "Benchmark 8 - Ballistic Limit V50.md",
+    "Benchmark 7 - Thermodynamic Monotonicity.md",
+    "Benchmark 1 - CFL Stability.md",
+    "Benchmark 6 - Progressive Failure.md",
+    "Benchmark 5 - Damping Decay Rate.md",
+    "Benchmark 4 - Prestrained String Deflection.md",
+    "Benchmark 3 - Smith Yarn Impact.md",
+    "Benchmark 2 - 1D Stress Wave.md",
+    "CFL Stability Condition.md",
+    "Welcome.md"
+  ]
+}
