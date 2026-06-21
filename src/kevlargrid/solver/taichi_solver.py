@@ -4,8 +4,9 @@ Implements Verlet explicit time integration, spring forces, interply contact,
 and projectile contact on macOS Metal or Windows CUDA/Vulkan GPUs.
 """
 
-import numpy as np
 from typing import Any
+
+import numpy as np
 
 try:
     import taichi as ti
