@@ -5,6 +5,7 @@ and projectile contact on macOS Metal or Windows CUDA/Vulkan GPUs.
 """
 
 import numpy as np
+from typing import Any
 
 try:
     import taichi as ti
@@ -12,10 +13,11 @@ except ImportError:
     ti = None
 
 
-
 class PhysicsViolationError(ValueError):
     """Exception raised when physical guardrails (e.g. mass-scaling energy limits) are violated."""
+
     pass
+
 
 # Initialize Taichi on GPU (Metal, CUDA, or Vulkan)
 if ti is not None:
@@ -60,6 +62,7 @@ class TaichiSolver:
         self.n_springs = n_springs
         self.n_plies_val = n_plies
         self.n_nodes_per_layer_val = n_nodes_per_layer
+        self._stiffnesses_id: int | None = None
 
         real_type = ti.f32
 
@@ -220,6 +223,7 @@ class TaichiSolver:
             for i in range(self.n_nodes):
                 self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
             self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
+
         self.k_reset_forces_graph = k_reset_forces_g
 
         @ti.kernel
@@ -231,6 +235,7 @@ class TaichiSolver:
                     u, v = self.springs[j][0], self.springs[j][1]
                     ti.atomic_add(self.node_active_counts[u], 1)
                     ti.atomic_add(self.node_active_counts[v], 1)
+
         self.k_compute_active_counts_graph = k_compute_active_counts_g
 
         @ti.kernel
@@ -281,11 +286,7 @@ class TaichiSolver:
                 ):
                     x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
                     y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                    dist = ti.sqrt(
-                        (px - x_proj) ** 2
-                        + (py - y_proj) ** 2
-                        + (pz - proj_pos.z) ** 2
-                    )
+                    dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
 
                     if dist <= proximity_threshold:
                         w = 1.0 / ti.max(dist, 1e-4)
@@ -302,7 +303,9 @@ class TaichiSolver:
                     w_normalized = self.node_w[i] / w_mean
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
-                        scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
+                        scale_factor = float(self.node_active_counts[i]) / float(
+                            self.node_initial_springs[i]
+                        )
 
                     ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
 
@@ -326,6 +329,7 @@ class TaichiSolver:
             dt_crit = self.cfl_factor[None] * self.dt_crit[None]
             self.dt[None] = dt_crit
             self.v_max[None] = self.dx[None] / dt_crit
+
         self.k_update_cfl_graph = k_update_cfl_g
 
         @ti.kernel
@@ -391,7 +395,9 @@ class TaichiSolver:
                         w_new = (k * L0**2 / (6.0 * h_safe)) * (x_peak_new**3 - x_onset**3)
 
                     dw = w_new - w_old
-                    ti.atomic_add(self.failure_dissipated[None], self.fracture_energy_multiplier[None] * dw)
+                    ti.atomic_add(
+                        self.failure_dissipated[None], self.fracture_energy_multiplier[None] * dw
+                    )
 
                 if self.spring_failed[j] == 1:
                     continue
@@ -417,6 +423,7 @@ class TaichiSolver:
                     ti.atomic_add(self.forces[u], damp_vec)
                     ti.atomic_add(self.forces[v], -damp_vec)
                     ti.atomic_add(self.damp_dissipated[None], damp_mag * v_proj * self.dt[None])
+
         self.k_fused_spring_pass_graph = k_fused_spring_pass_g
 
         @ti.kernel
@@ -448,11 +455,7 @@ class TaichiSolver:
                 ):
                     x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
                     y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                    dist = ti.sqrt(
-                        (px - x_proj) ** 2
-                        + (py - y_proj) ** 2
-                        + (pz - proj_pos.z) ** 2
-                    )
+                    dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
 
                     if dist <= proximity_threshold:
                         w = 1.0 / ti.max(dist, 1e-4)
@@ -471,13 +474,16 @@ class TaichiSolver:
 
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
-                        scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
+                        scale_factor = float(self.node_active_counts[i]) / float(
+                            self.node_initial_springs[i]
+                        )
 
                     f_val = k_penalty * w_normalized * penetration * scale_factor
                     f_z = f_val * direction
 
                     self.forces[i].z += f_z
                     ti.atomic_add(self.proj_reaction_force[None].z, -f_z)
+
         self.k_compute_projectile_forces_graph = k_compute_projectile_forces_g
 
         @ti.kernel
@@ -493,6 +499,7 @@ class TaichiSolver:
                         if self.node_active_counts[u] > 0 and self.node_active_counts[v] > 0:
                             ti.atomic_add(self.forces[u].z, -f_mag)
                             ti.atomic_add(self.forces[v].z, f_mag)
+
         self.k_compute_interply_forces_graph = k_compute_interply_forces_g
 
         @ti.kernel
@@ -516,6 +523,7 @@ class TaichiSolver:
                     C_i = ti.sqrt(self.masses[i] * k_eff)
                     f_boundary = -C_i * self.velocities[i]
                     self.forces[i] += f_boundary
+
         self.k_apply_impedance_boundary_graph = k_apply_impedance_boundary_g
 
         @ti.kernel
@@ -566,6 +574,7 @@ class TaichiSolver:
             self.proj_velocity[None] += proj_accel * dt
             self.proj_position[None] += self.proj_velocity[None] * dt
             self.t_sim[None] += dt
+
         self.k_fused_node_pass_graph = k_fused_node_pass_g
 
         @ti.kernel
@@ -578,17 +587,21 @@ class TaichiSolver:
                     length = diff.norm()
                     strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
                     effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
-                    ti.atomic_add(e_int, 0.5 * effective_k * (strain * self.rest_lengths[j])**2)
+                    ti.atomic_add(e_int, 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2)
 
             # sync barrier
-            e_total_int = e_int + self.failure_dissipated[None] + self.damp_dissipated[None] + self.clamp_dissipated[None]
+            e_total_int = (
+                e_int
+                + self.failure_dissipated[None]
+                + self.damp_dissipated[None]
+                + self.clamp_dissipated[None]
+            )
             if e_total_int > 0.0:
                 if self.E_artificial_kinetic[None] > 0.02 * e_total_int:
                     self.physics_violated[None] = 1
+
         self.k_guardrail_check_graph = k_guardrail_check_g
-
-        self.compiled_graphs = {}
-
+        self.compiled_graphs: dict[tuple[int, bool, bool, int], Any] = {}
 
     @ti.func
     def reset_forces(self):
@@ -690,11 +703,7 @@ class TaichiSolver:
             ):
                 x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
                 y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                dist = ti.sqrt(
-                    (px - x_proj) ** 2
-                    + (py - y_proj) ** 2
-                    + (pz - proj_pos.z) ** 2
-                )
+                dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
 
                 if dist <= proximity_threshold:
                     w = 1.0 / ti.max(dist, 1e-4)
@@ -712,7 +721,9 @@ class TaichiSolver:
 
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
-                        scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
+                        scale_factor = float(self.node_active_counts[i]) / float(
+                            self.node_initial_springs[i]
+                        )
 
                     f_val = k_penalty * w_normalized * penetration * scale_factor
                     f_z = f_val * direction
@@ -744,7 +755,9 @@ class TaichiSolver:
                 self.forces[i] += f_boundary
 
     @ti.func
-    def integrate_nodes(self, dt: ti.f32, rayleigh_alpha: ti.f32, v_max: ti.f32, use_viscous: ti.i32):
+    def integrate_nodes(
+        self, dt: ti.f32, rayleigh_alpha: ti.f32, v_max: ti.f32, use_viscous: ti.i32
+    ):
         """Update node velocities and coordinates using leapfrog time integration."""
         for i in range(self.n_nodes):
             if self.boundary_mask[i] == 1:
@@ -807,7 +820,10 @@ class TaichiSolver:
 
     @ti.func
     def compute_failure_dissipated(
-        self, failure_strain: ti.f32, damage_onset_strain: ti.f32, fracture_energy_multiplier: ti.f32
+        self,
+        failure_strain: ti.f32,
+        damage_onset_strain: ti.f32,
+        fracture_energy_multiplier: ti.f32,
     ):
         """Compute the total progressive damage failure dissipated energy continuously."""
         self.failure_dissipated[None] = 0.0
@@ -827,7 +843,9 @@ class TaichiSolver:
                     denom = x_fail - x_onset
                     denom_safe = denom if denom != 0.0 else 1.0
                     w_diss = (k * L0**2 / (6.0 * denom_safe)) * (x_peak**3 - x_onset**3)
-                    ti.atomic_add(self.failure_dissipated[None], fracture_energy_multiplier * w_diss)
+                    ti.atomic_add(
+                        self.failure_dissipated[None], fracture_energy_multiplier * w_diss
+                    )
 
     @ti.func
     def compute_internal_energy(self) -> ti.f32:
@@ -840,8 +858,13 @@ class TaichiSolver:
                 strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
                 effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
                 # Strain energy: 0.5 * k_eff * (strain * L0)^2
-                se += 0.5 * effective_k * (strain * self.rest_lengths[j])**2
-        return se + self.failure_dissipated[None] + self.damp_dissipated[None] + self.clamp_dissipated[None]
+                se += 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
+        return (
+            se
+            + self.failure_dissipated[None]
+            + self.damp_dissipated[None]
+            + self.clamp_dissipated[None]
+        )
 
     @ti.func
     def compute_artificial_kinetic_energy(self) -> ti.f32:
@@ -915,11 +938,7 @@ class TaichiSolver:
             ):
                 x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
                 y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                dist = ti.sqrt(
-                    (px - x_proj) ** 2
-                    + (py - y_proj) ** 2
-                    + (pz - proj_pos.z) ** 2
-                )
+                dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
 
                 if dist <= proximity_threshold:
                     w = 1.0 / ti.max(dist, 1e-4)
@@ -934,7 +953,9 @@ class TaichiSolver:
                     w_normalized = self.node_w[i] / w_mean if w_mean > 0.0 else self.node_w[i]
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
-                        scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
+                        scale_factor = float(self.node_active_counts[i]) / float(
+                            self.node_initial_springs[i]
+                        )
 
                     ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
 
@@ -1024,15 +1045,21 @@ class TaichiSolver:
         self.reset_forces()
 
     @ti.kernel
-    def k_compute_projectile_forces(self, w_h: ti.f32, t_h: ti.f32, k_penalty: ti.f32, proximity_threshold: ti.f32):
+    def k_compute_projectile_forces(
+        self, w_h: ti.f32, t_h: ti.f32, k_penalty: ti.f32, proximity_threshold: ti.f32
+    ):
         self.compute_projectile_forces(w_h, t_h, k_penalty, proximity_threshold)
 
     @ti.kernel
-    def k_compute_interply_forces(self, n_nodes_per_layer: ti.i32, n_plies: ti.i32, t_ply: ti.f32, k_penalty: ti.f32):
+    def k_compute_interply_forces(
+        self, n_nodes_per_layer: ti.i32, n_plies: ti.i32, t_ply: ti.f32, k_penalty: ti.f32
+    ):
         self.compute_interply_forces(n_nodes_per_layer, n_plies, t_ply, k_penalty)
 
     @ti.kernel
-    def k_compute_spring_forces(self, rayleigh_beta: ti.f32, damage_onset_strain: ti.f32, failure_strain: ti.f32, dt: ti.f32):
+    def k_compute_spring_forces(
+        self, rayleigh_beta: ti.f32, damage_onset_strain: ti.f32, failure_strain: ti.f32, dt: ti.f32
+    ):
         self.compute_spring_forces(rayleigh_beta, damage_onset_strain, failure_strain, dt)
 
     @ti.kernel
@@ -1040,7 +1067,9 @@ class TaichiSolver:
         self.apply_impedance_boundary(dt)
 
     @ti.kernel
-    def k_integrate_nodes(self, dt: ti.f32, rayleigh_alpha: ti.f32, v_max: ti.f32, use_viscous: ti.i32):
+    def k_integrate_nodes(
+        self, dt: ti.f32, rayleigh_alpha: ti.f32, v_max: ti.f32, use_viscous: ti.i32
+    ):
         self.integrate_nodes(dt, rayleigh_alpha, v_max, use_viscous)
 
     @ti.kernel
@@ -1048,8 +1077,15 @@ class TaichiSolver:
         self.integrate_projectile(dt)
 
     @ti.kernel
-    def k_compute_failure_dissipated(self, failure_strain: ti.f32, damage_onset_strain: ti.f32, fracture_energy_multiplier: ti.f32):
-        self.compute_failure_dissipated(failure_strain, damage_onset_strain, fracture_energy_multiplier)
+    def k_compute_failure_dissipated(
+        self,
+        failure_strain: ti.f32,
+        damage_onset_strain: ti.f32,
+        fracture_energy_multiplier: ti.f32,
+    ):
+        self.compute_failure_dissipated(
+            failure_strain, damage_onset_strain, fracture_energy_multiplier
+        )
 
     @ti.kernel
     def k_compute_guardrail(self) -> ti.i32:
@@ -1162,11 +1198,7 @@ class TaichiSolver:
         ti.block_local(self.positions)
         ti.block_local(self.forces)
         self.fused_spring_pass_func(
-            rayleigh_beta,
-            damage_onset_strain,
-            failure_strain,
-            dt,
-            fracture_energy_multiplier
+            rayleigh_beta, damage_onset_strain, failure_strain, dt, fracture_energy_multiplier
         )
 
     @ti.func
@@ -1249,7 +1281,7 @@ class TaichiSolver:
             length = diff.norm()
             strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
             effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
-            se += 0.5 * effective_k * (strain * self.rest_lengths[j])**2
+            se += 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
             if strain > peak:
                 ti.atomic_max(peak, strain)  # parallel-safe max
         self.telem_se[None] = se
@@ -1433,7 +1465,9 @@ class TaichiSolver:
             self.t_sim[None] += dt
 
             # 7. Compute progressive damage dissipated energy continuously
-            self.compute_failure_dissipated(failure_strain, damage_onset_strain, fracture_energy_multiplier)
+            self.compute_failure_dissipated(
+                failure_strain, damage_onset_strain, fracture_energy_multiplier
+            )
 
             # 8. Mass-scaling safety guardrail
             e_art = self.compute_artificial_kinetic_energy()

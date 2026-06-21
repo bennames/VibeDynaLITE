@@ -26,6 +26,7 @@ import numpy as np
 try:
     import jax
     import jax.numpy as jnp
+
     # Enable x64 to prevent compilation crashes on larger grids
     jax.config.update("jax_enable_x64", True)
 
@@ -98,6 +99,7 @@ def jit(fn: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., An
     Returns:
         Callable: JIT-compiled function or a decorator.
     """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         if BACKEND == "jax" and HAS_JAX:
             jax_kwargs = {}
@@ -107,7 +109,9 @@ def jit(fn: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., An
                 jax_kwargs["static_argnames"] = kwargs["static_argnames"]
             return jax.jit(func, **jax_kwargs)  # type: ignore[no-any-return]
         elif BACKEND == "numba" and HAS_NUMBA:
-            numba_kwargs = {k: v for k, v in kwargs.items() if k not in ("static_argnums", "static_argnames")}
+            numba_kwargs = {
+                k: v for k, v in kwargs.items() if k not in ("static_argnums", "static_argnames")
+            }
             if "parallel" not in numba_kwargs:
                 numba_kwargs["parallel"] = True
             if "fastmath" not in numba_kwargs:

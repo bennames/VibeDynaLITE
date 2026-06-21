@@ -20,6 +20,7 @@ import numpy as np
 
 try:
     import pyvista as pv
+
     HAS_PYVISTA = True
 except ImportError:
     pv = None
@@ -168,16 +169,12 @@ class VideoExporter:
                 pitch_rad = math.radians(pitch)
                 cy, sy = math.cos(yaw_rad), math.sin(yaw_rad)
                 cp, sp = math.cos(pitch_rad), math.sin(pitch_rad)
-                R = np.array([
-                    [cy, 0.0, -sy],
-                    [-sy * sp, cp, -cy * sp],
-                    [sy * cp, sp, cy * cp]
-                ])
+                R = np.array([[cy, 0.0, -sy], [-sy * sp, cp, -cy * sp], [sy * cp, sp, cy * cp]])
                 local_x = R[0, :]
                 local_y = R[1, :]
                 local_z = R[2, :]
 
-                grid_center = np.mean(self.history[0]["nodes"][:self.n_nodes_per_layer], axis=0)
+                grid_center = np.mean(self.history[0]["nodes"][: self.n_nodes_per_layer], axis=0)
 
                 # Apply custom camera distance / pan if provided
                 if distance is not None:
@@ -323,6 +320,7 @@ class VideoExporter:
 
             # Line3DCollection is 100x faster than plotting each spring as a separate Line3D
             from mpl_toolkits.mplot3d.art3d import Line3DCollection
+
             lines_collection = Line3DCollection([], linewidths=0.8)
             ax.add_collection3d(lines_collection)
 
@@ -372,16 +370,18 @@ class VideoExporter:
                 pw = 0.02
                 pt = 0.005
                 ph = 0.005
-                p_offsets = np.array([
-                    [-pw / 2, -pt / 2, -ph / 2],
-                    [pw / 2, -pt / 2, -ph / 2],
-                    [pw / 2, pt / 2, -ph / 2],
-                    [-pw / 2, pt / 2, -ph / 2],
-                    [-pw / 2, -pt / 2, ph / 2],
-                    [pw / 2, -pt / 2, ph / 2],
-                    [pw / 2, pt / 2, ph / 2],
-                    [-pw / 2, pt / 2, ph / 2],
-                ])
+                p_offsets = np.array(
+                    [
+                        [-pw / 2, -pt / 2, -ph / 2],
+                        [pw / 2, -pt / 2, -ph / 2],
+                        [pw / 2, pt / 2, -ph / 2],
+                        [-pw / 2, pt / 2, -ph / 2],
+                        [-pw / 2, -pt / 2, ph / 2],
+                        [pw / 2, -pt / 2, ph / 2],
+                        [pw / 2, pt / 2, ph / 2],
+                        [-pw / 2, pt / 2, ph / 2],
+                    ]
+                )
                 corners = p_pos + p_offsets
                 loop = [0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3]
                 proj_line.set_data_3d(corners[loop, 0], corners[loop, 1], corners[loop, 2])
@@ -407,10 +407,7 @@ class VideoExporter:
         else:
             if animation.FFMpegWriter.isAvailable():
                 writer = animation.FFMpegWriter(
-                    fps=fps,
-                    codec="h264",
-                    bitrate=1800,
-                    extra_args=["-pix_fmt", "yuv420p"]
+                    fps=fps, codec="h264", bitrate=1800, extra_args=["-pix_fmt", "yuv420p"]
                 )
                 anim.save(filepath, writer=writer)
             else:
@@ -419,7 +416,7 @@ class VideoExporter:
                     writer="ffmpeg",
                     fps=fps,
                     codec="h264",
-                    extra_args=["-pix_fmt", "yuv420p"]
+                    extra_args=["-pix_fmt", "yuv420p"],
                 )
 
         plt.close(fig)

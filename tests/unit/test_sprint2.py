@@ -178,12 +178,23 @@ def test_impedance_boundary_absorption_cpu() -> None:
     for _ in range(200):
         # Compute forces using the codebase's safe function
         forces = compute_spring_forces(
-            positions, grid.springs, grid.stiffnesses, grid.rest_lengths, grid.failed,
-            tension_only=grid.tension_only
+            positions,
+            grid.springs,
+            grid.stiffnesses,
+            grid.rest_lengths,
+            grid.failed,
+            tension_only=grid.tension_only,
         )
 
         forces = apply_impedance_boundary(
-            forces, velocities, grid.masses, grid.springs, grid.stiffnesses, grid.damage, grid.failed, boundary_mask
+            forces,
+            velocities,
+            grid.masses,
+            grid.springs,
+            grid.stiffnesses,
+            grid.damage,
+            grid.failed,
+            boundary_mask,
         )
 
         # Integrate
@@ -260,9 +271,31 @@ def test_impedance_boundary_absorption_gpu() -> None:
             np.zeros((n_nodes, 3)),
             np.zeros(3),
             np.zeros(3),
-            1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.3, 1.0,
-            dt, 1, 1, 0.0, 0.0, 0.0, t_sim, 0.0,
-            grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
+            1.0,
+            1.0,
+            1.0,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            1e6,
+            0.0,
+            0.0,
+            0.5,
+            0.3,
+            1.0,
+            dt,
+            1,
+            1,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            0.0,
+            grid.initial_spring_counts,
+            grid.node_spring_offsets,
+            grid.node_spring_ids,
+            grid.node_spring_signs,
         )
         vel_30_history.append(velocities[30, 0])
 

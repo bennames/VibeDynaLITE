@@ -104,7 +104,11 @@ def export_to_h5(
         ]
 
         if len(history) > 0 and "failure_dissipated" in history[0]:
-            failures_diss = np.array([float(frame.get("failure_dissipated", 0.0)) for frame in history], dtype=np.float32)
-            clamps_diss = np.array([float(frame.get("clamp_dissipated", 0.0)) for frame in history], dtype=np.float32)
+            failures_diss = np.array(
+                [float(frame.get("failure_dissipated", 0.0)) for frame in history], dtype=np.float32
+            )
+            clamps_diss = np.array(
+                [float(frame.get("clamp_dissipated", 0.0)) for frame in history], dtype=np.float32
+            )
             hist_grp.create_dataset("failure_dissipated", data=failures_diss, compression="gzip")
             hist_grp.create_dataset("clamp_dissipated", data=clamps_diss, compression="gzip")

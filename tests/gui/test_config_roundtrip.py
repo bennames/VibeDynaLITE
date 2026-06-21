@@ -155,10 +155,7 @@ class TestConfigRoundtrip:
         # tensile_modulus_gpa is specified in mm (incompatible!)
         invalid_unit_config = {
             **VALID_CONFIG,
-            "material": {
-                **VALID_CONFIG["material"],
-                "tensile_modulus_gpa": "71.0 mm"
-            }
+            "material": {**VALID_CONFIG["material"], "tensile_modulus_gpa": "71.0 mm"},
         }
 
         save_config(invalid_unit_config, config_path)
@@ -339,7 +336,9 @@ class TestGUIWidgets:
         assert retrieved["projectile"]["velocity"][2] == pytest.approx(
             VALID_CONFIG["projectile"]["velocity"][2]
         )
-        assert retrieved["simulation"]["damping_model"] == VALID_CONFIG["simulation"]["damping_model"]
+        assert (
+            retrieved["simulation"]["damping_model"] == VALID_CONFIG["simulation"]["damping_model"]
+        )
         assert retrieved["simulation"]["damping_coefficient"] == pytest.approx(
             VALID_CONFIG["simulation"]["damping_coefficient"]
         )

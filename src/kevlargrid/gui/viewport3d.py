@@ -230,7 +230,11 @@ class Viewport3D:
         if dpg.is_item_hovered(self.canvas_tag):
             self.drag_start = dpg.get_mouse_pos(local=False)
             self.is_dragging = True
-            button = app_data[0] if isinstance(app_data, (list, tuple)) and len(app_data) > 0 else app_data
+            button = (
+                app_data[0]
+                if isinstance(app_data, (list, tuple)) and len(app_data) > 0
+                else app_data
+            )
             self.drag_button = button
 
     def _on_mouse_drag(self, sender: str, app_data: Any) -> None:
@@ -344,7 +348,9 @@ class Viewport3D:
                         with contextlib.suppress(Exception):
                             self.plotter.close()
 
-                    self.plotter = pv.Plotter(off_screen=True, window_size=[self.width, self.height])
+                    self.plotter = pv.Plotter(
+                        off_screen=True, window_size=[self.width, self.height]
+                    )
                     self.plotter.background_color = "black"  # type: ignore[assignment]
 
                     texture_reg_tag = "viewport_texture_registry"
@@ -353,7 +359,10 @@ class Viewport3D:
                             self._texture_tag = dpg.generate_uuid()
 
                         texture_exists = dpg.does_item_exist(self._texture_tag)
-                        texture_size_matches = getattr(self, "_texture_w", 0) == self.width and getattr(self, "_texture_h", 0) == self.height
+                        texture_size_matches = (
+                            getattr(self, "_texture_w", 0) == self.width
+                            and getattr(self, "_texture_h", 0) == self.height
+                        )
 
                         if not texture_exists or not texture_size_matches:
                             if texture_exists:
@@ -363,7 +372,9 @@ class Viewport3D:
                             dpg.add_dynamic_texture(
                                 width=self.width,
                                 height=self.height,
-                                default_value=np.zeros(self.width * self.height * 4, dtype=np.float32),
+                                default_value=np.zeros(
+                                    self.width * self.height * 4, dtype=np.float32
+                                ),
                                 tag=self._texture_tag,
                                 parent=texture_reg_tag,
                             )
@@ -465,6 +476,7 @@ class Viewport3D:
                     w = getattr(self, "_target_plotter_width", self.width)
                     h = getattr(self, "_target_plotter_height", self.height)
                     import contextlib
+
                     if self.plotter is not None:
                         with contextlib.suppress(Exception):
                             self.plotter.close()
@@ -530,7 +542,12 @@ class Viewport3D:
             fail_thresh = 0.036
 
             # --- PyVista offscreen hardware rendering path ---
-            if HAS_PYVISTA and self.has_pyvista and self.plotter is not None and self.mesh is not None:
+            if (
+                HAS_PYVISTA
+                and self.has_pyvista
+                and self.plotter is not None
+                and self.mesh is not None
+            ):
                 try:
                     # Update point coordinate positions in-place
                     self.mesh.points = self.grid.nodes
@@ -600,7 +617,11 @@ class Viewport3D:
                     if not hasattr(self, "_texture_tag"):
                         self._texture_tag = dpg.generate_uuid()
 
-                    if getattr(self, "_texture_w", 0) != img_w or getattr(self, "_texture_h", 0) != img_h or not dpg.does_item_exist(self._texture_tag):
+                    if (
+                        getattr(self, "_texture_w", 0) != img_w
+                        or getattr(self, "_texture_h", 0) != img_h
+                        or not dpg.does_item_exist(self._texture_tag)
+                    ):
                         if dpg.does_item_exist(texture_reg_tag):
                             if dpg.does_item_exist(self._texture_tag):
                                 dpg.delete_item(self._texture_tag)

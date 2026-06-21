@@ -35,8 +35,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         solver_backend = sim_cfg.get("backend", "taichi")
         import os
+
         os.environ["KEVLARGRID_BACKEND"] = solver_backend
         from kevlargrid.solver import backend
+
         backend.BACKEND = solver_backend
 
         nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
@@ -158,6 +160,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             solver_backend = sim_cfg.get("backend", "taichi")
             if solver_backend == "numba":
                 from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
+
                 (
                     positions,
                     velocities,
@@ -219,6 +222,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 hist_peak_strain = np.zeros(len(hist_time))
             else:
                 from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop as solver_loop
+
                 (
                     positions,
                     velocities,

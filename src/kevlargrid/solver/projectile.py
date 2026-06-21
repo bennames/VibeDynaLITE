@@ -255,7 +255,9 @@ def check_termination(
             contact_mask[contact_nodes] = True
 
             # Find springs connected to at least one contact node
-            connected_to_contact = contact_mask[grid.springs[:, 0]] | contact_mask[grid.springs[:, 1]]
+            connected_to_contact = (
+                contact_mask[grid.springs[:, 0]] | contact_mask[grid.springs[:, 1]]
+            )
             if np.any(connected_to_contact):
                 if np.all(failed_np[connected_to_contact]):
                     return "penetration"

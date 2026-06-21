@@ -264,7 +264,7 @@ class TestPointImpact:
             "areal_density_kgm2": 0.47,
             "fiber_density_gcc": 1.44,
             "shear_ratio": 0.0004,
-            "failure_strain": 0.005, # Extremely low strain to trigger easy breakthrough
+            "failure_strain": 0.005,  # Extremely low strain to trigger easy breakthrough
         }
 
         grid = generate_rectangular_grid(
@@ -288,17 +288,17 @@ class TestPointImpact:
                         boundary_mask[offset + i * ny + j] = True
 
         # Projectile: fast projectile to break through the plies completely
-        proj_pos = np.array([2.5 * dx, 2.5 * dx, 0.005], dtype=np.float64) # start above grid
-        proj_vel = np.array([0.0, 0.0, -150.0], dtype=np.float64) # high speed
+        proj_pos = np.array([2.5 * dx, 2.5 * dx, 0.005], dtype=np.float64)  # start above grid
+        proj_vel = np.array([0.0, 0.0, -150.0], dtype=np.float64)  # high speed
         proj_mass = 0.02
         blade_width = 0.015
         edge_thickness = 0.005
         k_penalty = 1e6
         rayleigh_alpha = 0.05
-        rayleigh_beta = 1e-7 # Stable Rayleigh beta to avoid explicit integration explosion
+        rayleigh_beta = 1e-7  # Stable Rayleigh beta to avoid explicit integration explosion
         failure_strain = 0.005
         damage_onset_strain = 0.002
-        fracture_energy_multiplier = 1.0 # Set multiplier to 1.0 for conservation validation
+        fracture_energy_multiplier = 1.0  # Set multiplier to 1.0 for conservation validation
 
         # Calculate CFL timestep properly
         k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
@@ -375,9 +375,11 @@ class TestPointImpact:
             # Spring strain energy
             p1 = positions[grid.springs[:, 0]]
             p2 = positions[grid.springs[:, 1]]
-            lengths = np.sqrt(np.sum((p2 - p1)**2, axis=1))
+            lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
             strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-            se_springs = compute_strain_energy(strains, grid.stiffnesses, grid.rest_lengths, grid_failed, grid_damage)
+            se_springs = compute_strain_energy(
+                strains, grid.stiffnesses, grid.rest_lengths, grid_failed, grid_damage
+            )
             ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
 
             # Count active springs to calculate node active counts
@@ -392,7 +394,11 @@ class TestPointImpact:
             t_h = edge_thickness / 2.0
             x_proj = np.clip(positions[:, 0], x_p - w_h, x_p + w_h)
             y_proj = np.clip(positions[:, 1], y_p - t_h, y_p + t_h)
-            dist = np.sqrt((positions[:, 0] - x_proj)**2 + (positions[:, 1] - y_proj)**2 + (positions[:, 2] - z_p)**2)
+            dist = np.sqrt(
+                (positions[:, 0] - x_proj) ** 2
+                + (positions[:, 1] - y_proj) ** 2
+                + (positions[:, 2] - z_p) ** 2
+            )
             contact_mask = dist <= dx * 2.0
             w_i = 1.0 / np.maximum(dist, 1e-4)
             contact_mask = contact_mask & (active_counts > 0)
@@ -400,10 +406,22 @@ class TestPointImpact:
             w_normalized = np.where(contact_mask, w_i / w_mean, 0.0)
 
             penetration = np.maximum(0.0, (z_p - positions[:, 2]) * -1.0)
-            scale_factor = np.where(grid.initial_spring_counts > 0, active_counts / grid.initial_spring_counts, 0.0)
-            contact_potential_energy = np.sum(0.5 * k_penalty * w_normalized * (penetration**2) * scale_factor)
+            scale_factor = np.where(
+                grid.initial_spring_counts > 0, active_counts / grid.initial_spring_counts, 0.0
+            )
+            contact_potential_energy = np.sum(
+                0.5 * k_penalty * w_normalized * (penetration**2) * scale_factor
+            )
 
-            total_system_energy = ke_nodes + se_springs + ke_proj + damp_diss + failure_diss + clamp_diss + contact_potential_energy
+            total_system_energy = (
+                ke_nodes
+                + se_springs
+                + ke_proj
+                + damp_diss
+                + failure_diss
+                + clamp_diss
+                + contact_potential_energy
+            )
 
             energies.append(total_system_energy)
             failed_counts.append(np.sum(grid_failed))
@@ -420,8 +438,13 @@ class TestPointImpact:
         energy_std_dev = np.sqrt(energy_variance)
 
         # Post-breakthrough energy variance / initial energy should be extremely small (< 0.1%)
-        assert (energy_std_dev / initial_energy) < 0.01, f"Energy standard deviation too high: {energy_std_dev / initial_energy:.4f}"
+        assert (energy_std_dev / initial_energy) < 0.01, (
+            f"Energy standard deviation too high: {energy_std_dev / initial_energy:.4f}"
+        )
 
         # Overall drift compared to the start of the post-breakthrough phase should be < 2%
-        drift = np.abs(post_breakthrough_energies[-1] - post_breakthrough_energies[0]) / post_breakthrough_energies[0]
+        drift = (
+            np.abs(post_breakthrough_energies[-1] - post_breakthrough_energies[0])
+            / post_breakthrough_energies[0]
+        )
         assert drift < 0.02, f"Post-breakthrough drift too high: {drift:.4f}"

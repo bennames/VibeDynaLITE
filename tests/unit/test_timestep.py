@@ -100,4 +100,3 @@ class TestCFLTimestep:
         )
         # k_i = 500, m_i = 1.0 -> dt_i = sqrt(1.0 / 500.0)
         assert np.abs(dt - np.sqrt(1.0 / 500.0)) < 1e-4
-

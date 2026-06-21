@@ -56,16 +56,16 @@ def test_cfl_stability_limit() -> None:
         dir_vec = diff / L if L > 0 else np.zeros(3)
         ke = k * np.outer(dir_vec, dir_vec)
 
-        K[3*n0 : 3*n0+3, 3*n0 : 3*n0+3] += ke
-        K[3*n1 : 3*n1+3, 3*n1 : 3*n1+3] += ke
-        K[3*n0 : 3*n0+3, 3*n1 : 3*n1+3] -= ke
-        K[3*n1 : 3*n1+3, 3*n0 : 3*n0+3] -= ke
+        K[3 * n0 : 3 * n0 + 3, 3 * n0 : 3 * n0 + 3] += ke
+        K[3 * n1 : 3 * n1 + 3, 3 * n1 : 3 * n1 + 3] += ke
+        K[3 * n0 : 3 * n0 + 3, 3 * n1 : 3 * n1 + 3] -= ke
+        K[3 * n1 : 3 * n1 + 3, 3 * n0 : 3 * n0 + 3] -= ke
 
     # Symmetrized dynamic submatrix for free degrees of freedom
     free_dof = []
     for i in range(n_nodes):
         if not boundary_mask[i]:
-            free_dof.extend([3*i, 3*i+1, 3*i+2])
+            free_dof.extend([3 * i, 3 * i + 1, 3 * i + 2])
     free_dof = np.array(free_dof)
 
     K_free = K[free_dof[:, np.newaxis], free_dof[np.newaxis, :]]
@@ -134,9 +134,31 @@ def test_cfl_stability_limit() -> None:
         np.zeros((n_nodes, 3)),
         np.array([0.0, 0.0, 10.0]),
         np.zeros(3),
-        1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.49, 1.0,
-        dt_crit, 1, 1, 0.0, 0.0, 0.0, 0.0, 0.0,
-        node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
+        1.0,
+        1.0,
+        1.0,
+        1,
+        n_nodes,
+        0.002,
+        dx,
+        1e6,
+        0.0,
+        0.0,
+        0.5,
+        0.49,
+        1.0,
+        dt_crit,
+        1,
+        1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        node_initial_springs,
+        node_spring_offsets,
+        node_spring_ids,
+        node_spring_signs,
     )
     print("DEBUG BENCHMARK 1 (1 step): final velocities max =", np.max(np.abs(res_debug[1])))
     assert np.max(np.abs(res_debug[1])) > 0.0, "Velocity after 1 step is exactly zero!"
@@ -156,13 +178,37 @@ def test_cfl_stability_limit() -> None:
         np.zeros((n_nodes, 3)),
         np.array([0.0, 0.0, 10.0]),
         np.zeros(3),
-        1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.49, 1.0,
-        dt_stable, 200, 200, 0.0, 0.0, 0.0, 0.0, 0.0,
-        node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
+        1.0,
+        1.0,
+        1.0,
+        1,
+        n_nodes,
+        0.002,
+        dx,
+        1e6,
+        0.0,
+        0.0,
+        0.5,
+        0.49,
+        1.0,
+        dt_stable,
+        200,
+        200,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        node_initial_springs,
+        node_spring_offsets,
+        node_spring_ids,
+        node_spring_signs,
     )
     final_pos_stable = np.asarray(res_stable[0])
     assert not np.any(np.isnan(final_pos_stable)), "Stable timestep diverged to NaN"
-    assert np.max(np.abs(final_pos_stable - positions_init)) < 1.0, "Stable timestep experienced excessive growth"
+    assert np.max(np.abs(final_pos_stable - positions_init)) < 1.0, (
+        "Stable timestep experienced excessive growth"
+    )
 
     # Case B: Unstable timestep (1.05 * dt_crit to guarantee rapid overflow)
     dt_unstable = 1.05 * dt_crit
@@ -180,9 +226,31 @@ def test_cfl_stability_limit() -> None:
             np.zeros((n_nodes, 3)),
             np.array([0.0, 0.0, 10.0]),
             np.zeros(3),
-            1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.49, 1.0,
-            dt_unstable, 200, 200, 0.0, 0.0, 0.0, 0.0, 0.0,
-            node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
+            1.0,
+            1.0,
+            1.0,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            1e6,
+            0.0,
+            0.0,
+            0.5,
+            0.49,
+            1.0,
+            dt_unstable,
+            200,
+            200,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            node_initial_springs,
+            node_spring_offsets,
+            node_spring_ids,
+            node_spring_signs,
         )
         final_pos_unstable = np.asarray(res_unstable[0])
         final_vel_unstable = np.asarray(res_unstable[1])
@@ -266,9 +334,31 @@ def test_1d_stress_wave_propagation_and_reflection() -> None:
             np.zeros((n_nodes, 3)),
             np.array([0.0, 0.0, 10.0]),
             np.zeros(3),
-            1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.05, 0.03, 1.0,
-            dt, 1, 1, 0.0, 0.0, 0.0, t_sim, 0.0,
-            grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
+            1.0,
+            1.0,
+            1.0,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            1e6,
+            0.0,
+            0.0,
+            0.05,
+            0.03,
+            1.0,
+            dt,
+            1,
+            1,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            0.0,
+            grid.initial_spring_counts,
+            grid.node_spring_offsets,
+            grid.node_spring_ids,
+            grid.node_spring_signs,
         )
 
         # Check arrival at Node 30
@@ -356,7 +446,9 @@ def test_smith_yarn_impact_theory() -> None:
         else:
             eps_right = eps_mid
     eps_analytical = eps_mid
-    u_analytical = c_fiber * np.sqrt(eps_analytical * (1.0 + eps_analytical)) - c_fiber * eps_analytical
+    u_analytical = (
+        c_fiber * np.sqrt(eps_analytical * (1.0 + eps_analytical)) - c_fiber * eps_analytical
+    )
 
     # Set up simulation
     dt = compute_cfl_timestep(grid.stiffnesses, grid.masses, dx, 0.4)
@@ -392,9 +484,28 @@ def test_smith_yarn_impact_theory() -> None:
         proj.mass,
         proj.blade_width,
         proj.edge_thickness,
-        1, n_nodes, 0.002, dx, 1e7, 0.0, 0.0, 0.1, 0.06, 1.0,
-        dt, 150, 150, 0.0, 0.0, 0.0, 0.0, 1.0,
-        grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
+        1,
+        n_nodes,
+        0.002,
+        dx,
+        1e7,
+        0.0,
+        0.0,
+        0.1,
+        0.06,
+        1.0,
+        dt,
+        150,
+        150,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        grid.initial_spring_counts,
+        grid.node_spring_offsets,
+        grid.node_spring_ids,
+        grid.node_spring_signs,
     )
 
     # Analyze kink wavefront using 20% Z-deflection threshold and linear interpolation
@@ -419,7 +530,7 @@ def test_smith_yarn_impact_theory() -> None:
     # Numerical strain behind kink front: find the maximum strain in the yarn outside boundary nodes
     p0 = positions[grid.springs[:, 0]]
     p1 = positions[grid.springs[:, 1]]
-    lengths = np.sqrt(np.sum((p1 - p0)**2, axis=1))
+    lengths = np.sqrt(np.sum((p1 - p0) ** 2, axis=1))
     strains = (lengths - grid.rest_lengths) / grid.rest_lengths
     eps_numerical = np.max(strains)
 
@@ -492,11 +603,34 @@ def test_prestrained_string_static_deflection() -> None:
             grid.tension_only,
             boundary_mask,
             nodal_external_forces,
-            np.array([0.0, 0.0, 10.0]), np.zeros(3), 1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6,
-            rayleigh_alpha, 0.0, 0.05, 0.03, 1.0,
-            dt, 10000, 10000, 0.0, 0.0, 0.0, t_sim, 0.0,
-            grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs,
-            use_viscous=True
+            np.array([0.0, 0.0, 10.0]),
+            np.zeros(3),
+            1.0,
+            1.0,
+            1.0,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            1e6,
+            rayleigh_alpha,
+            0.0,
+            0.05,
+            0.03,
+            1.0,
+            dt,
+            10000,
+            10000,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            0.0,
+            grid.initial_spring_counts,
+            grid.node_spring_offsets,
+            grid.node_spring_ids,
+            grid.node_spring_signs,
+            use_viscous=True,
         )
 
     # Analytical static deflection
@@ -512,7 +646,7 @@ def test_prestrained_string_static_deflection() -> None:
 
     p1 = positions[grid.springs[:, 0]]
     p2 = positions[grid.springs[:, 1]]
-    lengths = np.sqrt(np.sum((p2 - p1)**2, axis=1))
+    lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
     strains = (lengths - grid.rest_lengths) / grid.rest_lengths
     forces = grid.stiffnesses * strains * grid.rest_lengths
     print(f"DEBUG BENCHMARK 4: w_numerical={w_numerical}, w_analytical={w_analytical}")
@@ -576,12 +710,44 @@ def test_damping_decay_rate() -> None:
             t_sim,
             *hist_vars,
         ) = taichi_leapfrog_loop(
-            positions_a, velocities_a, grid_springs, grid_stiffnesses, grid_rest_lengths,
-            grid_failed, grid_masses, grid_tension_only, boundary_mask, np.zeros((2, 3)),
-            np.zeros(3), np.zeros(3), 1.0, 1.0, 1.0, 1, 2, 0.002, 1.0, 1e6,
-            10.0, 0.0, 0.5, 0.3, 1.0, dt, 10, 10, 0.0, 0.0, 0.0, t_sim, 0.0,
-            node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs,
-            use_viscous=True
+            positions_a,
+            velocities_a,
+            grid_springs,
+            grid_stiffnesses,
+            grid_rest_lengths,
+            grid_failed,
+            grid_masses,
+            grid_tension_only,
+            boundary_mask,
+            np.zeros((2, 3)),
+            np.zeros(3),
+            np.zeros(3),
+            1.0,
+            1.0,
+            1.0,
+            1,
+            2,
+            0.002,
+            1.0,
+            1e6,
+            10.0,
+            0.0,
+            0.5,
+            0.3,
+            1.0,
+            dt,
+            10,
+            10,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            0.0,
+            node_initial_springs,
+            node_spring_offsets,
+            node_spring_ids,
+            node_spring_signs,
+            use_viscous=True,
         )
         # Record positive peak displacements (when velocity crosses zero)
         amplitudes_a.append(positions_a[1, 0] - 1.0)
@@ -593,15 +759,19 @@ def test_damping_decay_rate() -> None:
     peaks_a = []
     peak_times_a = []
     for i in range(1, len(amplitudes_a) - 1):
-        if amplitudes_a[i] > amplitudes_a[i-1] and amplitudes_a[i] > amplitudes_a[i+1] and amplitudes_a[i] > 0:
+        if (
+            amplitudes_a[i] > amplitudes_a[i - 1]
+            and amplitudes_a[i] > amplitudes_a[i + 1]
+            and amplitudes_a[i] > 0
+        ):
             peaks_a.append(amplitudes_a[i])
             peak_times_a.append(times_a[i])
 
     # Verify logarithmic decay matching e^(-5 * t)
     # A(t) = A0 * e^(-5 * t) -> A(t2) / A(t1) = e^(-5 * (t2 - t1))
     for i in range(len(peaks_a) - 1):
-        ratio = peaks_a[i+1] / peaks_a[i]
-        expected_ratio = np.exp(-5.0 * (peak_times_a[i+1] - peak_times_a[i]))
+        ratio = peaks_a[i + 1] / peaks_a[i]
+        expected_ratio = np.exp(-5.0 * (peak_times_a[i + 1] - peak_times_a[i]))
         assert np.abs(ratio - expected_ratio) < 0.01
 
     # CASE B: Stiffness-proportional damping (alpha = 0.0, beta = 0.001)
@@ -625,11 +795,43 @@ def test_damping_decay_rate() -> None:
             t_sim,
             *hist_vars,
         ) = taichi_leapfrog_loop(
-            positions_b, velocities_b, grid_springs, grid_stiffnesses, grid_rest_lengths,
-            grid_failed, grid_masses, grid_tension_only, boundary_mask, np.zeros((2, 3)),
-            np.zeros(3), np.zeros(3), 1.0, 1.0, 1.0, 1, 2, 0.002, 1.0, 1e6,
-            0.0, 0.001, 0.5, 0.3, 1.0, dt, 10, 10, 0.0, 0.0, 0.0, t_sim, 0.0,
-            node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
+            positions_b,
+            velocities_b,
+            grid_springs,
+            grid_stiffnesses,
+            grid_rest_lengths,
+            grid_failed,
+            grid_masses,
+            grid_tension_only,
+            boundary_mask,
+            np.zeros((2, 3)),
+            np.zeros(3),
+            np.zeros(3),
+            1.0,
+            1.0,
+            1.0,
+            1,
+            2,
+            0.002,
+            1.0,
+            1e6,
+            0.0,
+            0.001,
+            0.5,
+            0.3,
+            1.0,
+            dt,
+            10,
+            10,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            0.0,
+            node_initial_springs,
+            node_spring_offsets,
+            node_spring_ids,
+            node_spring_signs,
         )
         amplitudes_b.append(positions_b[1, 0] - 1.0)
         times_b.append(t_sim)
@@ -637,13 +839,17 @@ def test_damping_decay_rate() -> None:
     peaks_b = []
     peak_times_b = []
     for i in range(1, len(amplitudes_b) - 1):
-        if amplitudes_b[i] > amplitudes_b[i-1] and amplitudes_b[i] > amplitudes_b[i+1] and amplitudes_b[i] > 0:
+        if (
+            amplitudes_b[i] > amplitudes_b[i - 1]
+            and amplitudes_b[i] > amplitudes_b[i + 1]
+            and amplitudes_b[i] > 0
+        ):
             peaks_b.append(amplitudes_b[i])
             peak_times_b.append(times_b[i])
 
     for i in range(len(peaks_b) - 1):
-        ratio = peaks_b[i+1] / peaks_b[i]
-        expected_ratio = np.exp(-5.0 * (peak_times_b[i+1] - peak_times_b[i]))
+        ratio = peaks_b[i + 1] / peaks_b[i]
+        expected_ratio = np.exp(-5.0 * (peak_times_b[i + 1] - peak_times_b[i]))
         assert np.abs(ratio - expected_ratio) < 0.01
 
 
@@ -681,7 +887,9 @@ def test_progressive_failure_and_fracture_energy() -> None:
     # Analytical progressive fracture energy formula S7.14
     k_val = grid_stiffnesses[0]
     L0_val = grid_rest_lengths[0]
-    w_analytical = (k_val * L0_val**2 / 6.0) * (failure_strain**2 + failure_strain * damage_onset_strain + damage_onset_strain**2)
+    w_analytical = (k_val * L0_val**2 / 6.0) * (
+        failure_strain**2 + failure_strain * damage_onset_strain + damage_onset_strain**2
+    )
 
     positions_seq = positions.copy()
     velocities_seq = velocities.copy()
@@ -705,12 +913,43 @@ def test_progressive_failure_and_fracture_energy() -> None:
             t_sim,
             *hist_vars,
         ) = taichi_leapfrog_loop(
-            positions_seq, velocities_seq, grid_springs, grid_stiffnesses, grid_rest_lengths,
-            grid_failed, grid_masses, grid_tension_only, boundary_mask, np.zeros((2, 3)),
-            np.zeros(3), np.zeros(3), 1.0, 1.0, 1.0, 1, 2, 0.002, 1.0, 1e6,
-            0.0, 0.0, failure_strain, damage_onset_strain, fracture_energy_multiplier,
-            dt, 10, 10, 0.0, failure_diss, 0.0, t_sim, 0.0,
-            node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
+            positions_seq,
+            velocities_seq,
+            grid_springs,
+            grid_stiffnesses,
+            grid_rest_lengths,
+            grid_failed,
+            grid_masses,
+            grid_tension_only,
+            boundary_mask,
+            np.zeros((2, 3)),
+            np.zeros(3),
+            np.zeros(3),
+            1.0,
+            1.0,
+            1.0,
+            1,
+            2,
+            0.002,
+            1.0,
+            1e6,
+            0.0,
+            0.0,
+            failure_strain,
+            damage_onset_strain,
+            fracture_energy_multiplier,
+            dt,
+            10,
+            10,
+            0.0,
+            failure_diss,
+            0.0,
+            t_sim,
+            0.0,
+            node_initial_springs,
+            node_spring_offsets,
+            node_spring_ids,
+            node_spring_signs,
         )
         t_sim += 10 * dt
 
@@ -748,7 +987,7 @@ def test_thermodynamic_monotonicity() -> None:
     print(f"DEBUG: center_node mass={grid.masses[center_node]:.6e}")
     print(f"DEBUG: stiffnesses max={np.max(grid.stiffnesses):.6e}")
     print(f"DEBUG: dt={dt:.6e}")
-    print(f"DEBUG: v_max={dx/dt:.6e}")
+    print(f"DEBUG: v_max={dx / dt:.6e}")
 
     t_sim = 0.0
     damp_diss = 0.0
@@ -772,19 +1011,50 @@ def test_thermodynamic_monotonicity() -> None:
             t_sim,
             *hist_vars,
         ) = taichi_leapfrog_loop(
-            positions, velocities, grid.springs, grid.stiffnesses, grid.rest_lengths,
-            grid.failed, grid.masses, grid.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            np.array([0.0, 0.0, 10.0]), np.zeros(3), 1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6,
-            0.1, 1e-7, 0.05, 0.03, 1.0, dt, 10, 10,
-            damp_diss, failure_diss, clamp_diss, t_sim, 0.0,
-            grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
+            positions,
+            velocities,
+            grid.springs,
+            grid.stiffnesses,
+            grid.rest_lengths,
+            grid.failed,
+            grid.masses,
+            grid.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            np.array([0.0, 0.0, 10.0]),
+            np.zeros(3),
+            1.0,
+            1.0,
+            1.0,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            1e6,
+            0.1,
+            1e-7,
+            0.05,
+            0.03,
+            1.0,
+            dt,
+            10,
+            10,
+            damp_diss,
+            failure_diss,
+            clamp_diss,
+            t_sim,
+            0.0,
+            grid.initial_spring_counts,
+            grid.node_spring_offsets,
+            grid.node_spring_ids,
+            grid.node_spring_signs,
         )
 
         # Calculate energies
         ke = compute_kinetic_energy(velocities, grid.masses)
         p1 = positions[grid.springs[:, 0]]
         p2 = positions[grid.springs[:, 1]]
-        lengths = np.sqrt(np.sum((p2 - p1)**2, axis=1))
+        lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
         strains = (lengths - grid.rest_lengths) / grid.rest_lengths
         se = compute_strain_energy(strains, grid.stiffnesses, grid.rest_lengths, grid.failed)
 
@@ -792,8 +1062,12 @@ def test_thermodynamic_monotonicity() -> None:
         e_total = e_physical + damp_diss + failure_diss + clamp_diss
 
         max_v_node = np.argmax(np.sum(velocities**2, axis=1))
-        print(f"Iter: ke={ke:.3e}, se={se:.3e}, damp_diss={damp_diss:.3e}, failure_diss={failure_diss:.3e}, clamp_diss={clamp_diss:.3e}, total={e_total:.3e}")
-        print(f"DEBUG: max velocity={np.linalg.norm(velocities[max_v_node]):.6e} at node {max_v_node}")
+        print(
+            f"Iter: ke={ke:.3e}, se={se:.3e}, damp_diss={damp_diss:.3e}, failure_diss={failure_diss:.3e}, clamp_diss={clamp_diss:.3e}, total={e_total:.3e}"
+        )
+        print(
+            f"DEBUG: max velocity={np.linalg.norm(velocities[max_v_node]):.6e} at node {max_v_node}"
+        )
 
         physical_energies.append(e_physical)
         total_energies.append(e_total)
@@ -805,7 +1079,7 @@ def test_thermodynamic_monotonicity() -> None:
 
     # 2. Physical energy must be monotonically non-increasing (Second Law / Clausius-Duhem)
     for i in range(1, len(physical_energies)):
-        assert physical_energies[i] <= physical_energies[i-1] + 1e-9
+        assert physical_energies[i] <= physical_energies[i - 1] + 1e-9
 
 
 def test_ballistic_limit_v50() -> None:
@@ -861,12 +1135,43 @@ def test_ballistic_limit_v50() -> None:
             proj_vel_a,
             *_,
         ) = taichi_leapfrog_loop(
-            pos_a, vel_a, grid_a.springs, grid_a.stiffnesses, grid_a.rest_lengths,
-            grid_a.failed, grid_a.masses, grid_a.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            proj_pos_a, proj_vel_a, proj_mass, blade_width, edge_thickness,
-            1, n_nodes, 0.002, dx, k_penalty, 0.05, 1e-7, 0.04, 0.024, 1.5,
-            dt, 100, 100, 0.0, 0.0, 0.0, t_sim, 1.0,
-            grid_a.initial_spring_counts, grid_a.node_spring_offsets, grid_a.node_spring_ids, grid_a.node_spring_signs
+            pos_a,
+            vel_a,
+            grid_a.springs,
+            grid_a.stiffnesses,
+            grid_a.rest_lengths,
+            grid_a.failed,
+            grid_a.masses,
+            grid_a.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            proj_pos_a,
+            proj_vel_a,
+            proj_mass,
+            blade_width,
+            edge_thickness,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            k_penalty,
+            0.05,
+            1e-7,
+            0.04,
+            0.024,
+            1.5,
+            dt,
+            100,
+            100,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            1.0,
+            grid_a.initial_spring_counts,
+            grid_a.node_spring_offsets,
+            grid_a.node_spring_ids,
+            grid_a.node_spring_signs,
         )
         t_sim += 100 * dt
         # Early termination check: velocity reversed/stopped
@@ -895,12 +1200,43 @@ def test_ballistic_limit_v50() -> None:
             proj_vel_b,
             *_,
         ) = taichi_leapfrog_loop(
-            pos_b, vel_b, grid_b.springs, grid_b.stiffnesses, grid_b.rest_lengths,
-            grid_b.failed, grid_b.masses, grid_b.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            proj_pos_b, proj_vel_b, proj_mass, blade_width, edge_thickness,
-            1, n_nodes, 0.002, dx, k_penalty, 0.05, 1e-7, 0.04, 0.024, 1.5,
-            dt, 100, 100, 0.0, 0.0, 0.0, t_sim, 1.0,
-            grid_b.initial_spring_counts, grid_b.node_spring_offsets, grid_b.node_spring_ids, grid_b.node_spring_signs
+            pos_b,
+            vel_b,
+            grid_b.springs,
+            grid_b.stiffnesses,
+            grid_b.rest_lengths,
+            grid_b.failed,
+            grid_b.masses,
+            grid_b.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            proj_pos_b,
+            proj_vel_b,
+            proj_mass,
+            blade_width,
+            edge_thickness,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            k_penalty,
+            0.05,
+            1e-7,
+            0.04,
+            0.024,
+            1.5,
+            dt,
+            100,
+            100,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            1.0,
+            grid_b.initial_spring_counts,
+            grid_b.node_spring_offsets,
+            grid_b.node_spring_ids,
+            grid_b.node_spring_signs,
         )
         t_sim += 100 * dt
         # Early termination check: penetration occurred

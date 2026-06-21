@@ -259,7 +259,9 @@ class TestMultiPlyImpact:
             newly_failed = (~grid.failed) & (strains > material["failure_strain"])
 
             # Record fracture energy dissipation
-            fracture_se = np.where(newly_failed, 0.5 * grid.stiffnesses * (strains * grid.rest_lengths)**2, 0.0)
+            fracture_se = np.where(
+                newly_failed, 0.5 * grid.stiffnesses * (strains * grid.rest_lengths) ** 2, 0.0
+            )
             failure_dissipated += np.sum(fracture_se) * material["fracture_energy_multiplier"]
             grid.failed = grid.failed | newly_failed
 
@@ -278,7 +280,9 @@ class TestMultiPlyImpact:
                 proj, grid, positions=positions, k_contact=k_penalty
             )
             # Scale by remaining active springs
-            scale_factor = np.where(grid.initial_spring_counts > 0, active_counts / grid.initial_spring_counts, 0.0)
+            scale_factor = np.where(
+                grid.initial_spring_counts > 0, active_counts / grid.initial_spring_counts, 0.0
+            )
             proj_forces = proj_forces * scale_factor[:, np.newaxis]
 
             # 3. Inter-ply contact forces (using the updated symmetric function)
@@ -322,7 +326,11 @@ class TestMultiPlyImpact:
             x_proj = np.clip(c_pos[:, 0], x_p - w_h, x_p + w_h)
             y_proj = np.clip(c_pos[:, 1], y_p - t_h, y_p + t_h)
             z_proj = z_p
-            d_i = np.sqrt((c_pos[:, 0] - x_proj) ** 2 + (c_pos[:, 1] - y_proj) ** 2 + (c_pos[:, 2] - z_proj) ** 2)
+            d_i = np.sqrt(
+                (c_pos[:, 0] - x_proj) ** 2
+                + (c_pos[:, 1] - y_proj) ** 2
+                + (c_pos[:, 2] - z_proj) ** 2
+            )
             w_i = 1.0 / np.maximum(d_i, 1e-4)
             w_mean = np.mean(w_i) if len(w_i) > 0 else 1.0
             w_normalized = w_i / w_mean if w_mean > 0.0 else np.ones_like(w_i)
@@ -343,4 +351,3 @@ class TestMultiPlyImpact:
 
         # Must conserve energy to a very tight tolerance (< 1.5%) S7.13
         assert energy_drift < 0.015
-

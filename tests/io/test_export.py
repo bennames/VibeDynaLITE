@@ -251,9 +251,9 @@ def test_video_animation_exporter_compile(dummy_simulation_data) -> None:
 
         # 2. Test MP4 (if ffmpeg is available)
         import matplotlib.animation as animation
+
         if animation.FFMpegWriter.isAvailable() or animation.writers.is_available("ffmpeg"):
             mp4_filepath = os.path.join(tmpdir, "test_animation.mp4")
             exporter.compile(mp4_filepath, fps=5)
             assert os.path.exists(mp4_filepath)
             assert os.path.getsize(mp4_filepath) > 1024
-

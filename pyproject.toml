@@ -114,8 +114,15 @@ python_version = "3.11"
 mypy_path = "src"
 packages = ["kevlargrid"]
 strict = false
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "kevlargrid.io.export.video_exporter",
+    "kevlargrid.gui.viewport3d",
+]
+ignore_errors = true

@@ -31,7 +31,9 @@ def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
     if isinstance(val, (int, float)):
         return val
     if not isinstance(val, str):
-        raise ValidationError(f"Value must be a number or string with units, got {type(val).__name__}")
+        raise ValidationError(
+            f"Value must be a number or string with units, got {type(val).__name__}"
+        )
 
     match = UNIT_PATTERN.match(val)
     if not match:
@@ -90,7 +92,9 @@ def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
         elif unit in ("g/m2", "g/m^2"):
             return num * 1e-3
 
-    raise ValidationError(f"Unknown or incompatible unit '{unit_str}' for expected unit type '{expected_base_unit}'")
+    raise ValidationError(
+        f"Unknown or incompatible unit '{unit_str}' for expected unit type '{expected_base_unit}'"
+    )
 
 
 def normalize_old_config_keys(config: dict) -> dict:
@@ -355,7 +359,9 @@ def validate_config(config: dict) -> bool:
     if "fracture_energy_multiplier" in mat:
         fem = mat["fracture_energy_multiplier"]
         if not isinstance(fem, (int, float)) or fem < 1.0:
-            raise ValidationError(f"fracture_energy_multiplier must be a number >= 1.0 (got {fem}).")
+            raise ValidationError(
+                f"fracture_energy_multiplier must be a number >= 1.0 (got {fem})."
+            )
 
     if "yarn_count" in mat:
         yc = mat["yarn_count"]
@@ -439,7 +445,16 @@ def validate_config(config: dict) -> bool:
     if "dt" not in sim:
         sim["dt"] = 1.5e-7
 
-    for key in ["duration", "cfl_factor", "damping_model", "damping_coefficient", "rayleigh_alpha", "rayleigh_beta", "auto_cfl", "dt"]:
+    for key in [
+        "duration",
+        "cfl_factor",
+        "damping_model",
+        "damping_coefficient",
+        "rayleigh_alpha",
+        "rayleigh_beta",
+        "auto_cfl",
+        "dt",
+    ]:
         if key not in sim:
             raise ValidationError(f"Simulation section missing required key: '{key}'")
 

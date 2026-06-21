@@ -71,7 +71,7 @@ def check_progressive_damage(
     denom_safe = 1.0 if denom == 0.0 else denom
     d_val = np.minimum(np.maximum((strains - damage_onset_strain) / denom_safe, 0.0), 1.0)
     np.maximum(damage, d_val, out=damage)
-    failed |= (damage >= 1.0)
+    failed |= damage >= 1.0
     return damage, failed
 
 

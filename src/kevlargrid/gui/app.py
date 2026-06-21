@@ -272,7 +272,9 @@ class SimRunner:
                             # Interpolate cumulative dissipated energies linearly across the chunk S7.14
                             t_factor = (idx + 1) / n_frames if n_frames > 0 else 1.0
                             damp_val = prev_damp + (self.damp_dissipated - prev_damp) * t_factor
-                            fail_val = prev_failure + (self.failure_dissipated - prev_failure) * t_factor
+                            fail_val = (
+                                prev_failure + (self.failure_dissipated - prev_failure) * t_factor
+                            )
                             clamp_val = prev_clamp + (self.clamp_dissipated - prev_clamp) * t_factor
 
                             # Calculate conserved total energy including all components S7.14
@@ -289,7 +291,11 @@ class SimRunner:
                             failed_cnt_step = int(np.sum(hist_failed[idx]))
 
                             # Read accurate peak strain frame-by-frame
-                            p_strain = float(hist_peak_strain[idx]) if hist_peak_strain is not None else float(self.peak_strain)
+                            p_strain = (
+                                float(hist_peak_strain[idx])
+                                if hist_peak_strain is not None
+                                else float(self.peak_strain)
+                            )
 
                             self.history.append(
                                 {
@@ -405,7 +411,8 @@ def launch() -> None:
             config = load_config("configs/saved_configuration.json")
             config_panel.set_config(config)
             _show_modal_message(
-                "Config Loaded", "Configuration loaded from legacy JSON:\nconfigs/saved_configuration.json"
+                "Config Loaded",
+                "Configuration loaded from legacy JSON:\nconfigs/saved_configuration.json",
             )
         else:
             _show_modal_message(
@@ -474,12 +481,8 @@ def launch() -> None:
                     width=65,
                     callback=lambda: _toggle_playback(False),
                 )
-                dpg.add_button(
-                    label="Step <<", width=65, callback=lambda: _step_playback(-1)
-                )
-                dpg.add_button(
-                    label="Step >>", width=65, callback=lambda: _step_playback(1)
-                )
+                dpg.add_button(label="Step <<", width=65, callback=lambda: _step_playback(-1))
+                dpg.add_button(label="Step >>", width=65, callback=lambda: _step_playback(1))
                 dpg.add_slider_int(
                     label="Timeline",
                     tag="pb_slider",
@@ -602,7 +605,12 @@ def launch() -> None:
     _pending_tab_height = 0
 
     def _on_viewport_resize(sender, app_data):
-        nonlocal _last_resize_size, _resize_pending, _resize_time, _pending_right_width, _pending_tab_height
+        nonlocal \
+            _last_resize_size, \
+            _resize_pending, \
+            _resize_time, \
+            _pending_right_width, \
+            _pending_tab_height
         W_view, H_view = app_data[0], app_data[1]
 
         # Debounce identical resize calls S7.10
@@ -624,7 +632,9 @@ def launch() -> None:
         if dpg.does_item_exist(controls.group_tag):
             dpg.configure_item(controls.group_tag, width=right_width)
 
-        playback_visible = dpg.is_item_shown("playback_group") if dpg.does_item_exist("playback_group") else False
+        playback_visible = (
+            dpg.is_item_shown("playback_group") if dpg.does_item_exist("playback_group") else False
+        )
         playback_height = 40 if playback_visible else 0
         tab_height = H_view - 385 - playback_height
 

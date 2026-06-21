@@ -202,4 +202,3 @@ class TestProjectile:
         assert report["exit_velocity_m_s"] == 40.0
         assert report["residual_ke_j"] == 0.5 * 0.2 * 40.0**2  # 160 J
         assert report["energy_absorbed_j"] == initial_ke - 160.0
-

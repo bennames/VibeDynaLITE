@@ -53,7 +53,7 @@ def numba_gather_spring_forces(
         dy = positions[n1, 1] - positions[n0, 1]
         dz = positions[n1, 2] - positions[n0, 2]
 
-        length = np.sqrt(dx*dx + dy*dy + dz*dz)
+        length = np.sqrt(dx * dx + dy * dy + dz * dz)
         length_safe = length if length != 0.0 else 1.0
 
         strain = (length - rest_lengths[i]) / rest_lengths[i]
@@ -84,7 +84,7 @@ def numba_gather_spring_forces(
     forces = np.zeros((n_nodes, 3), dtype=positions.dtype)
     for i in numba.prange(n_nodes):
         start = node_spring_offsets[i]
-        end = node_spring_offsets[i+1]
+        end = node_spring_offsets[i + 1]
         f_x = 0.0
         f_y = 0.0
         f_z = 0.0
@@ -158,7 +158,11 @@ def compute_spring_forces(
         t_only = rest_lengths < 1.1 * min_l0
 
     if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-        if node_spring_offsets is not None and node_spring_ids is not None and node_spring_signs is not None:
+        if (
+            node_spring_offsets is not None
+            and node_spring_ids is not None
+            and node_spring_signs is not None
+        ):
             return numba_gather_spring_forces(
                 positions,
                 springs,
