@@ -218,9 +218,9 @@ class ResultsDashboard:
             self._show_modal("Export Error", f"Failed to export CSV:\n{e}")
 
     def _compile_video(self, sender: str, app_data: Any) -> None:
+        import math
         import os
         import threading
-        import math
 
         from kevlargrid.io.export.video_exporter import VideoExporter
 

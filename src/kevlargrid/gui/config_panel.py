@@ -87,7 +87,7 @@ class ConfigPanel:
         self.sim_dt = "sim_dt"
         self.compute_backend = "compute_backend"
         self.hardware_device = "hardware_device"
-        
+
         self.row_damping_coeff = "row_damping_coeff"
         self.row_rayleigh_alpha = "row_rayleigh_alpha"
         self.row_rayleigh_beta = "row_rayleigh_beta"
@@ -106,7 +106,7 @@ class ConfigPanel:
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
                     dpg.add_table_column()
-                    
+
                     with dpg.table_row():
                         dpg.add_text("Material Preset")
                         dpg.add_combo(
@@ -152,7 +152,7 @@ class ConfigPanel:
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
                     dpg.add_table_column()
-                    
+
                     with dpg.table_row():
                         dpg.add_text("Nodes Nx")
                         dpg.add_input_int(tag=self.grid_nx, default_value=11, callback=self._update_file_size_estimate_cb, width=-1)
@@ -168,7 +168,7 @@ class ConfigPanel:
                     with dpg.table_row():
                         dpg.add_text("Number of Plies")
                         dpg.add_input_int(tag=self.grid_n_plies, default_value=1, callback=self._update_file_size_estimate_cb, width=-1)
-                
+
                 with dpg.group(tag=self.grid_t_ply_group, show=False):
                     with dpg.table(header_row=False):
                         dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
@@ -176,14 +176,14 @@ class ConfigPanel:
                         with dpg.table_row():
                             dpg.add_text("Spacing t_ply (m)")
                             dpg.add_input_float(tag=self.grid_t_ply, default_value=0.001, format="%.4f", callback=self._update_file_size_estimate_cb, width=-1)
-                            
+
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
                     dpg.add_table_column()
                     with dpg.table_row():
                         dpg.add_text("Boundary Condition")
                         dpg.add_combo(items=["Fixed Clamped Edges", "Infinite Grid (Auto)", "Non-Reflecting (Impedance Matched)"], default_value="Fixed Clamped Edges", tag=self.grid_boundary, callback=self._on_boundary_change, width=-1)
-                
+
                 with dpg.group(tag=self.grid_rmin_group, show=False):
                     with dpg.table(header_row=False):
                         dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
@@ -197,7 +197,7 @@ class ConfigPanel:
                         with dpg.table_row():
                             dpg.add_text("Actual Length (m)")
                             dpg.add_input_float(tag=self.grid_actual_length_display, default_value=0.0, enabled=False, width=-1)
-                    
+
                     with dpg.group(horizontal=True):
                         dpg.add_text("Status: ")
                         dpg.add_text("✗ Insufficient — reflections likely", tag=self.grid_boundary_status, color=[255, 80, 80])
@@ -211,19 +211,19 @@ class ConfigPanel:
                     with dpg.table_row():
                         dpg.add_text("Mass (kg)")
                         dpg.add_input_float(tag=self.proj_mass, default_value=0.05, callback=self._on_projectile_change, width=-1)
-                
+
                 dpg.add_text("Initial Velocity (m/s):")
                 with dpg.group(horizontal=True):
                     dpg.add_input_float(label="Vx", width=70, tag=self.proj_vx, default_value=0.0, callback=self._on_projectile_change)
                     dpg.add_input_float(label="Vy", width=70, tag=self.proj_vy, default_value=0.0, callback=self._on_projectile_change)
                     dpg.add_input_float(label="Vz", width=70, tag=self.proj_vz, default_value=400.0, callback=self._on_projectile_change)
-                
+
                 dpg.add_text("Initial Position (m):")
                 with dpg.group(horizontal=True):
                     dpg.add_input_float(label="X0", width=70, tag=self.proj_px, default_value=0.0)
                     dpg.add_input_float(label="Y0", width=70, tag=self.proj_py, default_value=0.0)
                     dpg.add_input_float(label="Z0", width=70, tag=self.proj_pz, default_value=-0.005)
-                
+
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
                     dpg.add_table_column()
@@ -257,7 +257,7 @@ class ConfigPanel:
                     with dpg.table_row():
                         dpg.add_text("Damping Model")
                         dpg.add_combo(items=["Rayleigh Damping", "Viscous Damping"], default_value="Rayleigh Damping", tag=self.sim_damping_model, callback=self._on_damping_change, width=-1)
-                    
+
                     with dpg.table_row(tag=self.row_damping_coeff):
                         dpg.add_text("Viscous Damping Coeff")
                         dpg.add_input_float(tag=self.sim_damping_coeff, default_value=0.05, format="%.4f", width=-1)

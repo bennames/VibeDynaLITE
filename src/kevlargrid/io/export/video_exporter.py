@@ -141,7 +141,7 @@ class VideoExporter:
                 mesh.cell_data["colors"] = mesh_colors
 
                 # Add mesh to plotter
-                mesh_actor = plotter.add_mesh(
+                plotter.add_mesh(
                     mesh,
                     scalars="colors",
                     rgba=True,
@@ -178,7 +178,7 @@ class VideoExporter:
                 local_z = R[2, :]
 
                 grid_center = np.mean(self.history[0]["nodes"][:self.n_nodes_per_layer], axis=0)
-                
+
                 # Apply custom camera distance / pan if provided
                 if distance is not None:
                     px = pan_x if pan_x is not None else 0.0
@@ -291,21 +291,21 @@ class VideoExporter:
                 max_span = max(x_span, y_span)
                 default_dist = max_span * 2.5
                 zoom = default_dist / distance
-                
+
                 cx = (x_min + x_max) / 2.0
                 cy = (y_min + y_max) / 2.0
                 cz = (z_min + z_max) / 2.0
-                
+
                 px = pan_x if pan_x is not None else 0.0
                 py = pan_y if pan_y is not None else 0.0
-                
+
                 dx_lim = (x_span / 2.0) / zoom
                 dy_lim = (y_span / 2.0) / zoom
                 dz_lim = ((z_max - z_min) / 2.0) / zoom
-                
+
                 cx_shifted = cx - px
                 cy_shifted = cy - py
-                
+
                 ax.set_xlim3d(cx_shifted - dx_lim, cx_shifted + dx_lim)
                 ax.set_ylim3d(cy_shifted - dy_lim, cy_shifted + dy_lim)
                 ax.set_zlim3d(cz - dz_lim, cz + dz_lim)

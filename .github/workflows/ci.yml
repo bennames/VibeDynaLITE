@@ -37,6 +37,6 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[dev,compute]"
       - name: Run unit tests
         run: pytest tests/unit -v --tb=short

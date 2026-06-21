@@ -6,7 +6,11 @@ dynamic simulation of a Kevlar spring–mass grid.
 
 from __future__ import annotations
 
-from kevlargrid.solver.boundary import apply_clamped_boundary, compute_min_radius, apply_impedance_boundary
+from kevlargrid.solver.boundary import (
+    apply_clamped_boundary,
+    apply_impedance_boundary,
+    compute_min_radius,
+)
 from kevlargrid.solver.damping import rayleigh_damping, viscous_damping
 from kevlargrid.solver.energy import (
     compute_energy_balance,
@@ -15,7 +19,11 @@ from kevlargrid.solver.energy import (
     compute_layer_strain_energy,
     compute_strain_energy,
 )
-from kevlargrid.solver.failure import check_failures, get_layer_failure_stats, check_progressive_damage
+from kevlargrid.solver.failure import (
+    check_failures,
+    check_progressive_damage,
+    get_layer_failure_stats,
+)
 from kevlargrid.solver.forces import (
     compute_interply_contact_forces,
     compute_spring_forces,

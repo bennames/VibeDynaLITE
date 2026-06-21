@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from kevlargrid.solver import backend
-
 
 def compute_cfl_timestep(
     stiffnesses: np.ndarray,

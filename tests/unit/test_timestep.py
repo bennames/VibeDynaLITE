@@ -53,7 +53,7 @@ class TestCFLTimestep:
     def test_dynamic_nodal_cfl_timestep(self) -> None:
         """Verify that the dynamic nodal stiffness Taichi kernel computes the expected values."""
         from kevlargrid.solver.taichi_solver import TaichiSolver
-        
+
         positions = np.array([[0.0, 0.0, 0.0], [1.4, 0.0, 0.0]], dtype=np.float32)
         velocities = np.zeros_like(positions)
         springs = np.array([[0, 1]], dtype=np.int32)
@@ -65,7 +65,7 @@ class TestCFLTimestep:
         boundary_mask = np.zeros(2, dtype=np.int32)
         nodal_external_forces = np.zeros_like(positions)
         node_initial_springs = np.array([1, 1], dtype=np.int32)
-        
+
         solver = TaichiSolver(
             n_nodes=2,
             n_springs=1,
@@ -85,7 +85,7 @@ class TestCFLTimestep:
             strike_direction_init=1.0,
             node_initial_springs_init=node_initial_springs,
         )
-        
+
         dt = solver.compute_dynamic_dt(
             failure_strain=0.5,
             damage_onset_strain=0.3,

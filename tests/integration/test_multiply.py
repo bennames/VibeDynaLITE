@@ -222,7 +222,7 @@ class TestMultiPlyImpact:
         nx, ny, dx = 6, 6, 0.01
         n_plies = 2
         t_ply = 0.001
-        
+
         # Override material to have a lower failure strain so springs break easily
         material = MOCK_MATERIAL.copy()
         material["failure_strain"] = 0.02
@@ -245,7 +245,7 @@ class TestMultiPlyImpact:
 
         k_penalty = 5.0 * np.mean(grid.stiffnesses)
         k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
-        
+
         # Use stable CFL factor 0.4
         dt = compute_cfl_timestep(np.array([k_max_effective]), grid.masses, dx, 0.4)
 
@@ -257,7 +257,7 @@ class TestMultiPlyImpact:
             # 1. Spring failures & forces
             strains = compute_spring_strains(positions, grid.springs, grid.rest_lengths)
             newly_failed = (~grid.failed) & (strains > material["failure_strain"])
-            
+
             # Record fracture energy dissipation
             fracture_se = np.where(newly_failed, 0.5 * grid.stiffnesses * (strains * grid.rest_lengths)**2, 0.0)
             failure_dissipated += np.sum(fracture_se) * material["fracture_energy_multiplier"]
@@ -273,7 +273,7 @@ class TestMultiPlyImpact:
             active_springs = np.where(grid.failed, 0, 1)
             np.add.at(active_counts, grid.springs[:, 0], active_springs)
             np.add.at(active_counts, grid.springs[:, 1], active_springs)
-            
+
             proj_forces = distribute_contact_forces(
                 proj, grid, positions=positions, k_contact=k_penalty
             )

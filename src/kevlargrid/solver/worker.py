@@ -9,10 +9,8 @@ import traceback
 
 import numpy as np
 
-from kevlargrid.solver import backend
-from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
 from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.projectile import Projectile, update_contact_zone, check_termination
+from kevlargrid.solver.projectile import Projectile, check_termination, update_contact_zone
 from kevlargrid.solver.timestep import compute_cfl_timestep
 
 

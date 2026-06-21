@@ -398,13 +398,13 @@ class TestPointImpact:
             contact_mask = contact_mask & (active_counts > 0)
             w_mean = np.mean(w_i[contact_mask]) if np.sum(contact_mask) > 0 else 1.0
             w_normalized = np.where(contact_mask, w_i / w_mean, 0.0)
-            
+
             penetration = np.maximum(0.0, (z_p - positions[:, 2]) * -1.0)
             scale_factor = np.where(grid.initial_spring_counts > 0, active_counts / grid.initial_spring_counts, 0.0)
             contact_potential_energy = np.sum(0.5 * k_penalty * w_normalized * (penetration**2) * scale_factor)
 
             total_system_energy = ke_nodes + se_springs + ke_proj + damp_diss + failure_diss + clamp_diss + contact_potential_energy
-            
+
             energies.append(total_system_energy)
             failed_counts.append(np.sum(grid_failed))
             detached_node_counts.append(np.sum(active_counts == 0))
@@ -418,10 +418,10 @@ class TestPointImpact:
         post_breakthrough_energies = energies[5:]
         energy_variance = np.var(post_breakthrough_energies)
         energy_std_dev = np.sqrt(energy_variance)
-        
+
         # Post-breakthrough energy variance / initial energy should be extremely small (< 0.1%)
         assert (energy_std_dev / initial_energy) < 0.01, f"Energy standard deviation too high: {energy_std_dev / initial_energy:.4f}"
-        
+
         # Overall drift compared to the start of the post-breakthrough phase should be < 2%
         drift = np.abs(post_breakthrough_energies[-1] - post_breakthrough_energies[0]) / post_breakthrough_energies[0]
         assert drift < 0.02, f"Post-breakthrough drift too high: {drift:.4f}"

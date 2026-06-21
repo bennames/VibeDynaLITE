@@ -140,7 +140,7 @@ class StrainPlot:
                         y_plot.append(self.y_data[-1])
 
                 dpg.set_value(self.series_tag, [x_plot, y_plot])
-                
+
                 if self._update_count == 1 or self._update_count % 12 == 0:
                     dpg.fit_axis_data(self.x_axis)
                     dpg.fit_axis_data(self.y_axis)

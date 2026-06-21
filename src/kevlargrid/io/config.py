@@ -32,22 +32,22 @@ def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
         return val
     if not isinstance(val, str):
         raise ValidationError(f"Value must be a number or string with units, got {type(val).__name__}")
-    
+
     match = UNIT_PATTERN.match(val)
     if not match:
         raise ValidationError(f"Invalid format for value with units: '{val}'")
-    
+
     num_str, unit_str = match.groups()
     try:
         num = float(num_str) if ("." in num_str or "e" in num_str.lower()) else int(num_str)
     except ValueError as e:
-        raise ValidationError(f"Invalid numeric part in '{val}': {e}")
-    
+        raise ValidationError(f"Invalid numeric part in '{val}': {e}") from e
+
     if not unit_str:
         return num
-    
+
     unit = unit_str.lower().strip()
-    
+
     if expected_base_unit == "m":
         if unit in ("m", "meter", "meters"):
             return num
@@ -89,7 +89,7 @@ def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
             return num
         elif unit in ("g/m2", "g/m^2"):
             return num * 1e-3
-            
+
     raise ValidationError(f"Unknown or incompatible unit '{unit_str}' for expected unit type '{expected_base_unit}'")
 
 
@@ -164,14 +164,14 @@ def normalize_config_units(config: dict) -> None:
             mat["fiber_density_gcc"] = parse_unit_value(mat["fiber_density_gcc"], "gcc")
         if "areal_density_kgm2" in mat:
             mat["areal_density_kgm2"] = parse_unit_value(mat["areal_density_kgm2"], "kgm2")
-        
+
     if "grid" in config and isinstance(config["grid"], dict):
         grid = config["grid"]
         if "dx" in grid:
             grid["dx"] = parse_unit_value(grid["dx"], "m")
         if "t_ply" in grid and grid["t_ply"] is not None:
             grid["t_ply"] = parse_unit_value(grid["t_ply"], "m")
-            
+
     if "projectile" in config and isinstance(config["projectile"], dict):
         proj = config["projectile"]
         if "mass" in proj:
@@ -184,7 +184,7 @@ def normalize_config_units(config: dict) -> None:
             proj["velocity"] = [parse_unit_value(v, "m/s") for v in proj["velocity"]]
         if "position" in proj and isinstance(proj["position"], list):
             proj["position"] = [parse_unit_value(p, "m") for p in proj["position"]]
-            
+
     if "simulation" in config and isinstance(config["simulation"], dict):
         sim = config["simulation"]
         if "duration" in sim:
@@ -220,7 +220,7 @@ def serialize_toml(config: dict) -> str:
     for k, v in config.items():
         if not isinstance(v, dict):
             lines.append(f"{k} = {serialize_toml_val(v)}")
-    
+
     # Write tables
     for section, content in config.items():
         if isinstance(content, dict):
@@ -292,8 +292,8 @@ def load_config(path: str) -> dict:
         try:
             config = json.loads(content.decode("utf-8"))
             logger.info("Configuration loaded from legacy JSON fallback at path: %s", path)
-        except Exception:
-            raise toml_err
+        except Exception as json_err:
+            raise toml_err from json_err
 
     # Normalize old keys and units to float
     config = normalize_old_config_keys(config)

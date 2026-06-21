@@ -85,7 +85,7 @@ class Viewport3D:
         self.actor: Any = None
         self.proj_actor: Any = None
         self.has_pyvista = False
-        
+
         self.width = 700
         self.height = 310
         self._needs_plotter_resize = False
@@ -175,7 +175,7 @@ class Viewport3D:
                         )
                         self._texture_w = self.width
                         self._texture_h = self.height
-                        
+
     def resize(self, width: int, height: int) -> None:
         """Resize the viewport drawing canvas and offscreen PyVista plotter dynamically."""
         with self.render_lock:
@@ -183,10 +183,10 @@ class Viewport3D:
             self.height = height
             self.center_x = width / 2.0
             self.center_y = height / 2.0
-            
+
             if dpg is not None and dpg.does_item_exist(self.canvas_tag):
                 dpg.configure_item(self.canvas_tag, width=width, height=height)
-                
+
             if HAS_PYVISTA and self.has_pyvista:
                 if self.plotter is None:
                     self._needs_plotter_resize = True
@@ -199,7 +199,7 @@ class Viewport3D:
                         self._needs_plotter_resize = True
                         self._target_plotter_width = width
                         self._target_plotter_height = height
-            
+
             self.redraw()
 
     def _setup_mouse_handlers(self) -> None:
@@ -351,14 +351,14 @@ class Viewport3D:
                     if dpg is not None and dpg.does_item_exist(texture_reg_tag):
                         if not hasattr(self, "_texture_tag"):
                             self._texture_tag = dpg.generate_uuid()
-                        
+
                         texture_exists = dpg.does_item_exist(self._texture_tag)
                         texture_size_matches = getattr(self, "_texture_w", 0) == self.width and getattr(self, "_texture_h", 0) == self.height
-                        
+
                         if not texture_exists or not texture_size_matches:
                             if texture_exists:
                                 dpg.delete_item(self._texture_tag)
-                            
+
                             self._texture_tag = dpg.generate_uuid()
                             dpg.add_dynamic_texture(
                                 width=self.width,
@@ -468,10 +468,10 @@ class Viewport3D:
                     if self.plotter is not None:
                         with contextlib.suppress(Exception):
                             self.plotter.close()
-                    
+
                     self.plotter = pv.Plotter(off_screen=True, window_size=[w, h])
                     self.plotter.background_color = "black"
-                    
+
                     if self.mesh is not None:
                         self.actor = self.plotter.add_mesh(
                             self.mesh,
@@ -490,12 +490,12 @@ class Viewport3D:
                             lighting=False,
                         )
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
-                    
+
                     texture_reg_tag = "viewport_texture_registry"
                     if dpg.does_item_exist(texture_reg_tag):
                         if hasattr(self, "_texture_tag") and dpg.does_item_exist(self._texture_tag):
                             dpg.delete_item(self._texture_tag)
-                        
+
                         self._texture_tag = dpg.generate_uuid()
                         dpg.add_dynamic_texture(
                             width=w,
@@ -599,12 +599,12 @@ class Viewport3D:
                     texture_reg_tag = "viewport_texture_registry"
                     if not hasattr(self, "_texture_tag"):
                         self._texture_tag = dpg.generate_uuid()
-                        
+
                     if getattr(self, "_texture_w", 0) != img_w or getattr(self, "_texture_h", 0) != img_h or not dpg.does_item_exist(self._texture_tag):
                         if dpg.does_item_exist(texture_reg_tag):
                             if dpg.does_item_exist(self._texture_tag):
                                 dpg.delete_item(self._texture_tag)
-                                
+
                             self._texture_tag = dpg.generate_uuid()
                             dpg.add_dynamic_texture(
                                 width=img_w,

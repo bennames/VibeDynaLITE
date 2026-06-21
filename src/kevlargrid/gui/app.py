@@ -604,42 +604,42 @@ def launch() -> None:
     def _on_viewport_resize(sender, app_data):
         nonlocal _last_resize_size, _resize_pending, _resize_time, _pending_right_width, _pending_tab_height
         W_view, H_view = app_data[0], app_data[1]
-        
+
         # Debounce identical resize calls S7.10
         if (W_view, H_view) == _last_resize_size:
             return
         _last_resize_size = (W_view, H_view)
-        
+
         # Configure workspace window
         if dpg.does_item_exist("KevlarGrid Workspace"):
             dpg.configure_item("KevlarGrid Workspace", width=W_view, height=H_view - 40)
-        
+
         left_width = int(W_view * 0.3)
         left_width = max(420, min(500, left_width))
         right_width = W_view - left_width - 30
-        
+
         # Dynamically resize sidebar inputs, controls, tabs, and viewport
         if dpg.does_item_exist(config_panel.group_tag):
             dpg.configure_item(config_panel.group_tag, width=left_width, height=H_view - 60)
         if dpg.does_item_exist(controls.group_tag):
             dpg.configure_item(controls.group_tag, width=right_width)
-        
+
         playback_visible = dpg.is_item_shown("playback_group") if dpg.does_item_exist("playback_group") else False
         playback_height = 40 if playback_visible else 0
         tab_height = H_view - 385 - playback_height
-        
+
         if dpg.does_item_exist(viewport3d.group_tag):
             dpg.configure_item(viewport3d.group_tag, width=right_width, height=tab_height)
         if dpg.does_item_exist(dashboard.group_tag):
             dpg.configure_item(dashboard.group_tag, width=right_width, height=tab_height)
-        
+
         # Resize plots and plot groups
         plot_width = int((right_width - 20) / 2)
         if dpg.does_item_exist("strain_plot_group"):
             dpg.configure_item("strain_plot_group", width=plot_width)
         if dpg.does_item_exist("energy_plot_group"):
             dpg.configure_item("energy_plot_group", width=plot_width)
-        
+
         # Defer expensive viewport resize and plot height configuration S7.10
         _resize_pending = True
         _resize_time = time.time()

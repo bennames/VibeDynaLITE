@@ -127,21 +127,21 @@ class TestConfigRoundtrip:
 
         # Loaded config must have all values normalized to numeric SI base floats
         loaded = load_config(config_path)
-        
+
         assert loaded["material"]["tensile_modulus_gpa"] == 71.0
         assert loaded["material"]["tensile_strength_gpa"] == 2.92
         assert loaded["material"]["fiber_density_gcc"] == 1.44
         assert loaded["material"]["areal_density_kgm2"] == 0.47
-        
+
         assert loaded["grid"]["dx"] == pytest.approx(0.01)
         assert loaded["grid"]["t_ply"] == pytest.approx(0.002)
-        
+
         assert loaded["projectile"]["mass"] == 0.05
         assert loaded["projectile"]["velocity"] == [0.0, 0.0, 400.0]
         assert loaded["projectile"]["position"] == [0.0, 0.0, -0.005]
         assert loaded["projectile"]["blade_width"] == pytest.approx(0.02)
         assert loaded["projectile"]["edge_thickness"] == pytest.approx(0.005)
-        
+
         assert loaded["simulation"]["duration"] == pytest.approx(0.001)
         assert loaded["simulation"]["rayleigh_beta"] == pytest.approx(1e-9)
         assert loaded["simulation"]["dt"] == pytest.approx(1.5e-7)

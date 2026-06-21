@@ -4,6 +4,7 @@ This module provides a unified API for array creation, JIT compilation,
 and math operations, dynamically selecting the best available backend.
 """
 
+# ruff: noqa: E402
 from __future__ import annotations
 
 import os

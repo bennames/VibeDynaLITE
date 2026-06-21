@@ -11,7 +11,6 @@ try:
 except ImportError:
     ti = None
 
-from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
 
 
 class PhysicsViolationError(ValueError):
@@ -239,7 +238,7 @@ class TaichiSolver:
             # Clear nodal stiffnesses
             for i in range(self.n_nodes):
                 self.node_stiffness[i] = 0.0
-            
+
             # Sum spring stiffnesses
             for j in range(self.n_springs):
                 if self.spring_failed[j] == 0:
@@ -269,7 +268,7 @@ class TaichiSolver:
             t_h = self.t_h[None]
             k_penalty = self.k_penalty[None]
             proximity_threshold = self.proximity_threshold[None]
-            
+
             for i in range(self.n_nodes):
                 self.node_w[i] = 0.0
                 px, py, pz = self.positions[i].x, self.positions[i].y, self.positions[i].z
@@ -323,7 +322,7 @@ class TaichiSolver:
                 k_i = ti.max(self.node_stiffness[i], 1e-4)
                 dt_i = ti.sqrt(self.masses[i] / k_i)
                 ti.atomic_min(self.dt_crit[None], dt_i)
-                
+
             dt_crit = self.cfl_factor[None] * self.dt_crit[None]
             self.dt[None] = dt_crit
             self.v_max[None] = self.dx[None] / dt_crit
@@ -333,13 +332,13 @@ class TaichiSolver:
         def k_fused_spring_pass_g():
             ti.block_local(self.positions)
             ti.block_local(self.forces)
-            
+
             # Phase A: zero active counts and forces (fused reset forces)
             for i in range(self.n_nodes):
                 self.node_active_counts[i] = 0
                 self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
             self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
-            
+
             # Phase C: fused spring traversal
             for j in range(self.n_springs):
                 if self.spring_failed[j] == 1:
@@ -377,12 +376,12 @@ class TaichiSolver:
 
                     h = x_fail - x_onset
                     h_safe = h if h != 0.0 else 1.0
-                    
+
                     w_old = 0.0
                     if d_old > 0.0:
                         x_peak_old = x_onset + d_old * h
                         w_old = (k * L0**2 / (6.0 * h_safe)) * (x_peak_old**3 - x_onset**3)
-                    
+
                     w_new = 0.0
                     if d_new >= 1.0:
                         w_new = (k * L0**2 / 6.0) * (x_fail**2 + x_fail * x_onset + x_onset**2)
@@ -390,7 +389,7 @@ class TaichiSolver:
                     else:
                         x_peak_new = x_onset + d_new * h
                         w_new = (k * L0**2 / (6.0 * h_safe)) * (x_peak_new**3 - x_onset**3)
-                    
+
                     dw = w_new - w_old
                     ti.atomic_add(self.failure_dissipated[None], self.fracture_energy_multiplier[None] * dw)
 
@@ -469,11 +468,11 @@ class TaichiSolver:
                 if self.node_w[i] > 0.0 and w_mean > 0.0:
                     w_normalized = self.node_w[i] / w_mean
                     penetration = ti.max(0.0, (proj_pos.z - self.positions[i].z) * direction)
-                    
+
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
                         scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
-                    
+
                     f_val = k_penalty * w_normalized * penetration * scale_factor
                     f_z = f_val * direction
 
@@ -498,7 +497,6 @@ class TaichiSolver:
 
         @ti.kernel
         def k_apply_impedance_boundary_g():
-            dt = self.dt[None]
             for i in range(self.n_nodes):
                 if self.boundary_mask[i] == 2:
                     self.node_stiffness[i] = 0.0
@@ -523,12 +521,12 @@ class TaichiSolver:
         @ti.kernel
         def k_fused_node_pass_g():
             self.E_artificial_kinetic[None] = 0.0
-            
+
             dt = self.dt[None]
             rayleigh_alpha = self.rayleigh_alpha[None]
             v_max = self.v_max[None]
             use_viscous = self.use_viscous[None]
-            
+
             for i in range(self.n_nodes):
                 if self.boundary_mask[i] == 1:
                     self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
@@ -581,7 +579,7 @@ class TaichiSolver:
                     strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
                     effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
                     ti.atomic_add(e_int, 0.5 * effective_k * (strain * self.rest_lengths[j])**2)
-            
+
             # sync barrier
             e_total_int = e_int + self.failure_dissipated[None] + self.damp_dissipated[None] + self.clamp_dissipated[None]
             if e_total_int > 0.0:
@@ -711,11 +709,11 @@ class TaichiSolver:
                 if self.node_w[i] > 0.0:
                     w_normalized = self.node_w[i] / w_mean if w_mean > 0.0 else self.node_w[i]
                     penetration = ti.max(0.0, (proj_pos.z - self.positions[i].z) * direction)
-                    
+
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
                         scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
-                    
+
                     f_val = k_penalty * w_normalized * penetration * scale_factor
                     f_z = f_val * direction
 
@@ -793,17 +791,17 @@ class TaichiSolver:
                 diff = self.positions[v] - self.positions[u]
                 length = diff.norm()
                 strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
-                
+
                 denom = failure_strain - damage_onset_strain
                 denom_safe = denom if denom != 0.0 else 1.0
                 val = (strain - damage_onset_strain) / denom_safe
                 d_val = 0.0
                 if val > 0.0:
                     d_val = val if val < 1.0 else 1.0
-                
+
                 if d_val > self.spring_damage[j]:
                     self.spring_damage[j] = d_val
-                
+
                 if self.spring_damage[j] >= 1.0:
                     self.spring_failed[j] = 1
 
@@ -1286,7 +1284,7 @@ class TaichiSolver:
                 builder.dispatch(self.k_compute_interply_forces_graph)
             builder.dispatch(self.k_apply_impedance_boundary_graph)
             builder.dispatch(self.k_fused_node_pass_graph)
-            
+
             # Amortized guardrail check (only every 20 steps, and at the end of the chunk)
             if step % cfl_recompute_interval == 0 or step == num_substeps - 1:
                 builder.dispatch(self.k_guardrail_check_graph)

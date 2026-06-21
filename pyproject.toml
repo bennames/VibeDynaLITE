@@ -94,7 +94,13 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
     "SIM108", # use ternary operator
     "RUF002", # ambiguous unicode characters (like en-dash and greek alpha in math equations)
+    "N806",   # Variable in function should be lowercase (allow uppercase physics vars like L0, C_i)
+    "SIM102", # Use a single if statement instead of nested if statements (nested ifs are fine)
+    "SIM117", # Use a single with statement with multiple contexts (DearPyGui requires nested withs)
+    "RUF001", # String contains ambiguous greek/math characters (allow alpha/beta symbols)
+    "RUF100", # Unused noqa directive (ignore when noqa rules are globally disabled)
 ]
+per-file-ignores = { "tests/**/*.py" = ["RUF059", "B007", "F841"] }
 
 [tool.ruff.lint.isort]
 known-first-party = ["kevlargrid"]

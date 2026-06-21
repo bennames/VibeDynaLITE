@@ -20,9 +20,8 @@ from kevlargrid.solver.backend import (
     NUMBA_CACHE,
     clamp_boundary,
     maximum,
-    minimum,
     min,
-    max,
+    minimum,
     scatter_add,
     sqrt,
     stack_z,
@@ -31,7 +30,7 @@ from kevlargrid.solver.backend import (
     zeros,
 )
 from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
-from kevlargrid.solver.forces import compute_interply_contact_forces, compute_spring_forces
+from kevlargrid.solver.forces import compute_interply_contact_forces
 
 # Define helper to set values JAX/Numba-compatibly
 if backend.HAS_NUMBA and numba is not None:
@@ -415,7 +414,7 @@ def fused_leapfrog_loop(
     failure_dissipated = failure_dissipated_init
     clamp_dissipated = clamp_dissipated_init
     t_sim = t_sim_init
-    
+
     masses_col = grid_masses.reshape(-1, 1)
 
     # Loop steps inside JIT boundary
@@ -444,17 +443,17 @@ def fused_leapfrog_loop(
                 diff = p2 - p1
                 lengths = sqrt(sum(diff**2, axis=1))
                 strains = (lengths - grid_rest_lengths) / grid_rest_lengths
-                
+
                 denom = failure_strain - damage_onset_strain
                 denom_safe = where(denom == 0.0, 1.0, denom)
                 damage = minimum(maximum((strains - damage_onset_strain) / denom_safe, 0.0), 1.0)
                 effective_k = grid_stiffnesses * (1.0 - damage)
                 effective_k = where(grid_failed, 0.0, effective_k)
-                
+
                 nodal_k_springs = zeros(n_nodes, dtype=positions.dtype)
                 nodal_k_springs = scatter_add(nodal_k_springs, grid_springs[:, 0], effective_k)
                 nodal_k_springs = scatter_add(nodal_k_springs, grid_springs[:, 1], effective_k)
-                
+
                 active_springs = where(grid_failed, 0, 1)
                 active_counts = zeros(n_nodes, dtype=positions.dtype)
                 active_counts = scatter_add(active_counts, grid_springs[:, 0], active_springs)
@@ -469,17 +468,17 @@ def fused_leapfrog_loop(
                 + (positions[:, 2] - proj_position[2]) ** 2
             )
             contact_mask = dists <= proximity_threshold
-            
+
             w_i = where(contact_mask, 1.0 / maximum(dists, 1e-4), 0.0)
             n_contacts = sum(contact_mask)
             w_sum = sum(w_i)
             w_mean = w_sum / where(n_contacts > 0, n_contacts, 1)
             w_mean_safe = where(w_mean > 0.0, w_mean, 1.0)
             w_normalized = where(contact_mask, w_i / w_mean_safe, 0.0)
-            
+
             scale_factor = where(node_initial_springs > 0, active_counts / node_initial_springs, 0.0)
             nodal_k_contact = where(contact_mask, k_penalty * w_normalized * scale_factor, 0.0)
-            
+
             nodal_k_interply = zeros(n_nodes, dtype=positions.dtype)
             if n_plies > 1:
                 for ply in range(n_plies - 1):
@@ -493,16 +492,16 @@ def fused_leapfrog_loop(
                     active_n1 = active_counts[end_idx : end_idx + n_nodes_per_layer] > 0
                     both_active = active_n & active_n1 & penetrating
                     k_add = where(both_active, k_penalty, 0.0)
-                    
+
                     indices_n = np.arange(start_idx, end_idx)
                     indices_n1 = np.arange(end_idx, end_idx + n_nodes_per_layer)
-                    
+
                     nodal_k_interply = scatter_add(nodal_k_interply, indices_n, k_add)
                     nodal_k_interply = scatter_add(nodal_k_interply, indices_n1, k_add)
-                    
+
             total_nodal_k = nodal_k_springs + nodal_k_contact + nodal_k_interply
             total_nodal_k = maximum(total_nodal_k, 1e-4)
-            
+
             # Calculate dynamic stable timestep dt
             dt_crit = min(sqrt(grid_masses / total_nodal_k))
             dt = cfl_factor * dt_crit
@@ -526,20 +525,20 @@ def fused_leapfrog_loop(
                 + (positions[:, 2] - proj_position[2]) ** 2
             )
             contact_mask = dists <= proximity_threshold
-            
+
             w_i = where(contact_mask, 1.0 / maximum(dists, 1e-4), 0.0)
             n_contacts = sum(contact_mask)
             w_sum = sum(w_i)
             w_mean = w_sum / where(n_contacts > 0, n_contacts, 1)
             w_mean_safe = where(w_mean > 0.0, w_mean, 1.0)
             w_normalized = where(contact_mask, w_i / w_mean_safe, 0.0)
-            
+
             scale_factor = where(node_initial_springs > 0, active_counts / node_initial_springs, 0.0)
             v_max = dx / dt
 
         # 1. Irreversible failure updates & internal forces (Spring + Stiffness Damping)
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-            spring_stiff_damp_forces, step_fracture_energy, step_stiff_damp_power = numba_step_internal_forces_and_failures(
+            spring_stiff_damp_forces, _step_fracture_energy, step_stiff_damp_power = numba_step_internal_forces_and_failures(
                 positions,
                 velocities,
                 grid_springs,
@@ -585,7 +584,7 @@ def fused_leapfrog_loop(
             effective_beta = 0.0 if use_viscous else rayleigh_beta
             stiff_damp_mag = effective_beta * grid_stiffnesses * v_proj
             stiff_damp_mag = where(grid_failed, 0.0, stiff_damp_mag)
-            
+
             # Dissipation power
             stiff_damp_power = sum(stiff_damp_mag * v_proj)
             damp_dissipated += stiff_damp_power * dt
@@ -626,7 +625,7 @@ def fused_leapfrog_loop(
         # Integrate node dynamics (leapfrog Verlet)
         accel = net_forces / masses_col
         velocities = velocities + accel * dt
-        
+
         # CFL velocity clamping (Part B.4)
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
             velocities, excess_ke = numba_clamp_velocities(velocities, grid_masses, v_max)
@@ -667,20 +666,20 @@ def fused_leapfrog_loop(
             diff_post = p2_post - p1_post
             lengths_post = sqrt(sum(diff_post**2, axis=1))
             x_val = (lengths_post - grid_rest_lengths) / grid_rest_lengths
-            
+
             denom = failure_strain - damage_onset_strain
             denom_safe = where(denom == 0.0, 1.0, denom)
             damage_post = minimum(maximum((x_val - damage_onset_strain) / denom_safe, 0.0), 1.0)
             eff_k_post = grid_stiffnesses * (1.0 - damage_post)
             eff_k_post = where(grid_failed, 0.0, eff_k_post)
-            
+
             w_input = where(
                 x_val < damage_onset_strain,
                 0.5 * grid_stiffnesses * (x_val * grid_rest_lengths) ** 2,
                 (grid_stiffnesses * grid_rest_lengths ** 2 / 6.0) * (x_val**2 + x_val * damage_onset_strain + damage_onset_strain**2)
             )
             se_actual = 0.5 * eff_k_post * (x_val * grid_rest_lengths) ** 2
-            
+
             spring_dissipated = where(
                 x_val >= damage_onset_strain,
                 fracture_energy_multiplier * (w_input - se_actual),
@@ -706,13 +705,13 @@ def fused_leapfrog_loop(
             strains_telem = (strains_telem - grid_rest_lengths) / grid_rest_lengths
 
             ke = compute_kinetic_energy(velocities, grid_masses)
-            
+
             # Use degraded strain energy S7.14
             denom = failure_strain - damage_onset_strain
             denom_safe = where(denom == 0.0, 1.0, denom)
             damage_telem = minimum(maximum((strains_telem - damage_onset_strain) / denom_safe, 0.0), 1.0)
             se = compute_strain_energy(strains_telem, grid_stiffnesses, grid_rest_lengths, grid_failed, damage_telem)
-            
+
             proj_ke = 0.5 * proj_mass * sum(proj_velocity**2)
 
             hist_positions = set_index_3d(hist_positions, frame_idx, positions)

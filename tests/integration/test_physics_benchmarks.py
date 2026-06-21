@@ -7,13 +7,11 @@ solver engine against analytical solutions, first principles, and literature ref
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from kevlargrid.solver import backend
 from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
+from kevlargrid.solver.grid import generate_rectangular_grid
+from kevlargrid.solver.projectile import Projectile
 from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
-from kevlargrid.solver.grid import generate_rectangular_grid, Grid
-from kevlargrid.solver.projectile import Projectile, update_contact_zone, check_termination
 from kevlargrid.solver.timestep import compute_cfl_timestep
 
 MOCK_MATERIAL = {
@@ -57,7 +55,7 @@ def test_cfl_stability_limit() -> None:
         L = np.linalg.norm(diff)
         dir_vec = diff / L if L > 0 else np.zeros(3)
         ke = k * np.outer(dir_vec, dir_vec)
-        
+
         K[3*n0 : 3*n0+3, 3*n0 : 3*n0+3] += ke
         K[3*n1 : 3*n1+3, 3*n1 : 3*n1+3] += ke
         K[3*n0 : 3*n0+3, 3*n1 : 3*n1+3] -= ke
@@ -113,7 +111,7 @@ def test_cfl_stability_limit() -> None:
         f_vec = (f_mag / L) * diff if L > 0 else np.zeros(3)
         forces_py[n0] += f_vec
         forces_py[n1] -= f_vec
-    
+
     # Apply clamp boundary
     for i in range(n_nodes):
         if boundary_mask[i]:
@@ -272,7 +270,7 @@ def test_1d_stress_wave_propagation_and_reflection() -> None:
             dt, 1, 1, 0.0, 0.0, 0.0, t_sim, 0.0,
             grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
         )
-        
+
         # Check arrival at Node 30
         if arrival_node_30 is None and np.abs(positions[30, 0] - grid.nodes[30, 0]) > threshold:
             arrival_node_30 = t_sim
@@ -412,7 +410,7 @@ def test_smith_yarn_impact_theory() -> None:
             frac = (z0 - threshold) / (z0 - z1)
             kink_node = idx + frac
             break
-            
+
     # Numerical transverse wave speed U
     dist_kink = (kink_node - 100) * dx
     t_elapsed = 150 * dt
@@ -446,7 +444,7 @@ def test_prestrained_string_static_deflection() -> None:
     # rest_length = dx / 1.01 -> initial strain is 1.0%
     prestrain = 0.01
     grid.rest_lengths = grid.rest_lengths / (1.0 + prestrain)
-    
+
     k = grid.stiffnesses[0]
     # In the solver, spring force = k * (length - rest_length)
     # The actual initial tension is T_actual = k * (dx - rest_length) = k * prestrain * rest_length
@@ -505,7 +503,7 @@ def test_prestrained_string_static_deflection() -> None:
     # w_c = Fz * L / (4 * T_actual)
     # L = 1.0 m, Fz = 100 N
     w_analytical = 100.0 * 1.0 / (4.0 * T_actual)
-    
+
     # Numerical deflection at Node 5
     w_numerical = np.abs(positions[5, 2])
 
@@ -717,7 +715,7 @@ def test_progressive_failure_and_fracture_energy() -> None:
         t_sim += 10 * dt
 
     assert grid_failed[0], "Spring did not rupture"
-    
+
     # Verify the accumulated failure dissipation matches the analytical integral
     assert np.abs(failure_diss - w_analytical) / w_analytical < 0.01
 
@@ -792,7 +790,7 @@ def test_thermodynamic_monotonicity() -> None:
 
         e_physical = ke + se
         e_total = e_physical + damp_diss + failure_diss + clamp_diss
-        
+
         max_v_node = np.argmax(np.sum(velocities**2, axis=1))
         print(f"Iter: ke={ke:.3e}, se={se:.3e}, damp_diss={damp_diss:.3e}, failure_diss={failure_diss:.3e}, clamp_diss={clamp_diss:.3e}, total={e_total:.3e}")
         print(f"DEBUG: max velocity={np.linalg.norm(velocities[max_v_node]):.6e} at node {max_v_node}")

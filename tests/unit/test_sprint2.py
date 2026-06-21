@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 import taichi as ti
 
-from kevlargrid.solver.taichi_solver import TaichiSolver, PhysicsViolationError
-from kevlargrid.solver.failure import check_progressive_damage
 from kevlargrid.solver.boundary import apply_impedance_boundary
-from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.timestep import compute_cfl_timestep
+from kevlargrid.solver.failure import check_progressive_damage
 from kevlargrid.solver.forces import compute_spring_forces
+from kevlargrid.solver.grid import generate_rectangular_grid
+from kevlargrid.solver.taichi_solver import PhysicsViolationError, TaichiSolver
+from kevlargrid.solver.timestep import compute_cfl_timestep
 
 
 def test_progressive_damage_irreversible_cpu() -> None:
@@ -50,7 +50,7 @@ def test_taichi_progressive_damage_irreversible() -> None:
     boundary_mask = np.zeros(2, dtype=np.int32)
     nodal_external_forces = np.zeros_like(positions)
     node_initial_springs = np.array([1, 1], dtype=np.int32)
-    
+
     solver = TaichiSolver(
         n_nodes=2,
         n_springs=1,
@@ -70,22 +70,22 @@ def test_taichi_progressive_damage_irreversible() -> None:
         strike_direction_init=1.0,
         node_initial_springs_init=node_initial_springs,
     )
-    
+
     # Set positions to strain 0.005 (node 1 at [1.005, 0.0, 0.0])
     solver.positions[1] = ti.Vector([1.005, 0.0, 0.0])
     solver.advance_substeps(
         1, 1e-6, 0.0, 0.002, 0.006, 1, 2, 0.002, 100.0, 0.01, 0.005, 0.02, 0.0, 0, 0.0, 1.0, 1.0
     )
-    
+
     dmg = solver.spring_damage.to_numpy()
     assert np.isclose(dmg[0], 0.75)
-    
+
     # Strain decreases to 0.001
     solver.positions[1] = ti.Vector([1.001, 0.0, 0.0])
     solver.advance_substeps(
         1, 1e-6, 0.0, 0.002, 0.006, 1, 2, 0.002, 100.0, 0.01, 0.005, 0.02, 0.0, 0, 0.0, 1.0, 1.0
     )
-    
+
     dmg = solver.spring_damage.to_numpy()
     assert np.isclose(dmg[0], 0.75)  # Irreversible, stays at 0.75
 
@@ -99,18 +99,18 @@ def test_mass_scaling_energy_abort() -> None:
     stiffnesses = np.array([1000.0], dtype=np.float32)
     rest_lengths = np.array([1.0], dtype=np.float32)
     failed = np.zeros(1, dtype=np.int32)
-    
+
     # Scaled mass = 100.0, Physical mass = 1.0 (Huge mass scaling!)
     masses = np.array([100.0, 100.0], dtype=np.float32)
     masses_phys = np.array([1.0, 1.0], dtype=np.float32)
-    
+
     tension_only = np.zeros(1, dtype=np.int32)
     boundary_mask = np.zeros(2, dtype=np.int32)
     nodal_external_forces = np.zeros_like(positions)
     node_initial_springs = np.array([1, 1], dtype=np.int32)
-    
+
     from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
-    
+
     with pytest.raises(PhysicsViolationError, match="Physics violation: Artificial kinetic energy"):
         taichi_leapfrog_loop(
             positions=positions,
@@ -163,43 +163,43 @@ def test_impedance_boundary_absorption_cpu() -> None:
         "failure_strain": 0.5,
     }
     grid = generate_rectangular_grid(nx, ny, dx, MOCK_MATERIAL)
-    
+
     boundary_mask = np.zeros(n_nodes, dtype=np.int32)
     boundary_mask[49] = 2  # Impedance boundary condition
-    
+
     positions = grid.nodes.copy()
     velocities = np.zeros((n_nodes, 3), dtype=np.float64)
     velocities[5, 0] = -10.0
-    
+
     dt = compute_cfl_timestep(grid.stiffnesses, grid.masses, dx, 0.5)
-    
+
     vel_30_history = []
-    
+
     for _ in range(200):
         # Compute forces using the codebase's safe function
         forces = compute_spring_forces(
             positions, grid.springs, grid.stiffnesses, grid.rest_lengths, grid.failed,
             tension_only=grid.tension_only
         )
-            
+
         forces = apply_impedance_boundary(
             forces, velocities, grid.masses, grid.springs, grid.stiffnesses, grid.damage, grid.failed, boundary_mask
         )
-        
+
         # Integrate
         accel = forces / grid.masses[:, np.newaxis]
         velocities += accel * dt
         positions += velocities * dt
-        
+
         vel_30_history.append(velocities[30, 0])
-        
+
     vel_30_history = np.array(vel_30_history)
     incident_wave = vel_30_history[:100]
     reflected_wave = vel_30_history[100:]
-    
+
     peak_incident = np.max(np.abs(incident_wave))
     peak_reflected = np.max(np.abs(reflected_wave)) if len(reflected_wave) > 0 else 0.0
-    
+
     reflection_coeff = peak_reflected / peak_incident
     assert peak_incident > 0.5
     assert reflection_coeff < 0.05
@@ -217,24 +217,24 @@ def test_impedance_boundary_absorption_gpu() -> None:
         "failure_strain": 0.5,
     }
     grid = generate_rectangular_grid(nx, ny, dx, MOCK_MATERIAL)
-    
+
     boundary_mask = np.zeros(n_nodes, dtype=np.int32)
     boundary_mask[49] = 2  # Impedance matched boundary
-    
+
     velocities = np.zeros((n_nodes, 3), dtype=np.float64)
     # Pulse node 5 with negative velocity to launch a tension wave to the right
     velocities[5, 0] = -10.0
-    
+
     positions = grid.nodes.copy()
     grid_failed = np.zeros(len(grid.springs), dtype=bool)
-    
+
     dt = compute_cfl_timestep(grid.stiffnesses, grid.masses, dx, 0.5)
     t_sim = 0.0
-    
+
     vel_30_history = []
-    
+
     from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
-    
+
     for _ in range(200):
         (
             positions,
@@ -265,14 +265,14 @@ def test_impedance_boundary_absorption_gpu() -> None:
             grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
         )
         vel_30_history.append(velocities[30, 0])
-        
+
     vel_30_history = np.array(vel_30_history)
     incident_wave = vel_30_history[:100]
     reflected_wave = vel_30_history[100:]
-    
+
     peak_incident = np.max(np.abs(incident_wave))
     peak_reflected = np.max(np.abs(reflected_wave)) if len(reflected_wave) > 0 else 0.0
-    
+
     reflection_coeff = peak_reflected / peak_incident
     assert peak_incident > 0.5
     assert reflection_coeff < 0.05

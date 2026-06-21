@@ -11,8 +11,8 @@ import numpy as np
 from kevlargrid.solver import backend
 from kevlargrid.solver.backend import (
     maximum,
-    minimum,
     min,
+    minimum,
     scatter_add,
     sqrt,
     stack_z,
@@ -20,7 +20,6 @@ from kevlargrid.solver.backend import (
     where,
     zeros,
 )
-
 
 try:
     import numba

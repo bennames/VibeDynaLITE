@@ -253,7 +253,7 @@ def check_termination(
             # Vectorized check: build boolean mask of contact nodes S7.6.1
             contact_mask = np.zeros(grid.n_nodes, dtype=bool)
             contact_mask[contact_nodes] = True
-            
+
             # Find springs connected to at least one contact node
             connected_to_contact = contact_mask[grid.springs[:, 0]] | contact_mask[grid.springs[:, 1]]
             if np.any(connected_to_contact):
