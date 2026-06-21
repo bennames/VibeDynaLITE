@@ -83,6 +83,8 @@ class ConfigPanel:
         self.sim_rayleigh_beta = "sim_rayleigh_beta"
         self.sim_snapshot_interval = "sim_snapshot_interval"
         self.sim_file_size_display = "sim_file_size_display"
+        self.sim_auto_cfl = "sim_auto_cfl"
+        self.sim_dt = "sim_dt"
         self.compute_backend = "compute_backend"
         self.hardware_device = "hardware_device"
         
@@ -180,7 +182,7 @@ class ConfigPanel:
                     dpg.add_table_column()
                     with dpg.table_row():
                         dpg.add_text("Boundary Condition")
-                        dpg.add_combo(items=["Fixed Clamped Edges", "Infinite Grid (Auto)"], default_value="Fixed Clamped Edges", tag=self.grid_boundary, callback=self._on_boundary_change, width=-1)
+                        dpg.add_combo(items=["Fixed Clamped Edges", "Infinite Grid (Auto)", "Non-Reflecting (Impedance Matched)"], default_value="Fixed Clamped Edges", tag=self.grid_boundary, callback=self._on_boundary_change, width=-1)
                 
                 with dpg.group(tag=self.grid_rmin_group, show=False):
                     with dpg.table(header_row=False):
@@ -247,6 +249,12 @@ class ConfigPanel:
                         dpg.add_text("CFL safety factor")
                         dpg.add_input_float(tag=self.sim_cfl, default_value=0.8, callback=self._update_file_size_estimate_cb, width=-1)
                     with dpg.table_row():
+                        dpg.add_text("Dynamic Auto-CFL")
+                        dpg.add_checkbox(tag=self.sim_auto_cfl, default_value=True, callback=self._on_auto_cfl_change)
+                    with dpg.table_row():
+                        dpg.add_text("Static Timestep (s)")
+                        dpg.add_input_float(tag=self.sim_dt, default_value=1.5e-7, format="%.9f", enabled=False, width=-1)
+                    with dpg.table_row():
                         dpg.add_text("Damping Model")
                         dpg.add_combo(items=["Rayleigh Damping", "Viscous Damping"], default_value="Rayleigh Damping", tag=self.sim_damping_model, callback=self._on_damping_change, width=-1)
                     
@@ -267,7 +275,7 @@ class ConfigPanel:
                         dpg.add_input_text(tag=self.sim_file_size_display, default_value="0.0 KB", enabled=False, width=-1)
                     with dpg.table_row():
                         dpg.add_text("Compute Backend")
-                        dpg.add_combo(items=["Numba", "JAX", "NumPy", "Taichi"], default_value=backend.get_backend_name().capitalize(), tag=self.compute_backend, callback=self._on_backend_change, width=-1)
+                        dpg.add_combo(items=["Taichi", "Numba"], default_value=backend.get_backend_name().capitalize(), tag=self.compute_backend, callback=self._on_backend_change, width=-1)
                     with dpg.table_row():
                         dpg.add_text("Active Hardware")
                         dpg.add_input_text(tag=self.hardware_device, default_value=backend.get_active_device(), enabled=False, width=-1)
@@ -558,7 +566,13 @@ class ConfigPanel:
             return {}
 
         is_mode_b = "Mode B" in dpg.get_value(self.grid_mode)
-        b_type = "infinite" if "Infinite" in dpg.get_value(self.grid_boundary) else "fixed"
+        boundary_val = dpg.get_value(self.grid_boundary)
+        if "Infinite" in boundary_val:
+            b_type = "infinite"
+        elif "Non-Reflecting" in boundary_val:
+            b_type = "non-reflecting"
+        else:
+            b_type = "fixed"
 
         return {
             "material": {
@@ -609,6 +623,9 @@ class ConfigPanel:
                 "snapshot_interval": dpg.get_value(self.sim_snapshot_interval)
                 if dpg.does_item_exist(self.sim_snapshot_interval)
                 else 100,
+                "auto_cfl": dpg.get_value(self.sim_auto_cfl),
+                "dt": dpg.get_value(self.sim_dt),
+                "backend": dpg.get_value(self.compute_backend).lower(),
             },
         }
 
@@ -660,7 +677,12 @@ class ConfigPanel:
             dpg.set_value(self.grid_t_ply, t_ply)
 
         b_type = grid.get("boundary_type", "fixed")
-        boundary_val = "Infinite Grid (Auto)" if b_type == "infinite" else "Fixed Clamped Edges"
+        if b_type == "infinite":
+            boundary_val = "Infinite Grid (Auto)"
+        elif b_type == "non-reflecting":
+            boundary_val = "Non-Reflecting (Impedance Matched)"
+        else:
+            boundary_val = "Fixed Clamped Edges"
         dpg.set_value(self.grid_boundary, boundary_val)
         self._on_boundary_change(None, boundary_val)
 
@@ -685,6 +707,10 @@ class ConfigPanel:
         sim = config["simulation"]
         dpg.set_value(self.sim_duration, sim.get("duration", 0.001))
         dpg.set_value(self.sim_cfl, sim.get("cfl_factor", 0.8))
+        auto_cfl_val = sim.get("auto_cfl", True)
+        dpg.set_value(self.sim_auto_cfl, auto_cfl_val)
+        dpg.configure_item(self.sim_dt, enabled=not auto_cfl_val)
+        dpg.set_value(self.sim_dt, sim.get("dt", 1.5e-7))
         # Determine damping model and set widgets
         model = sim.get("damping_model")
         if model is None:
@@ -703,6 +729,12 @@ class ConfigPanel:
         dpg.set_value(self.sim_rayleigh_beta, sim.get("rayleigh_beta", 1e-9))
         if "snapshot_interval" in sim and dpg.does_item_exist(self.sim_snapshot_interval):
             dpg.set_value(self.sim_snapshot_interval, sim["snapshot_interval"])
+
+        # Update backend if present in the configuration TOML S6.5.9
+        loaded_backend = sim.get("backend", "taichi").capitalize()
+        if dpg.does_item_exist(self.compute_backend):
+            dpg.set_value(self.compute_backend, loaded_backend)
+            self._on_backend_change(None, loaded_backend)
 
         # Re-sync boundary sizing calculation & file size estimate
         self._on_boundary_change(None, None)
@@ -738,11 +770,11 @@ class ConfigPanel:
 
     def _on_backend_change(self, sender: Any, app_data: Any) -> None:
         """Callback triggered when the compute backend combo selection changes."""
-        backend.BACKEND = str(app_data).lower()
+        backend_name = str(app_data).lower()
         import os
-
-        os.environ["KEVLARGRID_BACKEND"] = str(app_data).lower()
-        if dpg is not None:
+        os.environ["KEVLARGRID_BACKEND"] = backend_name
+        backend.BACKEND = backend_name
+        if dpg.does_item_exist(self.hardware_device):
             dpg.set_value(self.hardware_device, backend.get_active_device())
 
     def _on_damping_change(self, sender: Any, app_data: str) -> None:
@@ -753,3 +785,10 @@ class ConfigPanel:
         dpg.configure_item(self.row_damping_coeff, show=is_viscous)
         dpg.configure_item(self.row_rayleigh_alpha, show=not is_viscous)
         dpg.configure_item(self.row_rayleigh_beta, show=not is_viscous)
+
+    def _on_auto_cfl_change(self, sender: Any, app_data: Any) -> None:
+        """Toggle enabled state of static timestep input based on Auto-CFL checkbox."""
+        if dpg is None:
+            return
+        auto_cfl = dpg.get_value(self.sim_auto_cfl)
+        dpg.configure_item(self.sim_dt, enabled=not auto_cfl)

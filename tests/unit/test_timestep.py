@@ -51,30 +51,53 @@ class TestCFLTimestep:
             compute_cfl_timestep(stiffnesses, masses, dx, -0.5)
 
     def test_dynamic_nodal_cfl_timestep(self) -> None:
-        """Verify that the dynamic nodal stiffness JIT helpers compute the expected values."""
-        from kevlargrid.solver.fused import numba_compute_effective_k, numba_sum_nodal_k_springs
+        """Verify that the dynamic nodal stiffness Taichi kernel computes the expected values."""
+        from kevlargrid.solver.taichi_solver import TaichiSolver
         
-        positions = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
+        positions = np.array([[0.0, 0.0, 0.0], [1.4, 0.0, 0.0]], dtype=np.float32)
+        velocities = np.zeros_like(positions)
         springs = np.array([[0, 1]], dtype=np.int32)
-        stiffnesses = np.array([1000.0], dtype=np.float64)
-        rest_lengths = np.array([1.0], dtype=np.float64)
-        failed = np.zeros(1, dtype=bool)
+        stiffnesses = np.array([1000.0], dtype=np.float32)
+        rest_lengths = np.array([1.0], dtype=np.float32)
+        failed = np.zeros(1, dtype=np.int32)
+        masses = np.array([1.0, 1.0], dtype=np.float32)
+        tension_only = np.zeros(1, dtype=np.int32)
+        boundary_mask = np.zeros(2, dtype=np.int32)
+        nodal_external_forces = np.zeros_like(positions)
+        node_initial_springs = np.array([1, 1], dtype=np.int32)
         
-        # Stretched past damage onset but before failure:
-        # strain = 0.4, damage = (0.4 - 0.3) / 0.2 = 0.5
-        positions_degraded = np.array([[0.0, 0.0, 0.0], [1.4, 0.0, 0.0]], dtype=np.float64)
-        
-        eff_k = numba_compute_effective_k(
-            positions_degraded, springs, stiffnesses, rest_lengths, failed, 0.3, 0.5
+        solver = TaichiSolver(
+            n_nodes=2,
+            n_springs=1,
+            positions_init=positions,
+            velocities_init=velocities,
+            springs_init=springs,
+            stiffnesses_init=stiffnesses,
+            rest_lengths_init=rest_lengths,
+            failed_init=failed,
+            masses_init=masses,
+            tension_only_init=tension_only,
+            boundary_mask_init=boundary_mask,
+            nodal_external_forces_init=nodal_external_forces,
+            proj_position_init=np.zeros(3),
+            proj_velocity_init=np.zeros(3),
+            proj_mass_init=1.0,
+            strike_direction_init=1.0,
+            node_initial_springs_init=node_initial_springs,
         )
-        # Expected: 1000 * (1.0 - 0.5) = 500.0
-        assert np.abs(eff_k[0] - 500.0) < 1e-7
         
-        # Nodal spring stiffness summation:
-        node_spring_offsets = np.array([0, 1, 2], dtype=np.int32)
-        node_spring_ids = np.array([0, 0], dtype=np.int32)
-        nodal_k = numba_sum_nodal_k_springs(eff_k, node_spring_offsets, node_spring_ids)
-        
-        # Both nodes are connected to spring 0, so both get stiffness 500.0
-        assert np.abs(nodal_k[0] - 500.0) < 1e-7
-        assert np.abs(nodal_k[1] - 500.0) < 1e-7
+        dt = solver.compute_dynamic_dt(
+            failure_strain=0.5,
+            damage_onset_strain=0.3,
+            w_h=0.0,
+            t_h=0.0,
+            k_penalty=0.0,
+            proximity_threshold=0.0,
+            n_nodes_per_layer=2,
+            n_plies=1,
+            t_ply=0.0,
+            cfl_factor=1.0,
+        )
+        # k_i = 500, m_i = 1.0 -> dt_i = sqrt(1.0 / 500.0)
+        assert np.abs(dt - np.sqrt(1.0 / 500.0)) < 1e-4
+

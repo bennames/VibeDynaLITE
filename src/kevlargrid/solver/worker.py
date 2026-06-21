@@ -11,7 +11,6 @@ import numpy as np
 
 from kevlargrid.solver import backend
 from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
-from kevlargrid.solver.fused import fused_leapfrog_loop
 from kevlargrid.solver.grid import generate_rectangular_grid
 from kevlargrid.solver.projectile import Projectile, update_contact_zone, check_termination
 from kevlargrid.solver.timestep import compute_cfl_timestep
@@ -36,6 +35,12 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         proj_cfg = config["projectile"]
         sim_cfg = config["simulation"]
 
+        solver_backend = sim_cfg.get("backend", "taichi")
+        import os
+        os.environ["KEVLARGRID_BACKEND"] = solver_backend
+        from kevlargrid.solver import backend
+        backend.BACKEND = solver_backend
+
         nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
         n_plies = grid_cfg["n_plies"]
         t_ply = grid_cfg["t_ply"]
@@ -46,7 +51,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         )
 
         # Build boundary mask
-        boundary_mask = np.zeros(grid.n_nodes, dtype=bool)
+        boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
         n_nodes_per_layer = nx * ny
         n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
         if grid_cfg["boundary_type"] == "fixed":
@@ -55,7 +60,14 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 for i in range(nx):
                     for j in range(ny):
                         if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                            boundary_mask[offset + i * ny + j] = True
+                            boundary_mask[offset + i * ny + j] = 1
+        elif grid_cfg["boundary_type"] == "non-reflecting":
+            for ply in range(n_layers):
+                offset = ply * n_nodes_per_layer
+                for i in range(nx):
+                    for j in range(ny):
+                        if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+                            boundary_mask[offset + i * ny + j] = 2
 
         # Nodal external forces setup
         if "nodal_external_forces" in config:
@@ -64,11 +76,15 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             nodal_external_forces = np.zeros((grid.n_nodes, 3), dtype=np.float64)
 
         # Calculate timestep
-        k_penalty = 10.0 * np.mean(grid.stiffnesses)
-        k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
-        dt = compute_cfl_timestep(
-            np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
-        )
+        auto_cfl = sim_cfg.get("auto_cfl", True)
+        if auto_cfl:
+            k_penalty = 10.0 * np.mean(grid.stiffnesses)
+            k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
+            dt = compute_cfl_timestep(
+                np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
+            )
+        else:
+            dt = sim_cfg.get("dt", 1.5e-7)
 
         # Projectile setup
         proj = Projectile(
@@ -140,71 +156,131 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             if current_steps <= 0:
                 break
 
-            # Execute explicit integration step
-            if backend.get_backend_name() == "taichi":
-                # Defer taichi solver import entirely to the subprocess
-                from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop as solver_loop
+            # Execute explicit integration step using Taichi or Numba backend
+            solver_backend = sim_cfg.get("backend", "taichi")
+            if solver_backend == "numba":
+                from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
+                (
+                    positions,
+                    velocities,
+                    grid.failed,
+                    proj.position,
+                    proj.velocity,
+                    damp_dissipated,
+                    failure_dissipated,
+                    clamp_dissipated,
+                    t_sim,
+                    hist_pos,
+                    hist_failed,
+                    hist_proj_pos,
+                    hist_time,
+                    hist_ke,
+                    hist_se,
+                    hist_proj_ke,
+                ) = solver_loop(
+                    positions,
+                    velocities,
+                    grid.springs,
+                    grid.stiffnesses,
+                    grid.rest_lengths,
+                    grid.failed,
+                    grid.masses,
+                    grid.tension_only,
+                    boundary_mask,
+                    nodal_external_forces,
+                    proj.position,
+                    proj.velocity,
+                    proj.mass,
+                    proj.blade_width,
+                    proj.edge_thickness,
+                    n_layers,
+                    n_nodes_per_layer,
+                    t_ply if t_ply is not None else 0.002,
+                    dx,
+                    k_penalty,
+                    rayleigh_alpha,
+                    rayleigh_beta,
+                    failure_strain,
+                    damage_onset_strain,
+                    fracture_energy_multiplier,
+                    dt,
+                    current_steps,
+                    save_interval,
+                    damp_dissipated,
+                    failure_dissipated,
+                    clamp_dissipated,
+                    t_sim,
+                    strike_direction,
+                    grid.initial_spring_counts,
+                    grid.node_spring_offsets,
+                    grid.node_spring_ids,
+                    grid.node_spring_signs,
+                    use_viscous=(damping_model == "viscous"),
+                    cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
+                )
+                hist_peak_strain = np.zeros(len(hist_time))
             else:
-                solver_loop = fused_leapfrog_loop
-
-            (
-                positions,
-                velocities,
-                grid.failed,
-                proj.position,
-                proj.velocity,
-                damp_dissipated,
-                failure_dissipated,
-                clamp_dissipated,
-                t_sim,
-                hist_pos,
-                hist_failed,
-                hist_proj_pos,
-                hist_time,
-                hist_ke,
-                hist_se,
-                hist_proj_ke,
-            ) = solver_loop(
-                positions,
-                velocities,
-                grid.springs,
-                grid.stiffnesses,
-                grid.rest_lengths,
-                grid.failed,
-                grid.masses,
-                grid.tension_only,
-                boundary_mask,
-                nodal_external_forces,
-                proj.position,
-                proj.velocity,
-                proj.mass,
-                proj.blade_width,
-                proj.edge_thickness,
-                n_layers,
-                n_nodes_per_layer,
-                t_ply if t_ply is not None else 0.002,
-                dx,
-                k_penalty,
-                rayleigh_alpha,
-                rayleigh_beta,
-                failure_strain,
-                damage_onset_strain,
-                fracture_energy_multiplier,
-                dt,
-                current_steps,
-                save_interval,
-                damp_dissipated,
-                failure_dissipated,
-                clamp_dissipated,
-                t_sim,
-                strike_direction,
-                grid.initial_spring_counts,
-                grid.node_spring_offsets,
-                grid.node_spring_ids,
-                grid.node_spring_signs,
-                use_viscous=(damping_model == "viscous"),
-                cfl_factor=sim_cfg["cfl_factor"],
-            )
+                from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop as solver_loop
+                (
+                    positions,
+                    velocities,
+                    grid.failed,
+                    proj.position,
+                    proj.velocity,
+                    damp_dissipated,
+                    failure_dissipated,
+                    clamp_dissipated,
+                    t_sim,
+                    hist_pos,
+                    hist_failed,
+                    hist_proj_pos,
+                    hist_time,
+                    hist_ke,
+                    hist_se,
+                    hist_proj_ke,
+                    hist_peak_strain,
+                ) = solver_loop(
+                    positions,
+                    velocities,
+                    grid.springs,
+                    grid.stiffnesses,
+                    grid.rest_lengths,
+                    grid.failed,
+                    grid.masses,
+                    grid.tension_only,
+                    boundary_mask,
+                    nodal_external_forces,
+                    proj.position,
+                    proj.velocity,
+                    proj.mass,
+                    proj.blade_width,
+                    proj.edge_thickness,
+                    n_layers,
+                    n_nodes_per_layer,
+                    t_ply if t_ply is not None else 0.002,
+                    dx,
+                    k_penalty,
+                    rayleigh_alpha,
+                    rayleigh_beta,
+                    failure_strain,
+                    damage_onset_strain,
+                    fracture_energy_multiplier,
+                    dt,
+                    current_steps,
+                    save_interval,
+                    damp_dissipated,
+                    failure_dissipated,
+                    clamp_dissipated,
+                    t_sim,
+                    strike_direction,
+                    grid.initial_spring_counts,
+                    grid.node_spring_offsets,
+                    grid.node_spring_ids,
+                    grid.node_spring_signs,
+                    use_viscous=(damping_model == "viscous"),
+                    cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
+                    grid_damage=grid.damage,
+                )
 
             # Check for numerical instability (NaN/inf values)
             if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
@@ -214,41 +290,17 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 )
 
             # Calculate metrics for live progress
-            ke = compute_kinetic_energy(velocities, grid.masses)
-            diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
-            lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
-            strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-            
-            # Compute progressive damage fraction for active-only/degraded strain energy calculation S7.14
-            denom = failure_strain - damage_onset_strain
-            denom_safe = denom if denom != 0.0 else 1.0
-            damage = np.minimum(np.maximum((strains - damage_onset_strain) / denom_safe, 0.0), 1.0)
-            se = compute_strain_energy(strains, grid.stiffnesses, grid.rest_lengths, grid.failed, damage)
-            
-            proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
+            ke = float(hist_ke[-1]) if len(hist_ke) > 0 else 0.0
+            se = float(hist_se[-1]) if len(hist_se) > 0 else 0.0
+            proj_ke = float(hist_proj_ke[-1]) if len(hist_proj_ke) > 0 else 0.0
+            peak_strain = float(hist_peak_strain[-1]) if len(hist_peak_strain) > 0 else 0.0
             failed_count = int(np.sum(grid.failed))
-            
-            # Compute peak strain only on active (non-failed) springs S7.14
-            active_strains = strains[~grid.failed]
-            peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
 
-            # Calculate frame-by-frame history of active-only peak strain S7.14
             hist_pos_np = np.asarray(hist_pos)
             hist_failed_np = np.asarray(hist_failed)
-            hist_peak_strain_list = []
-            for idx in range(len(hist_time)):
-                f_pos = hist_pos_np[idx]
-                f_failed = hist_failed_np[idx]
-                f_diff = f_pos[grid.springs[:, 1]] - f_pos[grid.springs[:, 0]]
-                f_lens = np.sqrt(np.sum(f_diff**2, axis=1))
-                f_strains = (f_lens - grid.rest_lengths) / grid.rest_lengths
-                f_active = f_strains[~f_failed]
-                f_peak = float(np.max(f_active)) if len(f_active) > 0 else 0.0
-                hist_peak_strain_list.append(f_peak)
-            hist_peak_strain = np.array(hist_peak_strain_list, dtype=np.float32)
 
             # Send telemetry snapshot chunk back to parent GUI process
-            # Convert JAX arrays to standard NumPy arrays for DPG/PyVista compatibility S7.6.1
+            # Convert Taichi fields to standard NumPy arrays for DPG/PyVista compatibility S7.6.1
             queue.put(
                 {
                     "type": "telemetry",
@@ -272,7 +324,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "hist_ke": np.asarray(hist_ke),
                     "hist_se": np.asarray(hist_se),
                     "hist_proj_ke": np.asarray(hist_proj_ke),
-                    "hist_peak_strain": hist_peak_strain,
+                    "hist_peak_strain": np.asarray(hist_peak_strain),
                 }
             )
 
@@ -298,6 +350,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             1.0 - (proj_ke / (0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)))
         )
 
+        diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
+        lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
+        strains = (lengths - grid.rest_lengths) / grid.rest_lengths
         active_strains = strains[~grid.failed]
         final_peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
 

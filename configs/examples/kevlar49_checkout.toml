@@ -1,0 +1,29 @@
+version = "2.0"
+
+[material]
+name = "Kevlar 49"
+tensile_modulus_gpa = "112.4 GPa"  # Sourced from DuPont Tech Guide
+failure_strain = 0.024            # Ultimate strain at failure from literature
+tensile_strength_gpa = "3.00 GPa"  # Tensile strength from literature
+fiber_density_gcc = "1.44 g/cm3"
+areal_density_kgm2 = "0.23 kg/m2"
+shear_ratio = 0.0003
+
+[projectile]
+mass_kg = "0.5 kg"
+velocity_ms = "189.74 m/s"
+blade_width_mm = "50.0 mm"
+edge_thickness_mm = "2.0 mm"
+
+[simulation]
+mode = "B"
+plies = 6
+ply_spacing_mm = "0.5 mm"
+penalty_stiffness_multiplier = 10.0
+cfl = 0.8
+boundary = "infinite"
+safety_factor = 1.5
+
+[damping]
+model = "viscous"
+coefficient = "auto"

@@ -1,4 +1,4 @@
-"""JSON config save, load, and validation.
+"""TOML config save, load, and validation.
 
 Provides dynamic serialization, deserialization, and schema validation
 for KevlarGrid simulation parameters.
@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import tomllib
+from typing import Any
 
 from kevlargrid.utils import get_logger
 
@@ -20,8 +23,218 @@ class ValidationError(ValueError):
     pass
 
 
+UNIT_PATTERN = re.compile(r"^\s*([0-9.eE+-]+)\s*([a-zA-Z0-9*/³²^\-\[\]]+)?\s*$")
+
+
+def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
+    """Parse a value that may be a float, int, or a string with units, and convert to base units."""
+    if isinstance(val, (int, float)):
+        return val
+    if not isinstance(val, str):
+        raise ValidationError(f"Value must be a number or string with units, got {type(val).__name__}")
+    
+    match = UNIT_PATTERN.match(val)
+    if not match:
+        raise ValidationError(f"Invalid format for value with units: '{val}'")
+    
+    num_str, unit_str = match.groups()
+    try:
+        num = float(num_str) if ("." in num_str or "e" in num_str.lower()) else int(num_str)
+    except ValueError as e:
+        raise ValidationError(f"Invalid numeric part in '{val}': {e}")
+    
+    if not unit_str:
+        return num
+    
+    unit = unit_str.lower().strip()
+    
+    if expected_base_unit == "m":
+        if unit in ("m", "meter", "meters"):
+            return num
+        elif unit in ("mm", "millimeter", "millimeters"):
+            return num * 1e-3
+        elif unit in ("cm", "centimeter", "centimeters"):
+            return num * 1e-2
+    elif expected_base_unit == "kg":
+        if unit in ("kg", "kilogram", "kilograms"):
+            return num
+        elif unit in ("g", "gram", "grams"):
+            return num * 1e-3
+    elif expected_base_unit == "m/s":
+        if unit in ("m/s", "ms-1", "m*s-1", "m/sec", "meters/second"):
+            return num
+    elif expected_base_unit == "s":
+        if unit in ("s", "sec", "second", "seconds"):
+            return num
+        elif unit in ("ms", "millisecond", "milliseconds"):
+            return num * 1e-3
+        elif unit in ("us", "microsecond", "microseconds"):
+            return num * 1e-6
+        elif unit in ("ns", "nanosecond", "nanoseconds"):
+            return num * 1e-9
+    elif expected_base_unit == "gpa":
+        if unit in ("gpa", "gigapascal", "gigapascals"):
+            return num
+        elif unit in ("pa", "pascal", "pascals"):
+            return num * 1e-9
+        elif unit in ("mpa", "megapascal", "megapascals"):
+            return num * 1e-3
+    elif expected_base_unit == "gcc":
+        if unit in ("gcc", "g/cm3", "g/cm^3", "g/cc", "grams/cc"):
+            return num
+        elif unit in ("kg/m3", "kg/m^3"):
+            return num * 1e-3
+    elif expected_base_unit == "kgm2":
+        if unit in ("kgm2", "kg/m2", "kg/m^2"):
+            return num
+        elif unit in ("g/m2", "g/m^2"):
+            return num * 1e-3
+            
+    raise ValidationError(f"Unknown or incompatible unit '{unit_str}' for expected unit type '{expected_base_unit}'")
+
+
+def normalize_old_config_keys(config: dict) -> dict:
+    """Normalize old config key layouts to the current schema format."""
+    # Ensure all required sections exist or create them
+    for sec in ["material", "grid", "projectile", "simulation"]:
+        if sec not in config or not isinstance(config[sec], dict):
+            config[sec] = {}
+
+    # 1. Projectile section mapping
+    proj = config["projectile"]
+    if "mass_kg" in proj:
+        proj["mass"] = proj.pop("mass_kg")
+    if "velocity_ms" in proj:
+        v_ms = proj.pop("velocity_ms")
+        if isinstance(v_ms, (int, float)):
+            proj["velocity"] = [0.0, 0.0, float(v_ms)]
+        elif isinstance(v_ms, str):
+            proj["velocity"] = [0.0, 0.0, v_ms]
+    if "blade_width_mm" in proj:
+        proj["blade_width"] = proj.pop("blade_width_mm")
+    if "edge_thickness_mm" in proj:
+        proj["edge_thickness"] = proj.pop("edge_thickness_mm")
+
+    # 2. Simulation -> Grid section mapping
+    sim = config["simulation"]
+    grid = config["grid"]
+    if "plies" in sim:
+        grid["n_plies"] = sim.pop("plies")
+    if "boundary" in sim:
+        grid["boundary_type"] = sim.pop("boundary")
+    if "cfl" in sim:
+        sim["cfl_factor"] = sim.pop("cfl")
+    if "ply_spacing_mm" in sim:
+        grid["t_ply"] = sim.pop("ply_spacing_mm")
+
+    # Fill defaults for missing grid sizes if converting old format
+    if "nx" not in grid:
+        grid["nx"] = 11
+    if "ny" not in grid:
+        grid["ny"] = 11
+    if "dx" not in grid:
+        grid["dx"] = "10 mm"
+    if "boundary_type" not in grid:
+        grid["boundary_type"] = "fixed"
+
+    # 3. Damping section mapping (moves to simulation)
+    if "damping" in config and isinstance(config["damping"], dict):
+        damp = config.pop("damping")
+        if "model" in damp:
+            sim["damping_model"] = damp["model"]
+        if "coefficient" in damp:
+            coeff = damp["coefficient"]
+            if coeff == "auto":
+                sim["damping_coefficient"] = 0.05
+            else:
+                sim["damping_coefficient"] = coeff
+
+    return config
+
+
+def normalize_config_units(config: dict) -> None:
+    """Parse and normalize all unit strings in the config to numerical base values."""
+    if "material" in config and isinstance(config["material"], dict):
+        mat = config["material"]
+        if "tensile_modulus_gpa" in mat:
+            mat["tensile_modulus_gpa"] = parse_unit_value(mat["tensile_modulus_gpa"], "gpa")
+        if "tensile_strength_gpa" in mat:
+            mat["tensile_strength_gpa"] = parse_unit_value(mat["tensile_strength_gpa"], "gpa")
+        if "fiber_density_gcc" in mat:
+            mat["fiber_density_gcc"] = parse_unit_value(mat["fiber_density_gcc"], "gcc")
+        if "areal_density_kgm2" in mat:
+            mat["areal_density_kgm2"] = parse_unit_value(mat["areal_density_kgm2"], "kgm2")
+        
+    if "grid" in config and isinstance(config["grid"], dict):
+        grid = config["grid"]
+        if "dx" in grid:
+            grid["dx"] = parse_unit_value(grid["dx"], "m")
+        if "t_ply" in grid and grid["t_ply"] is not None:
+            grid["t_ply"] = parse_unit_value(grid["t_ply"], "m")
+            
+    if "projectile" in config and isinstance(config["projectile"], dict):
+        proj = config["projectile"]
+        if "mass" in proj:
+            proj["mass"] = parse_unit_value(proj["mass"], "kg")
+        if "blade_width" in proj:
+            proj["blade_width"] = parse_unit_value(proj["blade_width"], "m")
+        if "edge_thickness" in proj:
+            proj["edge_thickness"] = parse_unit_value(proj["edge_thickness"], "m")
+        if "velocity" in proj and isinstance(proj["velocity"], list):
+            proj["velocity"] = [parse_unit_value(v, "m/s") for v in proj["velocity"]]
+        if "position" in proj and isinstance(proj["position"], list):
+            proj["position"] = [parse_unit_value(p, "m") for p in proj["position"]]
+            
+    if "simulation" in config and isinstance(config["simulation"], dict):
+        sim = config["simulation"]
+        if "duration" in sim:
+            sim["duration"] = parse_unit_value(sim["duration"], "s")
+        if "dt" in sim:
+            sim["dt"] = parse_unit_value(sim["dt"], "s")
+        if "rayleigh_beta" in sim:
+            sim["rayleigh_beta"] = parse_unit_value(sim["rayleigh_beta"], "s")
+
+
+def serialize_toml_val(v: Any) -> str:
+    """Helper to serialize values to TOML compliant string syntax."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    elif isinstance(v, (int, float)):
+        return str(v)
+    elif isinstance(v, str):
+        escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    elif isinstance(v, list):
+        items = [serialize_toml_val(x) for x in v]
+        return f"[{', '.join(items)}]"
+    elif v is None:
+        return '""'
+    else:
+        raise TypeError(f"Unsupported TOML type: {type(v)}")
+
+
+def serialize_toml(config: dict) -> str:
+    """Custom serializer of dict to TOML string representation."""
+    lines = []
+    # Write top-level metadata first if any (e.g. version)
+    for k, v in config.items():
+        if not isinstance(v, dict):
+            lines.append(f"{k} = {serialize_toml_val(v)}")
+    
+    # Write tables
+    for section, content in config.items():
+        if isinstance(content, dict):
+            if lines:
+                lines.append("")
+            lines.append(f"[{section}]")
+            for k, v in content.items():
+                if v is not None:  # Omit None values
+                    lines.append(f"{k} = {serialize_toml_val(v)}")
+    return "\n".join(lines) + "\n"
+
+
 def save_config(config: dict, path: str) -> None:
-    """Save configuration to JSON file.
+    """Save configuration to TOML file.
 
     Parameters
     ----------
@@ -30,17 +243,18 @@ def save_config(config: dict, path: str) -> None:
     path : str
         Output file path.
     """
-    # Create parent directories if they don't exist
     parent = os.path.dirname(os.path.abspath(path))
     os.makedirs(parent, exist_ok=True)
 
+    toml_str = serialize_toml(config)
+
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=4)
-    logger.info("Configuration saved successfully to path: %s", path)
+        f.write(toml_str)
+    logger.info("Configuration saved successfully to TOML path: %s", path)
 
 
 def load_config(path: str) -> dict:
-    """Load configuration from JSON file.
+    """Load configuration from TOML (or legacy JSON) file.
 
     Parameters
     ----------
@@ -56,10 +270,35 @@ def load_config(path: str) -> dict:
         logger.error("Configuration file not found at path: %s", path)
         raise FileNotFoundError(f"Configuration file not found: {path}")
 
-    with open(path, encoding="utf-8") as f:
-        config = json.load(f)
-    logger.info("Configuration loaded successfully from path: %s", path)
-    return config  # type: ignore[no-any-return]
+    with open(path, "rb") as f:
+        content = f.read()
+
+    # Try JSON fallback first if path ends with .json
+    if path.endswith(".json"):
+        try:
+            config = json.loads(content.decode("utf-8"))
+            logger.info("Configuration loaded from legacy JSON at path: %s", path)
+            config = normalize_old_config_keys(config)
+            normalize_config_units(config)
+            return config
+        except Exception as e:
+            logger.warning("Failed to parse JSON file: %s. Trying TOML...", e)
+
+    try:
+        config = tomllib.loads(content.decode("utf-8"))
+        logger.info("Configuration loaded from TOML at path: %s", path)
+    except Exception as toml_err:
+        # Fallback to JSON load
+        try:
+            config = json.loads(content.decode("utf-8"))
+            logger.info("Configuration loaded from legacy JSON fallback at path: %s", path)
+        except Exception:
+            raise toml_err
+
+    # Normalize old keys and units to float
+    config = normalize_old_config_keys(config)
+    normalize_config_units(config)
+    return config
 
 
 def validate_config(config: dict) -> bool:
@@ -141,9 +380,9 @@ def validate_config(config: dict) -> bool:
     if not isinstance(grid["dx"], (int, float)) or grid["dx"] <= 0.0:
         raise ValidationError(f"Grid parameter 'dx' must be a positive number (got {grid['dx']}).")
 
-    if grid["boundary_type"] not in ["fixed", "infinite"]:
+    if grid["boundary_type"] not in ["fixed", "infinite", "non-reflecting"]:
         raise ValidationError(
-            f"Grid boundary_type must be 'fixed' or 'infinite' (got '{grid['boundary_type']}')."
+            f"Grid boundary_type must be 'fixed', 'infinite', or 'non-reflecting' (got '{grid['boundary_type']}')."
         )
 
     if "t_ply" in grid and grid["t_ply"] is not None:
@@ -195,10 +434,24 @@ def validate_config(config: dict) -> bool:
         sim["rayleigh_alpha"] = 0.0
     if "rayleigh_beta" not in sim:
         sim["rayleigh_beta"] = 1e-9
+    if "auto_cfl" not in sim:
+        sim["auto_cfl"] = True
+    if "dt" not in sim:
+        sim["dt"] = 1.5e-7
 
-    for key in ["duration", "cfl_factor", "damping_model", "damping_coefficient", "rayleigh_alpha", "rayleigh_beta"]:
+    for key in ["duration", "cfl_factor", "damping_model", "damping_coefficient", "rayleigh_alpha", "rayleigh_beta", "auto_cfl", "dt"]:
         if key not in sim:
             raise ValidationError(f"Simulation section missing required key: '{key}'")
+
+    if not isinstance(sim["auto_cfl"], bool):
+        raise ValidationError(
+            f"Simulation parameter 'auto_cfl' must be a boolean (got {type(sim['auto_cfl']).__name__})."
+        )
+
+    if not isinstance(sim["dt"], (int, float)) or sim["dt"] <= 0.0:
+        raise ValidationError(
+            f"Simulation parameter 'dt' must be a positive number (got {sim['dt']})."
+        )
 
     if not isinstance(sim["duration"], (int, float)) or sim["duration"] <= 0.0:
         raise ValidationError(

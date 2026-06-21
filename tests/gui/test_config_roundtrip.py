@@ -48,6 +48,8 @@ VALID_CONFIG = {
         "damping_coefficient": 0.05,
         "rayleigh_alpha": 0.0,
         "rayleigh_beta": 0.0001,
+        "auto_cfl": True,
+        "dt": 1.5e-7,
     },
 }
 
@@ -58,12 +60,12 @@ class TestConfigRoundtrip:
     def test_save_load_roundtrip(self, tmp_path: pytest.TempPathFactory) -> None:
         """Verify that configuration can be saved and reloaded exactly.
 
-        Saving a config dict to JSON and then reading it back should yield
+        Saving a config dict to TOML and then reading it back should yield
         identical parameter structures and values.
         """
         temp_dir = tmp_path / "configs"
         temp_dir.mkdir()
-        config_path = str(temp_dir / "test_config.json")
+        config_path = str(temp_dir / "test_config.toml")
 
         # 1. Save config
         save_config(VALID_CONFIG, config_path)
@@ -74,6 +76,94 @@ class TestConfigRoundtrip:
 
         # 3. Assert equality
         assert loaded == VALID_CONFIG
+
+    def test_unit_parsing_and_conversion(self, tmp_path: pytest.TempPathFactory) -> None:
+        """Verify that string inputs with units are parsed and converted correctly."""
+        temp_dir = tmp_path / "configs"
+        temp_dir.mkdir()
+        config_path = str(temp_dir / "unit_config.toml")
+
+        unit_config = {
+            "material": {
+                "name": "Kevlar 29",
+                "tensile_modulus_gpa": "71.0 GPa",
+                "failure_strain": 0.036,
+                "tensile_strength_gpa": "2.92 GPa",
+                "fiber_density_gcc": "1.44 g/cc",
+                "areal_density_kgm2": "0.47 kg/m^2",
+                "shear_ratio": 0.0004,
+                "crimp_factor": 0.10,
+                "yarn_count": [17, 17],
+            },
+            "grid": {
+                "nx": 10,
+                "ny": 10,
+                "dx": "10 mm",
+                "n_plies": 2,
+                "t_ply": "2.0 mm",
+                "boundary_type": "fixed",
+            },
+            "projectile": {
+                "mass": "0.05 kg",
+                "velocity": ["0 m/s", "0 m/s", "400 m/s"],
+                "position": ["0.0 mm", "0.0 mm", "-5.0 mm"],
+                "blade_width": "20.0 mm",
+                "edge_thickness": "5.0 mm",
+            },
+            "simulation": {
+                "duration": "1.0 ms",
+                "cfl_factor": 0.8,
+                "damping_model": "rayleigh",
+                "damping_coefficient": 0.05,
+                "rayleigh_alpha": 0.0,
+                "rayleigh_beta": "1.0 ns",
+                "auto_cfl": True,
+                "dt": "150.0 ns",
+            },
+        }
+
+        save_config(unit_config, config_path)
+        assert os.path.exists(config_path)
+
+        # Loaded config must have all values normalized to numeric SI base floats
+        loaded = load_config(config_path)
+        
+        assert loaded["material"]["tensile_modulus_gpa"] == 71.0
+        assert loaded["material"]["tensile_strength_gpa"] == 2.92
+        assert loaded["material"]["fiber_density_gcc"] == 1.44
+        assert loaded["material"]["areal_density_kgm2"] == 0.47
+        
+        assert loaded["grid"]["dx"] == pytest.approx(0.01)
+        assert loaded["grid"]["t_ply"] == pytest.approx(0.002)
+        
+        assert loaded["projectile"]["mass"] == 0.05
+        assert loaded["projectile"]["velocity"] == [0.0, 0.0, 400.0]
+        assert loaded["projectile"]["position"] == [0.0, 0.0, -0.005]
+        assert loaded["projectile"]["blade_width"] == pytest.approx(0.02)
+        assert loaded["projectile"]["edge_thickness"] == pytest.approx(0.005)
+        
+        assert loaded["simulation"]["duration"] == pytest.approx(0.001)
+        assert loaded["simulation"]["rayleigh_beta"] == pytest.approx(1e-9)
+        assert loaded["simulation"]["dt"] == pytest.approx(1.5e-7)
+
+    def test_invalid_unit_rejected(self, tmp_path: pytest.TempPathFactory) -> None:
+        """Verify that incompatible units are rejected with ValidationError."""
+        temp_dir = tmp_path / "configs"
+        temp_dir.mkdir()
+        config_path = str(temp_dir / "invalid_unit.toml")
+
+        # tensile_modulus_gpa is specified in mm (incompatible!)
+        invalid_unit_config = {
+            **VALID_CONFIG,
+            "material": {
+                **VALID_CONFIG["material"],
+                "tensile_modulus_gpa": "71.0 mm"
+            }
+        }
+
+        save_config(invalid_unit_config, config_path)
+        with pytest.raises(ValidationError, match="Unknown or incompatible unit"):
+            load_config(config_path)
 
     def test_invalid_config_rejected(self) -> None:
         """Verify that invalid config formats or values are rejected.

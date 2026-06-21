@@ -373,7 +373,7 @@ playback_last_tick = 0.0
 
 last_autosave_time = 0.0
 AUTOSAVE_DIR = ".autosave"
-AUTOSAVE_PATH = f"{AUTOSAVE_DIR}/session.json"
+AUTOSAVE_PATH = f"{AUTOSAVE_DIR}/session.toml"
 
 
 def launch() -> None:
@@ -388,21 +388,28 @@ def launch() -> None:
     # File Menu callbacks
     def _menu_save_config():
         config = config_panel.get_config()
-        save_config(config, "configs/saved_configuration.json")
+        save_config(config, "configs/saved_configuration.toml")
         _show_modal_message(
-            "Config Saved", "Configuration successfully saved to:\nconfigs/saved_configuration.json"
+            "Config Saved", "Configuration successfully saved to:\nconfigs/saved_configuration.toml"
         )
 
     def _menu_load_config():
-        if os.path.exists("configs/saved_configuration.json"):
+        if os.path.exists("configs/saved_configuration.toml"):
+            config = load_config("configs/saved_configuration.toml")
+            config_panel.set_config(config)
+            _show_modal_message(
+                "Config Loaded", "Configuration loaded from:\nconfigs/saved_configuration.toml"
+            )
+        elif os.path.exists("configs/saved_configuration.json"):
+            # Backward compatibility check
             config = load_config("configs/saved_configuration.json")
             config_panel.set_config(config)
             _show_modal_message(
-                "Config Loaded", "Configuration loaded from:\nconfigs/saved_configuration.json"
+                "Config Loaded", "Configuration loaded from legacy JSON:\nconfigs/saved_configuration.json"
             )
         else:
             _show_modal_message(
-                "Error", "No saved configuration file found in 'configs/saved_configuration.json'."
+                "Error", "No saved configuration file found in 'configs/saved_configuration.toml'."
             )
 
     # Main window viewport setup

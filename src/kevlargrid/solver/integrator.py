@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from kevlargrid.solver import backend
 
-
-@backend.jit
 def leapfrog_step(
     positions: np.ndarray,
     velocities: np.ndarray,

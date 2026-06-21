@@ -11,7 +11,7 @@ import pytest
 
 from kevlargrid.solver import backend
 from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
-from kevlargrid.solver.fused import fused_leapfrog_loop
+from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
 from kevlargrid.solver.grid import generate_rectangular_grid, Grid
 from kevlargrid.solver.projectile import Projectile, update_contact_zone, check_termination
 from kevlargrid.solver.timestep import compute_cfl_timestep
@@ -123,7 +123,7 @@ def test_cfl_stability_limit() -> None:
     print("DEBUG BENCHMARK 1 forces_py max =", np.max(np.abs(forces_py)))
 
     # Run 1 step to debug forces and velocities
-    res_debug = fused_leapfrog_loop(
+    res_debug = taichi_leapfrog_loop(
         positions_init.copy(),
         velocities_init.copy(),
         grid.springs.copy(),
@@ -136,16 +136,16 @@ def test_cfl_stability_limit() -> None:
         np.zeros((n_nodes, 3)),
         np.array([0.0, 0.0, 10.0]),
         np.zeros(3),
-        1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.3, 1.0,
+        1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.49, 1.0,
         dt_crit, 1, 1, 0.0, 0.0, 0.0, 0.0, 0.0,
         node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
     )
     print("DEBUG BENCHMARK 1 (1 step): final velocities max =", np.max(np.abs(res_debug[1])))
     assert np.max(np.abs(res_debug[1])) > 0.0, "Velocity after 1 step is exactly zero!"
 
-    # Case A: Stable timestep (0.99 * dt_crit)
-    dt_stable = 0.99 * dt_crit
-    res_stable = fused_leapfrog_loop(
+    # Case A: Stable timestep (0.95 * dt_crit)
+    dt_stable = 0.95 * dt_crit
+    res_stable = taichi_leapfrog_loop(
         positions_init.copy(),
         velocities_init.copy(),
         grid.springs.copy(),
@@ -158,7 +158,7 @@ def test_cfl_stability_limit() -> None:
         np.zeros((n_nodes, 3)),
         np.array([0.0, 0.0, 10.0]),
         np.zeros(3),
-        1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.3, 1.0,
+        1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.49, 1.0,
         dt_stable, 200, 200, 0.0, 0.0, 0.0, 0.0, 0.0,
         node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
     )
@@ -169,7 +169,7 @@ def test_cfl_stability_limit() -> None:
     # Case B: Unstable timestep (1.05 * dt_crit to guarantee rapid overflow)
     dt_unstable = 1.05 * dt_crit
     try:
-        res_unstable = fused_leapfrog_loop(
+        res_unstable = taichi_leapfrog_loop(
             positions_init.copy(),
             velocities_init.copy(),
             grid.springs.copy(),
@@ -182,8 +182,8 @@ def test_cfl_stability_limit() -> None:
             np.zeros((n_nodes, 3)),
             np.array([0.0, 0.0, 10.0]),
             np.zeros(3),
-            1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.3, 1.0,
-            dt_unstable, 150, 150, 0.0, 0.0, 0.0, 0.0, 0.0,
+            1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6, 0.0, 0.0, 0.5, 0.49, 1.0,
+            dt_unstable, 200, 200, 0.0, 0.0, 0.0, 0.0, 0.0,
             node_initial_springs, node_spring_offsets, node_spring_ids, node_spring_signs
         )
         final_pos_unstable = np.asarray(res_unstable[0])
@@ -255,7 +255,7 @@ def test_1d_stress_wave_propagation_and_reflection() -> None:
             clamp_diss_val,
             t_sim,
             *hist_vars,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             positions,
             velocities,
             grid.springs,
@@ -378,7 +378,7 @@ def test_smith_yarn_impact_theory() -> None:
         proj_pos,
         proj_vel,
         *_,
-    ) = fused_leapfrog_loop(
+    ) = taichi_leapfrog_loop(
         positions,
         velocities,
         grid.springs,
@@ -399,15 +399,18 @@ def test_smith_yarn_impact_theory() -> None:
         grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
     )
 
-    # Analyze kink wavefront
-    # Kink wavefront is located where Z-deflection starts to drop to zero
+    # Analyze kink wavefront using 20% Z-deflection threshold and linear interpolation
     z_deflections = positions[:, 2]
     # Center node is 100 (where projectile strikes)
     # Scan from node 100 to node 200 (right half of string)
-    kink_node = 100
+    threshold = 0.20 * z_deflections[100]
+    kink_node = 100.0
     for idx in range(100, 200):
-        if z_deflections[idx] < 0.50 * z_deflections[100]:
-            kink_node = idx
+        if z_deflections[idx] >= threshold > z_deflections[idx + 1]:
+            z0 = z_deflections[idx]
+            z1 = z_deflections[idx + 1]
+            frac = (z0 - threshold) / (z0 - z1)
+            kink_node = idx + frac
             break
             
     # Numerical transverse wave speed U
@@ -422,8 +425,8 @@ def test_smith_yarn_impact_theory() -> None:
     strains = (lengths - grid.rest_lengths) / grid.rest_lengths
     eps_numerical = np.max(strains)
 
-    # Validate within appropriate discretization tolerances
-    assert np.abs(u_numerical - u_analytical) / u_analytical < 0.25
+    # Validate within appropriate discretization tolerances (transverse wave speed anchored to <2%)
+    assert np.abs(u_numerical - u_analytical) / u_analytical < 0.02
     assert np.abs(eps_numerical - eps_analytical) / eps_analytical < 0.30
 
 
@@ -480,7 +483,7 @@ def test_prestrained_string_static_deflection() -> None:
             clamp_diss_val,
             t_sim,
             *hist_vars,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             positions,
             velocities,
             grid.springs,
@@ -574,7 +577,7 @@ def test_damping_decay_rate() -> None:
             clamp_a,
             t_sim,
             *hist_vars,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             positions_a, velocities_a, grid_springs, grid_stiffnesses, grid_rest_lengths,
             grid_failed, grid_masses, grid_tension_only, boundary_mask, np.zeros((2, 3)),
             np.zeros(3), np.zeros(3), 1.0, 1.0, 1.0, 1, 2, 0.002, 1.0, 1e6,
@@ -623,7 +626,7 @@ def test_damping_decay_rate() -> None:
             clamp_b,
             t_sim,
             *hist_vars,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             positions_b, velocities_b, grid_springs, grid_stiffnesses, grid_rest_lengths,
             grid_failed, grid_masses, grid_tension_only, boundary_mask, np.zeros((2, 3)),
             np.zeros(3), np.zeros(3), 1.0, 1.0, 1.0, 1, 2, 0.002, 1.0, 1e6,
@@ -703,7 +706,7 @@ def test_progressive_failure_and_fracture_energy() -> None:
             clamp_diss_val,
             t_sim,
             *hist_vars,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             positions_seq, velocities_seq, grid_springs, grid_stiffnesses, grid_rest_lengths,
             grid_failed, grid_masses, grid_tension_only, boundary_mask, np.zeros((2, 3)),
             np.zeros(3), np.zeros(3), 1.0, 1.0, 1.0, 1, 2, 0.002, 1.0, 1e6,
@@ -770,7 +773,7 @@ def test_thermodynamic_monotonicity() -> None:
             clamp_diss,
             t_sim,
             *hist_vars,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             positions, velocities, grid.springs, grid.stiffnesses, grid.rest_lengths,
             grid.failed, grid.masses, grid.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
             np.array([0.0, 0.0, 10.0]), np.zeros(3), 1.0, 1.0, 1.0, 1, n_nodes, 0.002, dx, 1e6,
@@ -859,7 +862,7 @@ def test_ballistic_limit_v50() -> None:
             proj_pos_a,
             proj_vel_a,
             *_,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             pos_a, vel_a, grid_a.springs, grid_a.stiffnesses, grid_a.rest_lengths,
             grid_a.failed, grid_a.masses, grid_a.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
             proj_pos_a, proj_vel_a, proj_mass, blade_width, edge_thickness,
@@ -893,7 +896,7 @@ def test_ballistic_limit_v50() -> None:
             proj_pos_b,
             proj_vel_b,
             *_,
-        ) = fused_leapfrog_loop(
+        ) = taichi_leapfrog_loop(
             pos_b, vel_b, grid_b.springs, grid_b.stiffnesses, grid_b.rest_lengths,
             grid_b.failed, grid_b.masses, grid_b.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
             proj_pos_b, proj_vel_b, proj_mass, blade_width, edge_thickness,

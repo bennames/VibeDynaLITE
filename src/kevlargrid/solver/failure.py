@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from kevlargrid.solver import backend
 
-
-@backend.jit
 def check_failures(
     strains: np.ndarray,
     failed: np.ndarray,
@@ -39,6 +36,43 @@ def check_failures(
     """
     failed |= strains > epsilon_fail
     return failed
+
+
+def check_progressive_damage(
+    strains: np.ndarray,
+    damage: np.ndarray,
+    failed: np.ndarray,
+    damage_onset_strain: float,
+    failure_strain: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Update irreversible damage and failure arrays based on strain.
+
+    Parameters
+    ----------
+    strains : np.ndarray
+        Current engineering strain per spring, shape ``(n_springs,)``.
+    damage : np.ndarray
+        Irreversible damage per spring, shape ``(n_springs,)``.
+        Modified **in-place** and also returned.
+    failed : np.ndarray
+        Boolean failure flags per spring, shape ``(n_springs,)``.
+        Modified **in-place** and also returned.
+    damage_onset_strain : float
+        Onset strain for stiffness degradation.
+    failure_strain : float
+        Failure strain threshold.
+
+    Returns
+    -------
+    (np.ndarray, np.ndarray)
+        Updated damage and failed arrays.
+    """
+    denom = failure_strain - damage_onset_strain
+    denom_safe = 1.0 if denom == 0.0 else denom
+    d_val = np.minimum(np.maximum((strains - damage_onset_strain) / denom_safe, 0.0), 1.0)
+    np.maximum(damage, d_val, out=damage)
+    failed |= (damage >= 1.0)
+    return damage, failed
 
 
 def get_layer_failure_stats(

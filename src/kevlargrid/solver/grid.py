@@ -43,6 +43,7 @@ class Grid:
     rest_lengths: np.ndarray
     failed: np.ndarray
     tension_only: np.ndarray
+    damage: np.ndarray
     n_nodes: int
     n_springs: int
     initial_spring_counts: np.ndarray
@@ -60,6 +61,7 @@ class Grid:
         failed: np.ndarray,
         tension_only: np.ndarray,
         initial_spring_counts: np.ndarray | None = None,
+        damage: np.ndarray | None = None,
     ) -> None:
         self.nodes = nodes
         self.springs = springs
@@ -68,6 +70,10 @@ class Grid:
         self.rest_lengths = rest_lengths
         self.failed = failed
         self.tension_only = tension_only
+        if damage is None:
+            self.damage = failed.astype(np.float64)
+        else:
+            self.damage = damage
         self.n_nodes = len(nodes)
         self.n_springs = len(springs)
 
