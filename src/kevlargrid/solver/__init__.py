@@ -23,6 +23,7 @@ from kevlargrid.solver.failure import (
     check_failures,
     check_progressive_damage,
     get_layer_failure_stats,
+    scale_failure_strain,
 )
 from kevlargrid.solver.forces import (
     compute_interply_contact_forces,
@@ -64,6 +65,7 @@ __all__ = [
     "get_layer_failure_stats",
     "leapfrog_step",
     "rayleigh_damping",
+    "scale_failure_strain",
     "update_contact_zone",
     "viscous_damping",
 ]

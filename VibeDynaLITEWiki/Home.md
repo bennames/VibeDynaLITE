@@ -1,6 +1,6 @@
 # VibeDynaLITE
 
-**VibeDynaLITE** is an explicit dynamics simulation tool for modeling ballistic projectile impact on woven Kevlar fabric. It represents the fabric as a mass-spring grid where each node corresponds to a yarn crossover point, and springs capture the tensile, shear, and diagonal load paths between them. The solver uses [[Leapfrog Verlet Integration]] to march the system forward in time, with support for multiple [[Compute Backends]] (Numba, JAX, NumPy, Taichi).
+**VibeDynaLITE** is an explicit dynamics simulation tool for modeling ballistic projectile impact on woven Kevlar fabric. It represents the fabric as a mass-spring grid where each node corresponds to a yarn crossover point, and springs capture the tensile, shear, and diagonal load paths between them. The solver uses [[Leapfrog Verlet Integration]] to march the system forward in time, with support for multiple [[Compute Backends]] (Taichi, Numba, NumPy).
 
 The primary use case is predicting the **V50 ballistic limit** — the velocity at which a projectile has a 50% probability of penetrating a given fabric system — and understanding the deformation and failure mechanics of the fabric during impact.
 
@@ -19,7 +19,7 @@ The primary use case is predicting the **V50 ballistic limit** — the velocity 
 
 ## Solver Architecture
 
-- [[Compute Backends]] — Numba, JAX, NumPy, and Taichi solver implementations
+- [[Compute Backends]] — Taichi, Numba, and NumPy solver implementations
 - [[CFL Stability Condition]] — Critical timestep calculation and the CFL safety factor
 - [[Leapfrog Verlet Integration]] — The time integration scheme
 

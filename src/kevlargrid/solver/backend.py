@@ -50,7 +50,9 @@ env_backend = os.environ.get("KEVLARGRID_BACKEND", "").lower()
 if env_backend in ("jax", "numba", "numpy", "taichi"):
     BACKEND = env_backend
 else:
-    if HAS_NUMBA:
+    if HAS_TAICHI:
+        BACKEND = "taichi"
+    elif HAS_NUMBA:
         BACKEND = "numba"
     elif HAS_JAX:
         BACKEND = "jax"

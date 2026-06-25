@@ -9,6 +9,15 @@ from __future__ import annotations
 import numpy as np
 
 
+def scale_failure_strain(epsilon_0: float, dx: float) -> float:
+    """Scale the failure strain using Bazant regularization for fine meshes (dx < 1mm)."""
+    if dx < 0.001:
+        # h_0 = 10mm = 0.01m
+        return epsilon_0 * np.sqrt(0.01 / dx)
+    return epsilon_0
+
+
+
 def check_failures(
     strains: np.ndarray,
     failed: np.ndarray,

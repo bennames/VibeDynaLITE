@@ -73,7 +73,7 @@ The underlying `compute_min_radius` function lives in `solver/boundary.py` and s
 
 When the user clicks "Apply Infinite Boundary Dimensions", the computed $N_x$ is currently **clamped to a maximum of 101 nodes** (line 713 of `config_panel.py`). This was a temporary safeguard to prevent the GUI from freezing on very large grids before the solver's parallel backends were fully optimized.
 
-> **Note:** This clamp is being raised to 501 nodes as the Numba and JAX backends can now handle larger grids efficiently.
+> **Note:** This clamp is being raised to 501 nodes as the Taichi and Numba backends can now handle larger grids efficiently.
 
 If the clamped value is smaller than the physics requires, the simulation will have reflections. The GUI displays $R_{\min}$ so the user can verify whether the applied grid size is adequate.
 

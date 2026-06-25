@@ -18,6 +18,9 @@ All benchmarks are implemented as automated integration tests in [test_physics_b
 | **6. Progressive Failure** | Spring failure & fracture energy | **PASSED** | Accumulated failure energy matches analytical rupture work within 1% | Rupture work matched analytical value within 0.1% | [[Benchmark 6 - Progressive Failure]] |
 | **7. Thermodynamics** | Energy conservation & decay | **PASSED** | System energy conserved ($0.05\%$), physical energy decays monotonically | System energy conserved; physical energy strictly decays | [[Benchmark 7 - Thermodynamic Monotonicity]] |
 | **8. Ballistic Limit ($V_{50}$)** | 17-grain FSP Kevlar 29 case study | **PASSED** | Arrest at 150 m/s, penetration at 400 m/s | 150 m/s fully arrested. 400 m/s penetrated (exit vel > 50 m/s) | [[Benchmark 8 - Ballistic Limit V50]] |
+| **9. Free-Flight Energy** | Projectile energy in vacuum | **PASSED** | Total linear + rotational kinetic energy conserved | Conserved within machine precision, $0.00\%$ drift | [[Benchmark 9 - Free-Flying Projectile Energy Conservation]] |
+| **10. Oblique Tumbling** | Eccentric torque and spin | **PASSED** | Off-center fabric contact forces generate torque and tumbling spin | Oblilque contact initiated tumbling rotation ($>1e-3$ rad/s) | [[Benchmark 10 - Oblique Impact Tumbling Dynamics]] |
+| **11. Mesh Convergence** | regularized refinement stability | **PASSED** | Ballistic limit/residual velocity converges within 15% under grid sizing | Residual velocity converged under dx = 10, 5, and 2.5 mm | [[Benchmark 11 - Mesh Refinement V50 Convergence]] |
 
 ---
 
@@ -26,7 +29,7 @@ All benchmarks are implemented as automated integration tests in [test_physics_b
 To run all physics-based benchmarks on your local system, execute the following command in the project root directory:
 
 ```bash
-.venv/bin/pytest tests/integration/test_physics_benchmarks.py -v
+.venv/bin/pytest tests/integration/ -v
 ```
 
 This runs the automated Pytest integration suite, exercising the compiled JIT explicit dynamics loops and asserting compliance with all theoretical benchmarks.

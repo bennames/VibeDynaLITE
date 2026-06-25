@@ -27,6 +27,7 @@ from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
 from kevlargrid.solver import (
     generate_rectangular_grid,
+    Projectile,
 )
 from kevlargrid.utils import get_logger
 
@@ -68,6 +69,9 @@ class SimRunner:
         self.grid_nodes = np.zeros((0, 3))
         self.grid_failed = np.zeros(0, dtype=bool)
         self.projectile_pos = np.zeros(3)
+        self.projectile_vel = np.zeros(3)
+        self.projectile_quat = np.array([1.0, 0.0, 0.0, 0.0])
+        self.projectile_omega = np.zeros(3)
 
     def start(self, config: dict) -> None:
         """Launch the solver on a background worker thread."""
@@ -128,6 +132,9 @@ class SimRunner:
             self.grid_nodes = np.zeros((0, 3))
             self.grid_failed = np.zeros(0, dtype=bool)
             self.projectile_pos = np.zeros(3)
+            self.projectile_vel = np.zeros(3)
+            self.projectile_quat = np.array([1.0, 0.0, 0.0, 0.0])
+            self.projectile_omega = np.zeros(3)
 
     def get_telemetry(self) -> dict[str, Any]:
         """Fetch current thread-safe simulation telemetry data."""
@@ -151,6 +158,9 @@ class SimRunner:
                 "grid_nodes": self.grid_nodes.copy(),
                 "grid_failed": self.grid_failed.copy(),
                 "projectile_pos": self.projectile_pos.copy(),
+                "projectile_vel": self.projectile_vel.copy(),
+                "projectile_quat": self.projectile_quat.copy(),
+                "projectile_omega": self.projectile_omega.copy(),
                 "results_report": self.results_report.copy(),
             }
 
@@ -256,11 +266,15 @@ class SimRunner:
                         self.grid_nodes = msg["positions"]
                         self.grid_failed = msg["failed"]
                         self.projectile_pos = msg["projectile_pos"]
+                        self.projectile_vel = msg.get("projectile_vel", np.zeros(3))
+                        self.projectile_quat = msg.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
+                        self.projectile_omega = msg.get("projectile_omega", np.zeros(3))
 
                         # Append each frame in chunk history to self.history
                         hist_pos = msg["hist_pos"]
                         hist_failed = msg["hist_failed"]
                         hist_proj_pos = msg["hist_proj_pos"]
+                        hist_proj_quat = msg.get("hist_proj_quat", None)
                         hist_time = msg["hist_time"]
                         hist_ke = msg["hist_ke"]
                         hist_se = msg["hist_se"]
@@ -303,6 +317,9 @@ class SimRunner:
                                     "nodes": hist_pos[idx],
                                     "failed": hist_failed[idx],
                                     "projectile_pos": hist_proj_pos[idx],
+                                    "projectile_quat": hist_proj_quat[idx] if hist_proj_quat is not None else np.array([1.0, 0.0, 0.0, 0.0]),
+                                    "projectile_vel": self.projectile_vel.copy(),
+                                    "projectile_omega": self.projectile_omega.copy(),
                                     "ke": float(hist_ke[idx]),
                                     "se": float(hist_se[idx]),
                                     "damped": float(damp_val),
@@ -527,6 +544,18 @@ def launch() -> None:
                 np.array(cfg["projectile"]["position"], dtype=np.float64),
                 cfg["projectile"]["blade_width"],
                 cfg["projectile"]["edge_thickness"],
+                quat=np.array(cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+                shape_type=cfg["projectile"].get("shape_type", "box"),
+                radius=cfg["projectile"].get("radius", 0.005),
+                length=cfg["projectile"].get("length", 0.01),
+                edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+                ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+                span=cfg["projectile"].get("span", 0.05),
+                root_chord=cfg["projectile"].get("root_chord", 0.01),
+                tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+                twist=cfg["projectile"].get("twist", 15.0),
+                thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+                tip_radius=cfg["projectile"].get("tip_radius", 0.002),
             )
 
             # Reset plots
@@ -584,6 +613,18 @@ def launch() -> None:
             np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
             reset_cfg["projectile"]["blade_width"],
             reset_cfg["projectile"]["edge_thickness"],
+            quat=np.array(reset_cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+            shape_type=reset_cfg["projectile"].get("shape_type", "box"),
+            radius=reset_cfg["projectile"].get("radius", 0.005),
+            length=reset_cfg["projectile"].get("length", 0.01),
+            edge_radius=reset_cfg["projectile"].get("edge_radius", 0.0),
+            ogive_multiplier=reset_cfg["projectile"].get("ogive_multiplier", 2.0),
+            span=reset_cfg["projectile"].get("span", 0.05),
+            root_chord=reset_cfg["projectile"].get("root_chord", 0.01),
+            tip_chord=reset_cfg["projectile"].get("tip_chord", 0.005),
+            twist=reset_cfg["projectile"].get("twist", 15.0),
+            thickness_ratio=reset_cfg["projectile"].get("thickness_ratio", 12.0),
+            tip_radius=reset_cfg["projectile"].get("tip_radius", 0.002),
         )
 
     # Bind controls callbacks
@@ -701,6 +742,18 @@ def launch() -> None:
         np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
         initial_cfg["projectile"]["blade_width"],
         initial_cfg["projectile"]["edge_thickness"],
+        quat=np.array(initial_cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+        shape_type=initial_cfg["projectile"].get("shape_type", "box"),
+        radius=initial_cfg["projectile"].get("radius", 0.005),
+        length=initial_cfg["projectile"].get("length", 0.01),
+        edge_radius=initial_cfg["projectile"].get("edge_radius", 0.0),
+        ogive_multiplier=initial_cfg["projectile"].get("ogive_multiplier", 2.0),
+        span=initial_cfg["projectile"].get("span", 0.05),
+        root_chord=initial_cfg["projectile"].get("root_chord", 0.01),
+        tip_chord=initial_cfg["projectile"].get("tip_chord", 0.005),
+        twist=initial_cfg["projectile"].get("twist", 15.0),
+        thickness_ratio=initial_cfg["projectile"].get("thickness_ratio", 12.0),
+        tip_radius=initial_cfg["projectile"].get("tip_radius", 0.002),
     )
 
     last_grid_key = None
@@ -733,6 +786,17 @@ def launch() -> None:
                 cfg["projectile"]["blade_width"],
                 cfg["projectile"]["edge_thickness"],
                 tuple(cfg["projectile"]["position"]),
+                cfg["projectile"].get("shape_type", "box"),
+                cfg["projectile"].get("radius", 0.005),
+                cfg["projectile"].get("length", 0.01),
+                cfg["projectile"].get("edge_radius", 0.0),
+                cfg["projectile"].get("ogive_multiplier", 2.0),
+                cfg["projectile"].get("span", 0.05),
+                cfg["projectile"].get("root_chord", 0.01),
+                cfg["projectile"].get("tip_chord", 0.005),
+                cfg["projectile"].get("twist", 15.0),
+                cfg["projectile"].get("thickness_ratio", 12.0),
+                cfg["projectile"].get("tip_radius", 0.002),
             )
             if current_grid_key != last_grid_key:
                 last_grid_key = current_grid_key
@@ -754,9 +818,57 @@ def launch() -> None:
                         np.array(cfg["projectile"]["position"], dtype=np.float64),
                         cfg["projectile"]["blade_width"],
                         cfg["projectile"]["edge_thickness"],
+                        quat=np.array(cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+                        shape_type=cfg["projectile"].get("shape_type", "box"),
+                        radius=cfg["projectile"].get("radius", 0.005),
+                        length=cfg["projectile"].get("length", 0.01),
+                        edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+                        ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+                        span=cfg["projectile"].get("span", 0.05),
+                        root_chord=cfg["projectile"].get("root_chord", 0.01),
+                        tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+                        twist=cfg["projectile"].get("twist", 15.0),
+                        thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+                        tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                     )
-                except Exception:
-                    pass
+
+                    # Compute static mass properties on parameter update
+                    proj_temp = Projectile(
+                        mass=cfg["projectile"]["mass"],
+                        velocity=cfg["projectile"]["velocity"],
+                        position=cfg["projectile"]["position"],
+                        shape_type=cfg["projectile"].get("shape_type", "box"),
+                        blade_width=cfg["projectile"]["blade_width"],
+                        edge_thickness=cfg["projectile"]["edge_thickness"],
+                        radius=cfg["projectile"].get("radius", 0.005),
+                        length=cfg["projectile"].get("length", 0.01),
+                        edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+                        ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+                        span=cfg["projectile"].get("span", 0.05),
+                        root_chord=cfg["projectile"].get("root_chord", 0.01),
+                        tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+                        twist=cfg["projectile"].get("twist", 15.0),
+                        thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+                        tip_radius=cfg["projectile"].get("tip_radius", 0.002),
+                        omega=cfg["projectile"].get("omega", None),
+                        quat=cfg["projectile"].get("quat", None),
+                    )
+
+                    if dpg.does_item_exist("dash_val_proj_shape"):
+                        dpg.set_value("dash_val_proj_shape", proj_temp.shape_type.capitalize())
+                    if dpg.does_item_exist("dash_val_proj_vol"):
+                        dpg.set_value("dash_val_proj_vol", f"{proj_temp.volume:.3e} m^3")
+                    if dpg.does_item_exist("dash_val_proj_inertia"):
+                        dpg.set_value("dash_val_proj_inertia", f"[{proj_temp.inertia[0,0]:.3e}, {proj_temp.inertia[1,1]:.3e}, {proj_temp.inertia[2,2]:.3e}] kg*m^2")
+                    if dpg.does_item_exist("dash_val_proj_vel"):
+                        dpg.set_value("dash_val_proj_vel", f"[{proj_temp.vel[0]:.2f}, {proj_temp.vel[1]:.2f}, {proj_temp.vel[2]:.2f}] m/s")
+                    if dpg.does_item_exist("dash_val_proj_omega"):
+                        dpg.set_value("dash_val_proj_omega", f"[{proj_temp.omega[0]:.2f}, {proj_temp.omega[1]:.2f}, {proj_temp.omega[2]:.2f}] rad/s")
+                    if dpg.does_item_exist("dash_val_proj_quat"):
+                        dpg.set_value("dash_val_proj_quat", f"[{proj_temp.quat[0]:.4f}, {proj_temp.quat[1]:.4f}, {proj_temp.quat[2]:.4f}, {proj_temp.quat[3]:.4f}]")
+
+                except Exception as e:
+                    logger.error(f"Idle preview generation failed: {e}")
 
         if state == "running":
             controls.update_telemetry(
@@ -769,6 +881,17 @@ def launch() -> None:
                 ke=tel["ke"],
                 se=tel["se"],
             )
+            # Update results dashboard projectile kinematics live
+            vel = tel.get("projectile_vel", np.zeros(3))
+            omega = tel.get("projectile_omega", np.zeros(3))
+            quat = tel.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
+            if dpg.does_item_exist("dash_val_proj_vel"):
+                dpg.set_value("dash_val_proj_vel", f"[{vel[0]:.2f}, {vel[1]:.2f}, {vel[2]:.2f}] m/s")
+            if dpg.does_item_exist("dash_val_proj_omega"):
+                dpg.set_value("dash_val_proj_omega", f"[{omega[0]:.2f}, {omega[1]:.2f}, {omega[2]:.2f}] rad/s")
+            if dpg.does_item_exist("dash_val_proj_quat"):
+                dpg.set_value("dash_val_proj_quat", f"[{quat[0]:.4f}, {quat[1]:.4f}, {quat[2]:.4f}, {quat[3]:.4f}]")
+
             # Live Plotting Traces Update S6.5.5
             strain_plot.update(tel["elapsed_time"], tel["peak_strain"])
             energy_plot.update(
@@ -798,6 +921,18 @@ def launch() -> None:
                     tel["projectile_pos"],
                     cfg["projectile"]["blade_width"],
                     cfg["projectile"]["edge_thickness"],
+                    quat=tel.get("projectile_quat", None),
+                    shape_type=cfg["projectile"].get("shape_type", "box"),
+                    radius=cfg["projectile"].get("radius", 0.005),
+                    length=cfg["projectile"].get("length", 0.01),
+                    edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+                    ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+                    span=cfg["projectile"].get("span", 0.05),
+                    root_chord=cfg["projectile"].get("root_chord", 0.01),
+                    tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+                    twist=cfg["projectile"].get("twist", 15.0),
+                    thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+                    tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                 )
 
         elif state == "completed":
@@ -917,6 +1052,18 @@ def _render_playback_frame(frame_idx: int) -> None:
         frame["projectile_pos"],
         cfg["projectile"]["blade_width"],
         cfg["projectile"]["edge_thickness"],
+        quat=frame.get("projectile_quat", None),
+        shape_type=cfg["projectile"].get("shape_type", "box"),
+        radius=cfg["projectile"].get("radius", 0.005),
+        length=cfg["projectile"].get("length", 0.01),
+        edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+        ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+        span=cfg["projectile"].get("span", 0.05),
+        root_chord=cfg["projectile"].get("root_chord", 0.01),
+        tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+        twist=cfg["projectile"].get("twist", 15.0),
+        thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+        tip_radius=cfg["projectile"].get("tip_radius", 0.002),
     )
 
     # 2. Update telemetry text values on panel controls
@@ -930,6 +1077,17 @@ def _render_playback_frame(frame_idx: int) -> None:
         ke=frame["ke"],
         se=frame["se"],
     )
+
+    # Update dashboard table live with projectile kinematics
+    vel = frame.get("projectile_vel", np.zeros(3))
+    omega = frame.get("projectile_omega", np.zeros(3))
+    quat = frame.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
+    if dpg.does_item_exist("dash_val_proj_vel"):
+        dpg.set_value("dash_val_proj_vel", f"[{vel[0]:.2f}, {vel[1]:.2f}, {vel[2]:.2f}] m/s")
+    if dpg.does_item_exist("dash_val_proj_omega"):
+        dpg.set_value("dash_val_proj_omega", f"[{omega[0]:.2f}, {omega[1]:.2f}, {omega[2]:.2f}] rad/s")
+    if dpg.does_item_exist("dash_val_proj_quat"):
+        dpg.set_value("dash_val_proj_quat", f"[{quat[0]:.4f}, {quat[1]:.4f}, {quat[2]:.4f}, {quat[3]:.4f}]")
 
     # 3. Update plot timeline markers S6.5.4
     strain_plot.set_playback_marker(frame["time"], frame.get("peak_strain", 0.0))

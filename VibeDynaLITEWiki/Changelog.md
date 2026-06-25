@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 5: 3D Analytical SDF Contact & 6-DOF Kinematics
+
+### Added
+- **3D Analytical SDF Contact Solver**: Added support for sphere, cylinder (with edge rounding), bullet (tangent ogive with cylindrical body), and propeller blade (twisted, tapered span with rounded tip) shapes via analytical Signed Distance Fields (SDFs).
+- **6-DOF Rigid Body Kinematics**: Formulated full translational and rotational dynamics using quaternions for orientation tracking, assuming uniform density to calculate volume, mass, and principal moments of inertia.
+- **Node-to-Surface Penalty contact**: Integrated contact force calculation using the JIT compiler loops under Numba and Taichi backends.
+- **Bazant Strain Regularization**: Resolved mesh dependency issues at small grid spacing ($dx < 1.0\text{ mm}$) using regularized failure strain $\epsilon_{\text{fail}} = \epsilon_0 \sqrt{h_0 / dx}$.
+- **6-DOF Projectile Telemetry Dashboard**: Created a dedicated telescoping summary table detailing calculated volume, diagonal inertia tensors, velocities, angular velocities, and orientation quaternions.
+- **Dynamic shape config panel**: Implemented combo box shape dropdown and shape-specific input fields (Sphere radius, Cylinder edge-radius, Bullet ogive, Propeller twist/span/tip-radius).
+- **Physics Benchmarks 9, 10, 11**: Added free flight energy conservation validation, oblique impact tumbling dynamics, and mesh refinement V50 convergence benchmarks, with associated unit/integration tests and wiki documentation.
+
+---
+
 ## [Unreleased] — Sprint 7.14: Dynamic CFL Timestep & Thermodynamically Consistent Energy Accounting
 
 ### Added

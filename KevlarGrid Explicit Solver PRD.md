@@ -11,7 +11,7 @@
 ## **2\. Technical Stack & Performance Targets**
 
 * **Core Logic:** Python with numpy for vectorized array operations.  
-* **Hardware Acceleration:** Leverage libraries like jax, numba (JIT compilation), or cupy to ensure the explicit time-stepping executes rapidly on modern hardware (Apple Silicon or discrete GPUs).  
+* **Hardware Acceleration:** Leverage libraries like taichi (GPU parallelization) or numba (JIT compilation) to ensure the explicit time-stepping executes rapidly on modern hardware (Apple Silicon or discrete GPUs).  
 * **GUI Framework:** The tool must feature a clean, user-friendly desktop GUI. Suggest using CustomTkinter, PyQt, or DearPyGui for a responsive local application.  
 * **Visualization:** Integrate 3D surface plots and animations (e.g., using pyvista, matplotlib, or vispy embedded in the GUI) to visualize wave propagation and element failure.
 

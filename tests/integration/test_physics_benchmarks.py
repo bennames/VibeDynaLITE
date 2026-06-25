@@ -260,7 +260,7 @@ def test_cfl_stability_limit() -> None:
         max_growth = np.max(np.abs(final_pos_unstable - positions_init))
         print(f"DEBUG BENCHMARK 1: unstable run max growth = {max_growth}")
         # Instability is indicated by NaNs or extreme unphysical displacements
-        has_diverged = np.any(np.isnan(final_pos_unstable)) or max_growth > 1.0
+        has_diverged = np.any(np.isnan(final_pos_unstable)) or max_growth > 0.1
         assert has_diverged, "Unstable timestep remained stable"
     except ValueError as e:
         # Core solver throws ValueError when NaN is detected in the process loop

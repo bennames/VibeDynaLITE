@@ -91,8 +91,21 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             mass=proj_cfg["mass"],
             velocity=proj_cfg["velocity"],
             position=proj_cfg["position"],
-            blade_width=proj_cfg["blade_width"],
-            edge_thickness=proj_cfg["edge_thickness"],
+            shape_type=proj_cfg.get("shape_type", "box"),
+            blade_width=proj_cfg.get("blade_width", 0.02),
+            edge_thickness=proj_cfg.get("edge_thickness", 0.005),
+            radius=proj_cfg.get("radius", 0.005),
+            length=proj_cfg.get("length", 0.01),
+            edge_radius=proj_cfg.get("edge_radius", 0.0),
+            ogive_multiplier=proj_cfg.get("ogive_multiplier", 2.0),
+            span=proj_cfg.get("span", 0.05),
+            root_chord=proj_cfg.get("root_chord", 0.01),
+            tip_chord=proj_cfg.get("tip_chord", 0.005),
+            twist=proj_cfg.get("twist", 15.0),
+            thickness_ratio=proj_cfg.get("thickness_ratio", 12.0),
+            tip_radius=proj_cfg.get("tip_radius", 0.002),
+            omega=proj_cfg.get("omega", None),
+            quat=proj_cfg.get("quat", None),
         )
 
         # Determine strike direction based on initial velocity Z-component
@@ -117,6 +130,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         damp_dissipated = 0.0
         failure_dissipated = 0.0
         clamp_dissipated = 0.0
+        
+        proj_peak_deceleration = np.zeros(1, dtype=np.float64)
 
         # Send configuration metadata back to GUI process
         queue.put(
@@ -156,10 +171,39 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             if current_steps <= 0:
                 break
 
+            # Allocate history array for orientation
+            m_frames = current_steps // save_interval
+            hist_proj_quat = np.zeros((m_frames, 4), dtype=np.float64)
+
+            # Extra solver arguments for 6-DOF and shape
+            extra_kwargs = {
+                "grid_damage": grid.damage,
+                "proj_quat": proj.quat,
+                "proj_omega": proj.omega,
+                "proj_shape_type": proj.shape_type,
+                "proj_radius": proj.radius,
+                "proj_length": proj.length,
+                "proj_edge_radius": proj.edge_radius,
+                "proj_ogive_multiplier": proj.ogive_multiplier,
+                "proj_span": proj.span,
+                "proj_root_chord": proj.root_chord,
+                "proj_tip_chord": proj.tip_chord,
+                "proj_twist": proj.twist,
+                "proj_thickness_ratio": proj.thickness_ratio,
+                "proj_tip_radius": proj.tip_radius,
+                "proj_z_com": getattr(proj, "z_com", 0.0),
+                "proj_y_com": getattr(proj, "y_com", 0.0),
+                "proj_c_damping": proj_cfg.get("c_damping", 0.0),
+                "proj_inertia_inv": proj.inertia_inv,
+                "hist_proj_quat": hist_proj_quat,
+            }
+
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")
             if solver_backend == "numba":
                 from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
+                
+                extra_kwargs["proj_peak_deceleration"] = proj_peak_deceleration
 
                 (
                     positions,
@@ -218,6 +262,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     grid.node_spring_signs,
                     use_viscous=(damping_model == "viscous"),
                     cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
+                    **extra_kwargs,
                 )
                 hist_peak_strain = np.zeros(len(hist_time))
             else:
@@ -281,7 +326,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     grid.node_spring_signs,
                     use_viscous=(damping_model == "viscous"),
                     cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
-                    grid_damage=grid.damage,
+                    **extra_kwargs,
                 )
 
             # Check for numerical instability (NaN/inf values)
@@ -311,6 +356,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "positions": np.asarray(positions).copy(),
                     "failed": np.asarray(grid.failed).copy(),
                     "projectile_pos": np.asarray(proj.position).copy(),
+                    "projectile_vel": np.asarray(proj.velocity).copy(),
+                    "projectile_quat": np.asarray(proj.quat).copy(),
+                    "projectile_omega": np.asarray(proj.omega).copy(),
                     "ke": float(ke),
                     "se": float(se),
                     "damp_dissipated": float(damp_dissipated),
@@ -322,6 +370,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "hist_pos": hist_pos_np,
                     "hist_failed": hist_failed_np,
                     "hist_proj_pos": np.asarray(hist_proj_pos),
+                    "hist_proj_quat": hist_proj_quat.copy(),
                     "hist_time": np.asarray(hist_time),
                     "hist_ke": np.asarray(hist_ke),
                     "hist_se": np.asarray(hist_se),
@@ -346,11 +395,36 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 break
 
         # Calculate final reports
-        # Compute final velocity and kinetic energy
         final_velocity_z = float(proj.velocity[2])
-        e_loss_pct = 100.0 * (
-            1.0 - (proj_ke / (0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)))
-        )
+        is_arrested = (reason == "arrest")
+        is_penetrated = (reason == "penetration")
+
+        initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)
+        final_ke = 0.5 * proj.mass * np.sum(proj.velocity ** 2)
+        energy_eff = float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
+
+        # Retrieve peak deceleration Gs
+        if solver_backend == "numba":
+            peak_decel = float(proj_peak_deceleration[0])
+        else:
+            import kevlargrid.solver.taichi_solver as taichi_solver
+            peak_decel = float(taichi_solver._SOLVER_CACHE.peak_deceleration_g[None]) if taichi_solver._SOLVER_CACHE is not None else 0.0
+
+        # Find closest node in-plane in the base layer to identify center node per layer
+        base_nodes = positions[:n_nodes_per_layer]
+        dists_in_plane = (base_nodes[:, 0] - proj_cfg["position"][0]) ** 2 + (
+            base_nodes[:, 1] - proj_cfg["position"][1]
+        ) ** 2
+        center_idx = int(np.argmin(dists_in_plane))
+
+        max_layer_perf = -1
+        for l in range(n_layers):
+            c = center_idx + l * n_nodes_per_layer
+            start_sp = grid.node_spring_offsets[c]
+            end_sp = grid.node_spring_offsets[c + 1]
+            sp_ids = grid.node_spring_ids[start_sp:end_sp]
+            if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
+                max_layer_perf = l
 
         diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
         lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
@@ -359,9 +433,23 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         final_peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
 
         report = {
-            "penetrated": bool(final_velocity_z < -0.1 and proj.position[2] < 0.0),
+            "arrested": bool(is_arrested),
+            "peak_deceleration_g": float(peak_decel),
+            "yarn_rupture_percentage": float(np.sum(grid.failed) / len(grid.failed) * 100.0) if len(grid.failed) > 0 else 0.0,
+            "residual_velocity_ms": float(np.linalg.norm(proj.velocity)) if is_penetrated else 0.0,
+            "energy_dissipation_efficiency": float(energy_eff),
+            "max_layer_perforated": int(max_layer_perf),
+            # Detailed 6-DOF projectile metrics
+            "projectile_shape": str(proj.shape_type),
+            "projectile_volume": float(proj.volume),
+            "projectile_inertia": [float(proj.inertia[0, 0]), float(proj.inertia[1, 1]), float(proj.inertia[2, 2])],
+            "projectile_velocity_final": [float(proj.velocity[0]), float(proj.velocity[1]), float(proj.velocity[2])],
+            "projectile_omega_final": [float(proj.omega[0]), float(proj.omega[1]), float(proj.omega[2])],
+            "projectile_quat_final": [float(proj.quat[0]), float(proj.quat[1]), float(proj.quat[2]), float(proj.quat[3])],
+            # Keep legacy keys for any other potential backward compatibility
+            "penetrated": bool(is_penetrated),
             "final_velocity": float(np.linalg.norm(proj.velocity)),
-            "energy_loss_pct": float(e_loss_pct),
+            "energy_loss_pct": float(energy_eff * 100.0),
             "failed_springs": int(np.sum(grid.failed)),
             "peak_strain": final_peak_strain,
             "damp_dissipated": float(damp_dissipated),

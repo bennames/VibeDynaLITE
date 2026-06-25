@@ -72,6 +72,20 @@ class ConfigPanel:
         self.proj_pz = "proj_pz"
         self.proj_width = "proj_width"
         self.proj_thickness = "proj_thickness"
+        self.proj_shape = "proj_shape"
+        self.proj_radius = "proj_radius"
+        self.proj_radius_cyl = "proj_radius_cyl"
+        self.proj_length_cyl = "proj_length_cyl"
+        self.proj_edge_radius = "proj_edge_radius"
+        self.proj_radius_bullet = "proj_radius_bullet"
+        self.proj_length_bullet = "proj_length_bullet"
+        self.proj_ogive_multiplier = "proj_ogive_multiplier"
+        self.proj_span = "proj_span"
+        self.proj_root_chord = "proj_root_chord"
+        self.proj_tip_chord = "proj_tip_chord"
+        self.proj_twist = "proj_twist"
+        self.proj_thickness_ratio = "proj_thickness_ratio"
+        self.proj_tip_radius = "proj_tip_radius"
         self.proj_ke_display = "proj_ke_display"
 
         # Simulation section tags
@@ -126,7 +140,7 @@ class ConfigPanel:
                         dpg.add_input_float(
                             tag=self.mat_strain, default_value=0.036, enabled=False, width=-1
                         )
-                    with dpg.table_row():
+                    with dpg.table_row(show=False):
                         dpg.add_text("Strength (GPa)")
                         dpg.add_input_float(
                             tag=self.mat_strength, default_value=2.92, enabled=False, width=-1
@@ -146,7 +160,7 @@ class ConfigPanel:
                         dpg.add_input_float(
                             tag=self.mat_shear_ratio, default_value=0.0004, enabled=False, width=-1
                         )
-                    with dpg.table_row():
+                    with dpg.table_row(show=False):
                         dpg.add_text("Crimp Factor")
                         dpg.add_input_float(
                             tag=self.mat_crimp, default_value=0.10, enabled=False, width=-1
@@ -160,16 +174,17 @@ class ConfigPanel:
                             format="%.2f",
                             width=-1,
                         )
-                    with dpg.table_row():
+                    with dpg.table_row(show=False):
                         dpg.add_text("Yarn X (Warp Count/in)")
                         dpg.add_input_int(
                             tag=self.mat_yarn_count_x, default_value=17, enabled=False, width=-1
                         )
-                    with dpg.table_row():
+                    with dpg.table_row(show=False):
                         dpg.add_text("Yarn Y (Weft Count/in)")
                         dpg.add_input_int(
                             tag=self.mat_yarn_count_y, default_value=17, enabled=False, width=-1
                         )
+
 
             # --- GRID GEOMETRY SECTION ---
             with dpg.collapsing_header(label="Grid Geometry & Boundaries", default_open=True):
@@ -344,11 +359,89 @@ class ConfigPanel:
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
                     dpg.add_table_column()
                     with dpg.table_row():
-                        dpg.add_text("Blade Width (m)")
-                        dpg.add_input_float(tag=self.proj_width, default_value=0.02, width=-1)
-                    with dpg.table_row():
-                        dpg.add_text("Edge Thickness (m)")
-                        dpg.add_input_float(tag=self.proj_thickness, default_value=0.005, width=-1)
+                        dpg.add_text("Shape Type")
+                        dpg.add_combo(
+                            items=["Box", "Sphere", "Cylinder", "Bullet", "Propeller"],
+                            tag=self.proj_shape,
+                            default_value="Box",
+                            callback=self._on_projectile_shape_change,
+                            width=-1,
+                        )
+
+                # Groups for shape-specific parameters
+                with dpg.group(tag="proj_box_group", show=True):
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Blade Width (m)")
+                            dpg.add_input_float(tag=self.proj_width, default_value=0.02, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Edge Thickness (m)")
+                            dpg.add_input_float(tag=self.proj_thickness, default_value=0.005, width=-1)
+
+                with dpg.group(tag="proj_sphere_group", show=False):
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Radius (m)")
+                            dpg.add_input_float(tag=self.proj_radius, default_value=0.005, width=-1)
+
+                with dpg.group(tag="proj_cylinder_group", show=False):
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Radius (m)")
+                            dpg.add_input_float(tag=self.proj_radius_cyl, default_value=0.005, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Length (m)")
+                            dpg.add_input_float(tag=self.proj_length_cyl, default_value=0.01, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Edge Radius (m)")
+                            dpg.add_input_float(tag=self.proj_edge_radius, default_value=0.0, width=-1)
+
+                with dpg.group(tag="proj_bullet_group", show=False):
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Radius (m)")
+                            dpg.add_input_float(tag=self.proj_radius_bullet, default_value=0.005, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Length (m)")
+                            dpg.add_input_float(tag=self.proj_length_bullet, default_value=0.01, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Ogive Multiplier")
+                            dpg.add_input_float(tag=self.proj_ogive_multiplier, default_value=2.0, width=-1)
+
+                with dpg.group(tag="proj_propeller_group", show=False):
+                    with dpg.table(header_row=False):
+                        dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                        dpg.add_table_column()
+                        with dpg.table_row():
+                            dpg.add_text("Span (m)")
+                            dpg.add_input_float(tag=self.proj_span, default_value=0.05, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Root Chord (m)")
+                            dpg.add_input_float(tag=self.proj_root_chord, default_value=0.01, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Tip Chord (m)")
+                            dpg.add_input_float(tag=self.proj_tip_chord, default_value=0.005, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Twist (deg)")
+                            dpg.add_input_float(tag=self.proj_twist, default_value=15.0, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Thickness Ratio (%)")
+                            dpg.add_input_float(tag=self.proj_thickness_ratio, default_value=12.0, width=-1)
+                        with dpg.table_row():
+                            dpg.add_text("Tip Radius (m)")
+                            dpg.add_input_float(tag=self.proj_tip_radius, default_value=0.002, width=-1)
+
+                with dpg.table(header_row=False):
+                    dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
+                    dpg.add_table_column()
                     with dpg.table_row():
                         dpg.add_text("KE (Joules)")
                         dpg.add_input_float(
@@ -584,6 +677,17 @@ class ConfigPanel:
         ke = 0.5 * mass * v_sq
         dpg.set_value(self.proj_ke_display, ke)
 
+    def _on_projectile_shape_change(self, sender: str | None, app_data: str | None) -> None:
+        """Triggered when the projectile shape selection combo is changed."""
+        if dpg is None:
+            return
+        shape = str(app_data).lower()
+        dpg.configure_item("proj_box_group", show=shape == "box")
+        dpg.configure_item("proj_sphere_group", show=shape == "sphere")
+        dpg.configure_item("proj_cylinder_group", show=shape == "cylinder")
+        dpg.configure_item("proj_bullet_group", show=shape == "bullet")
+        dpg.configure_item("proj_propeller_group", show=shape == "propeller")
+
     def _add_tooltips(self) -> None:
         """Add documentation tooltips to configuration panel inputs."""
         if dpg is None:  # pragma: no cover
@@ -788,8 +892,20 @@ class ConfigPanel:
                     dpg.get_value(self.proj_py),
                     dpg.get_value(self.proj_pz),
                 ],
+                "shape": dpg.get_value(self.proj_shape).lower(),
+                "shape_type": dpg.get_value(self.proj_shape).lower(),
                 "blade_width": dpg.get_value(self.proj_width),
                 "edge_thickness": dpg.get_value(self.proj_thickness),
+                "radius": dpg.get_value(self.proj_radius_cyl) if dpg.get_value(self.proj_shape).lower() == "cylinder" else (dpg.get_value(self.proj_radius_bullet) if dpg.get_value(self.proj_shape).lower() == "bullet" else dpg.get_value(self.proj_radius)),
+                "length": dpg.get_value(self.proj_length_cyl) if dpg.get_value(self.proj_shape).lower() == "cylinder" else (dpg.get_value(self.proj_length_bullet) if dpg.get_value(self.proj_shape).lower() == "bullet" else 0.01),
+                "edge_radius": dpg.get_value(self.proj_edge_radius),
+                "ogive_multiplier": dpg.get_value(self.proj_ogive_multiplier),
+                "span": dpg.get_value(self.proj_span),
+                "root_chord": dpg.get_value(self.proj_root_chord),
+                "tip_chord": dpg.get_value(self.proj_tip_chord),
+                "twist": dpg.get_value(self.proj_twist),
+                "thickness_ratio": dpg.get_value(self.proj_thickness_ratio),
+                "tip_radius": dpg.get_value(self.proj_tip_radius),
             },
             "simulation": {
                 "duration": dpg.get_value(self.sim_duration),
@@ -879,8 +995,39 @@ class ConfigPanel:
         dpg.set_value(self.proj_py, pos[1])
         dpg.set_value(self.proj_pz, pos[2])
 
+        shape = proj.get("shape", proj.get("shape_type", "box")).lower()
+        shape_cased = "Box"
+        if shape == "sphere":
+            shape_cased = "Sphere"
+        elif shape == "cylinder":
+            shape_cased = "Cylinder"
+        elif shape == "bullet":
+            shape_cased = "Bullet"
+        elif shape == "propeller":
+            shape_cased = "Propeller"
+            
+        dpg.set_value(self.proj_shape, shape_cased)
+        self._on_projectile_shape_change(None, shape_cased)
+
         dpg.set_value(self.proj_width, proj.get("blade_width", 0.02))
         dpg.set_value(self.proj_thickness, proj.get("edge_thickness", 0.005))
+        
+        radius = proj.get("radius", 0.005)
+        length = proj.get("length", 0.01)
+        dpg.set_value(self.proj_radius, radius)
+        dpg.set_value(self.proj_radius_cyl, radius)
+        dpg.set_value(self.proj_length_cyl, length)
+        dpg.set_value(self.proj_edge_radius, proj.get("edge_radius", 0.0))
+        dpg.set_value(self.proj_radius_bullet, radius)
+        dpg.set_value(self.proj_length_bullet, length)
+        dpg.set_value(self.proj_ogive_multiplier, proj.get("ogive_multiplier", 2.0))
+        dpg.set_value(self.proj_span, proj.get("span", 0.05))
+        dpg.set_value(self.proj_root_chord, proj.get("root_chord", 0.01))
+        dpg.set_value(self.proj_tip_chord, proj.get("tip_chord", 0.005))
+        dpg.set_value(self.proj_twist, proj.get("twist", 15.0))
+        dpg.set_value(self.proj_thickness_ratio, proj.get("thickness_ratio", 12.0))
+        dpg.set_value(self.proj_tip_radius, proj.get("tip_radius", 0.002))
+        
         self._on_projectile_change(None, None)
 
         # 4. Update Simulation settings

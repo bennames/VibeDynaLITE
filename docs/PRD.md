@@ -18,12 +18,12 @@
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| **Primary compute** | **JAX** (`jax.numpy`, `jit`, `vmap`) | XLA compilation targets both Apple Silicon (Metal via `jax-metal`) and NVIDIA GPUs (CUDA via `jax[cuda]`). Single codebase for both platforms. |
-| **Fallback compute** | **Numba** (`@njit`, `@cuda.jit`) | For environments where JAX is unavailable or for specific kernels where Numba's ahead-of-time compilation is advantageous. |
+| **Primary compute** | **Taichi** (`ti.kernel`, `ti.func`, `SNode`) | JIT compiler targeting Apple Silicon (Metal), Vulkan, CUDA, and CPU. High-performance mutable memory layouts. |
+| **Fallback compute** | **Numba** (`@njit`, `@numba.jit`) | JIT compiled parallel CPU backend for direct performance benchmarking and CPU environments. |
 | **Array library** | **NumPy** | Data interchange, pre/post-processing, I/O. |
 | **Serialization** | **HDF5** (`h5py`) + **JSON** | HDF5 for large result arrays; JSON for configuration. |
 
-> **IMPORTANT:** The solver kernel must be written in a **backend-agnostic** style: pure-function, array-in/array-out. A thin adapter layer selects JAX or Numba at runtime based on available hardware.
+> **IMPORTANT:** The solver supports multiple backends. A runtime configuration selects either the high-performance GPU-resident Taichi backend or the parallelized CPU-resident Numba backend.
 
 ### 2.2 GUI Framework: DearPyGui
 
@@ -530,7 +530,7 @@ See [docs/sprint0_tasks.md](sprint0_tasks.md) for the detailed task list.
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| JAX-Metal not stable on Apple Silicon | Medium | High | Numba fallback. Test both in CI. |
+| Taichi-Metal not stable on Apple Silicon | Low | Medium | Numba CPU fallback. Test both in CI. |
 | DearPyGui 3D insufficient for large grids | Medium | Medium | Fall back to PyVista embedded window. |
 | Performance targets not met for 1000² | Medium | High | SoA layout, JIT, sparse storage. Profile early. |
 | Penalty contact instability (Mode B) | Low | Medium | k_penalty as user param. Future: kinematic. |

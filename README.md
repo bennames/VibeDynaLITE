@@ -9,7 +9,7 @@ This tool determines and validates the minimum number of Kevlar plies required t
 - **Dual-mode solver:** Fast sizing mode (Mode A) and high-fidelity multi-ply checkout mode (Mode B)
 - **Built-in material library:** Kevlar 29, 49, and KM2 with sourced properties
 - **Interactive GUI:** Real-time strain telemetry, energy balance plots, and 3D impact viewport
-- **GPU acceleration:** JAX (Apple Silicon + NVIDIA) with Numba fallback
+- **GPU acceleration:** Taichi Lang (Apple Silicon Metal / CUDA / Vulkan) with parallel Numba JIT fallback
 - **Comprehensive output:** HDF5/CSV export, MP4/GIF animation, HTML/PDF reports
 
 ## Architecture
@@ -32,9 +32,9 @@ This tool determines and validates the minimum number of Kevlar plies required t
           ┌────────────┼────────────┐
           ▼            ▼            ▼
     ┌──────────┐ ┌──────────┐ ┌──────────┐
-    │   JAX    │ │  Numba   │ │  NumPy   │
-    │ (Metal/  │ │ (CUDA/   │ │ (CPU     │
-    │  CUDA)   │ │  CPU)    │ │ fallback)│
+    │  Taichi  │ │  Numba   │ │  NumPy   │
+    │ (Metal/  │ │ (Parallel│ │ (CPU     │
+    │  Vulkan) │ │  JIT)    │ │ fallback)│
     └──────────┘ └──────────┘ └──────────┘
 ```
 
@@ -81,8 +81,8 @@ VibeDynaLITE/
 ## Tech Stack
 
 - **Python 3.11+**
-- **JAX** — GPU-accelerated array computation (Apple Silicon Metal / NVIDIA CUDA)
-- **Numba** — JIT compilation fallback
+- **Taichi Lang** — GPU-accelerated mass-spring execution (Apple Silicon Metal / CUDA / Vulkan)
+- **Numba** — Parallel JIT compilation CPU solver
 - **DearPyGui** — Desktop GUI with real-time plots and 3D rendering
 - **PyVista** — Offline 3D visualization and video export
 - **HDF5 / h5py** — Large result dataset storage

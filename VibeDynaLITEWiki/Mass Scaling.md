@@ -73,7 +73,7 @@ Mass scaling **slows the cone** (by reducing wave speed) without changing the st
 
 We chose **not to implement mass scaling** in the VibeDynaLITE GUI. The risk of a user unknowingly running a mass-scaled simulation and treating the V50 result as physical is too high. The computational cost savings are real, but we address them through other means:
 
-- **[[Compute Backends]]** — GPU-accelerated JAX and Taichi backends for raw throughput
+- **[[Compute Backends]]** — GPU-accelerated Taichi backend for raw throughput
 - **[[Grid Sizing and Mesh Resolution]]** — Guidance on using coarser (but physically meaningful) dx values
 - **[[Damping Models|Rayleigh damping]]** — For improved numerical stability without corrupting the wave physics
 
