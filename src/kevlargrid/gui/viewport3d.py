@@ -315,6 +315,18 @@ class Viewport3D:
         n_nodes_per_layer: int = 121,
         blade_width: float = 0.02,
         edge_thickness: float = 0.005,
+        shape_type: str = "box",
+        radius: float = 0.005,
+        length: float = 0.01,
+        edge_radius: float = 0.0,
+        ogive_multiplier: float = 2.0,
+        span: float = 0.05,
+        root_chord: float = 0.01,
+        tip_chord: float = 0.005,
+        twist: float = 15.0,
+        thickness_ratio: float = 12.0,
+        tip_radius: float = 0.002,
+        t_ply: float | None = None,
     ) -> None:
         """Store grid model coordinates and regenerate layer visibility checkboxes.
 
@@ -330,14 +342,42 @@ class Viewport3D:
             Width of the projectile blade.
         edge_thickness : float
             Thickness of the projectile edge.
+        shape_type : str
+            Shape string mapping.
+        radius : float
+            Radius dimension.
         """
         with self.render_lock:
+            if t_ply is None:
+                if n_nodes_per_layer > 0:
+                    n_plies = max(1, len(grid.nodes) // n_nodes_per_layer)
+                else:
+                    n_plies = 1
+            
             self.grid = grid
             self.n_plies = n_plies
             self.n_nodes_per_layer = n_nodes_per_layer
             self.layer_visibility = [True] * n_plies
+            
+            # Cache projectile params
+            self.proj_shape_type = shape_type
             self.proj_blade_width = blade_width
             self.proj_edge_thickness = edge_thickness
+            self.proj_radius = radius
+            self.proj_length = length
+            self.proj_edge_radius = edge_radius
+            self.proj_ogive_multiplier = ogive_multiplier
+            self.proj_span = span
+            self.proj_root_chord = root_chord
+            self.proj_tip_chord = tip_chord
+            self.proj_twist = twist
+            self.proj_thickness_ratio = thickness_ratio
+            self.proj_tip_radius = tip_radius
+            
+            if hasattr(self, "_last_mesh_params"):
+                delattr(self, "_last_mesh_params")
+            self.proj_mesh = None
+            self.proj_actor = None
 
             # Find bounds of single grid center
             if len(grid.nodes) > 0:
@@ -417,18 +457,7 @@ class Viewport3D:
                         lighting=False,
                     )
 
-                    # Add wireframe Box representing the projectile
-                    w_h = self.proj_blade_width / 2.0
-                    t_h = self.proj_edge_thickness / 2.0
-                    h_h = 0.005
-                    self.proj_mesh = pv.Box(bounds=[-w_h, w_h, -t_h, t_h, -h_h, h_h])
-                    self.proj_actor = self.plotter.add_mesh(
-                        self.proj_mesh,
-                        color=[230, 230, 250],
-                        style="wireframe",
-                        line_width=2.5,
-                        lighting=False,
-                    )
+                    # Projectile mesh will be created by redraw() since _last_mesh_params was deleted
                     # Show to initialize offscreen rendering context window
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
 

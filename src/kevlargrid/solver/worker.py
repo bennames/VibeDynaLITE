@@ -4,14 +4,11 @@ Runs the physics integration in a separate OS process to bypass the Python GIL a
 prevent Objective-C class name collisions between DearPyGui and Taichi on macOS.
 """
 
+import logging
 import time
 import traceback
 
 import numpy as np
-
-from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.projectile import Projectile, check_termination, update_contact_zone
-from kevlargrid.solver.timestep import compute_cfl_timestep
 
 
 def run_solver_process(config: dict, queue, pipe) -> None:
@@ -27,6 +24,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         Pipe to receive controls (pause, resume, stop) from GUI.
     """
     try:
+        logger = logging.getLogger("kevlargrid")
         # 1. Setup simulation components
         mat = config["material"]
         grid_cfg = config["grid"]
@@ -37,6 +35,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         import os
 
         os.environ["KEVLARGRID_BACKEND"] = solver_backend
+        
+        # Import solver modules after backend environment variable is set
+        from kevlargrid.solver.grid import generate_rectangular_grid
+        from kevlargrid.solver.projectile import Projectile, check_termination, update_contact_zone
+        from kevlargrid.solver.timestep import compute_cfl_timestep
         from kevlargrid.solver import backend
 
         backend.BACKEND = solver_backend
@@ -86,16 +89,57 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         else:
             dt = sim_cfg.get("dt", 1.5e-7)
 
+        # Determine strike direction based on initial velocity Z-component
+        strike_direction = -1.0 if proj_cfg["velocity"][2] < 0.0 else 1.0
+
         # Projectile setup
+        shape_type = proj_cfg.get("shape_type", "box")
+        radius = proj_cfg.get("radius", 0.005)
+        length = proj_cfg.get("length", 0.01)
+        edge_thickness = proj_cfg.get("edge_thickness", 0.005)
+
+        # Calculate half-height along Z axis based on shape
+        s_lower = shape_type.lower()
+        if s_lower == "box":
+            h_half = edge_thickness / 2.0
+        elif s_lower == "sphere":
+            h_half = radius
+        elif s_lower == "cylinder":
+            h_half = length / 2.0
+        elif s_lower == "bullet":
+            h_half = length / 2.0
+        else:
+            h_half = radius
+
+        # Check for initial penetration Z-overlap
+        z_pos = proj_cfg["position"][2]
+        n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
+        t_ply_val = t_ply if t_ply is not None else 0.0
+        z_grid_bottom = 0.0
+        z_grid_top = (n_layers - 1) * t_ply_val
+
+        if strike_direction > 0.0:
+            # Striking from below: top of projectile must start below or at grid bottom (0.0)
+            if z_pos + h_half > z_grid_bottom:
+                z_pos = z_grid_bottom - h_half
+                logger.warning("Projectile initially overlaps Kevlar grid. Adjusted Z starting position to %f m to ensure tangent contact.", z_pos)
+        else:
+            # Striking from above: bottom of projectile must start above or at grid top
+            if z_pos - h_half < z_grid_top:
+                z_pos = z_grid_top + h_half
+                logger.warning("Projectile initially overlaps Kevlar grid. Adjusted Z starting position to %f m to ensure tangent contact.", z_pos)
+
+        proj_position = np.array([proj_cfg["position"][0], proj_cfg["position"][1], z_pos], dtype=np.float64)
+
         proj = Projectile(
             mass=proj_cfg["mass"],
             velocity=proj_cfg["velocity"],
-            position=proj_cfg["position"],
-            shape_type=proj_cfg.get("shape_type", "box"),
+            position=proj_position,
+            shape_type=shape_type,
             blade_width=proj_cfg.get("blade_width", 0.02),
-            edge_thickness=proj_cfg.get("edge_thickness", 0.005),
-            radius=proj_cfg.get("radius", 0.005),
-            length=proj_cfg.get("length", 0.01),
+            edge_thickness=edge_thickness,
+            radius=radius,
+            length=length,
             edge_radius=proj_cfg.get("edge_radius", 0.0),
             ogive_multiplier=proj_cfg.get("ogive_multiplier", 2.0),
             span=proj_cfg.get("span", 0.05),
@@ -107,9 +151,6 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             omega=proj_cfg.get("omega", None),
             quat=proj_cfg.get("quat", None),
         )
-
-        # Determine strike direction based on initial velocity Z-component
-        strike_direction = -1.0 if proj_cfg["velocity"][2] < 0.0 else 1.0
 
         positions = grid.nodes.copy()
         velocities = np.zeros_like(positions)
@@ -130,6 +171,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         damp_dissipated = 0.0
         failure_dissipated = 0.0
         clamp_dissipated = 0.0
+        contact_energy = 0.0
         
         proj_peak_deceleration = np.zeros(1, dtype=np.float64)
 
@@ -143,6 +185,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "n_nodes_per_layer": n_nodes_per_layer,
                 "n_layers": n_layers,
                 "device": backend.get_active_device(),
+                "projectile_pos": proj_position.tolist(),
             }
         )
 
@@ -200,6 +243,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")
+            prev_clamp = clamp_dissipated
             if solver_backend == "numba":
                 from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
                 
@@ -222,6 +266,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     hist_ke,
                     hist_se,
                     hist_proj_ke,
+                    contact_energy,
                 ) = solver_loop(
                     positions,
                     velocities,
@@ -262,9 +307,28 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     grid.node_spring_signs,
                     use_viscous=(damping_model == "viscous"),
                     cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
+                    contact_energy_init=contact_energy,
                     **extra_kwargs,
                 )
                 hist_peak_strain = np.zeros(len(hist_time))
+                n_springs = len(grid.springs)
+                if n_springs > 0:
+                    s0 = grid.springs[:, 0]
+                    s1 = grid.springs[:, 1]
+                    L0 = grid.rest_lengths
+                    for f in range(len(hist_time)):
+                        pos_f = hist_pos[f]
+                        failed_f = hist_failed[f]
+                        dx_f = pos_f[s1, 0] - pos_f[s0, 0]
+                        dy_f = pos_f[s1, 1] - pos_f[s0, 1]
+                        dz_f = pos_f[s1, 2] - pos_f[s0, 2]
+                        lens_f = np.sqrt(dx_f**2 + dy_f**2 + dz_f**2)
+                        strains_f = (lens_f - L0) / L0
+                        active_strains = np.where(failed_f, 0.0, strains_f)
+                        hist_peak_strain[f] = np.max(active_strains) if len(active_strains) > 0 else 0.0
+
+                if clamp_dissipated > prev_clamp:
+                    logger.warning("Velocity clamping occurred in Numba solver: dissipated energy increased by %e J", clamp_dissipated - prev_clamp)
             else:
                 from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop as solver_loop
 
@@ -286,6 +350,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     hist_se,
                     hist_proj_ke,
                     hist_peak_strain,
+                    contact_energy,
                 ) = solver_loop(
                     positions,
                     velocities,
@@ -326,8 +391,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     grid.node_spring_signs,
                     use_viscous=(damping_model == "viscous"),
                     cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
+                    contact_energy_init=contact_energy,
                     **extra_kwargs,
                 )
+                if clamp_dissipated > prev_clamp:
+                    logger.warning("Velocity clamping occurred in Taichi solver: dissipated energy increased by %e J", clamp_dissipated - prev_clamp)
 
             # Check for numerical instability (NaN/inf values)
             if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
@@ -396,8 +464,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         # Calculate final reports
         final_velocity_z = float(proj.velocity[2])
-        is_arrested = (reason == "arrest")
         is_penetrated = (reason == "penetration")
+        is_arrested = (reason == "arrest" or reason == "timeout" or reason is None)
 
         initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)
         final_ke = 0.5 * proj.mass * np.sum(proj.velocity ** 2)

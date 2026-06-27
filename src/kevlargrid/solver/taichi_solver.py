@@ -76,6 +76,7 @@ class TaichiSolver:
         self.positions = ti.Vector.field(3, dtype=real_type)
         self.velocities = ti.Vector.field(3, dtype=real_type)
         self.forces = ti.Vector.field(3, dtype=real_type)
+        self.accel = ti.Vector.field(3, dtype=real_type)
         self.nodal_external_forces = ti.Vector.field(3, dtype=real_type)
         self.masses = ti.field(dtype=real_type)
         self.masses_physical = ti.field(dtype=real_type)
@@ -102,6 +103,8 @@ class TaichiSolver:
             node_block.place(self.velocities.get_scalar_field(i, 0))
         for i in range(3):
             node_block.place(self.forces.get_scalar_field(i, 0))
+        for i in range(3):
+            node_block.place(self.accel.get_scalar_field(i, 0))
         for i in range(3):
             node_block.place(self.nodal_external_forces.get_scalar_field(i, 0))
         node_block.place(self.masses)
@@ -136,6 +139,8 @@ class TaichiSolver:
         self.proj_torque = ti.Vector.field(3, dtype=real_type, shape=())
         self.proj_inertia_inv = ti.Vector.field(3, dtype=real_type, shape=())
         self.proj_shape_type = ti.field(dtype=ti.i32, shape=())
+        self.proj_accel = ti.Vector.field(3, dtype=real_type, shape=())
+        self.proj_omega_dot = ti.Vector.field(3, dtype=real_type, shape=())
         
         # Shape parameter fields
         self.radius_field = ti.field(dtype=real_type, shape=())
@@ -160,6 +165,7 @@ class TaichiSolver:
         self.t_sim = ti.field(dtype=real_type, shape=())
         self.E_artificial_kinetic = ti.field(dtype=real_type, shape=())
         self.physics_violated = ti.field(dtype=ti.i32, shape=())
+        self.contact_energy = ti.field(dtype=real_type, shape=())
 
         # GPU-side telemetry scalars
         self.telem_ke = ti.field(dtype=real_type, shape=())
@@ -223,6 +229,8 @@ class TaichiSolver:
         self.proj_torque[None] = [0.0, 0.0, 0.0]
         self.proj_inertia_inv[None] = [1.0, 1.0, 1.0]
         self.proj_shape_type[None] = 0
+        self.proj_accel[None] = [0.0, 0.0, 0.0]
+        self.proj_omega_dot[None] = [0.0, 0.0, 0.0]
         self.radius_field[None] = 0.005
         self.length_field[None] = 0.01
         self.edge_radius_field[None] = 0.0
@@ -275,8 +283,11 @@ class TaichiSolver:
             for i in range(self.n_nodes):
                 self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
             self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
+            self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
+            self.contact_energy[None] = 0.0
 
         self.k_reset_forces_graph = k_reset_forces_g
+
 
         @ti.kernel
         def k_compute_active_counts_g():
@@ -317,56 +328,65 @@ class TaichiSolver:
                     ti.atomic_add(self.node_stiffness[u], effective_k)
                     ti.atomic_add(self.node_stiffness[v], effective_k)
 
-            # Projectile contact weights (Phase 1)
-            self.w_sum[None] = 0.0
-            self.n_contacts[None] = 0
-            proj_pos = self.proj_position[None]
-            w_h = self.w_h[None]
-            t_h = self.t_h[None]
+            # Projectile contact stiffness (SDF or IDW)
             k_penalty = self.k_penalty[None]
             proximity_threshold = self.proximity_threshold[None]
+            if self.proj_shape_type[None] == 0:
+                self.w_sum[None] = 0.0
+                self.n_contacts[None] = 0
+                proj_pos = self.proj_position[None]
+                w_h = self.w_h[None]
+                t_h = self.t_h[None]
 
-            for i in range(self.n_nodes):
-                self.node_w[i] = 0.0
-                px, py, pz = self.positions[i].x, self.positions[i].y, self.positions[i].z
-                if (
-                    px >= proj_pos.x - w_h - proximity_threshold
-                    and px <= proj_pos.x + w_h + proximity_threshold
-                    and py >= proj_pos.y - t_h - proximity_threshold
-                    and py <= proj_pos.y + t_h + proximity_threshold
-                    and ti.abs(pz - proj_pos.z) <= proximity_threshold
-                ):
-                    x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
-                    y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                    dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
+                for i in range(self.n_nodes):
+                    self.node_w[i] = 0.0
+                    px, py, pz = self.positions[i].x, self.positions[i].y, self.positions[i].z
+                    if (
+                        px >= proj_pos.x - w_h - proximity_threshold
+                        and px <= proj_pos.x + w_h + proximity_threshold
+                        and py >= proj_pos.y - t_h - proximity_threshold
+                        and py <= proj_pos.y + t_h + proximity_threshold
+                        and ti.abs(pz - proj_pos.z) <= proximity_threshold
+                    ):
+                        x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
+                        y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
+                        dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
 
-                    if dist <= proximity_threshold:
-                        w = 1.0 / ti.max(dist, 1e-4)
-                        self.node_w[i] = w
-                        ti.atomic_add(self.w_sum[None], w)
-                        ti.atomic_add(self.n_contacts[None], 1)
+                        if dist <= proximity_threshold:
+                            w = 1.0 / ti.max(dist, 1e-4)
+                            self.node_w[i] = w
+                            ti.atomic_add(self.w_sum[None], w)
+                            ti.atomic_add(self.n_contacts[None], 1)
 
-            # Projectile contact stiffness (Phase 2) - Parallelized!
-            w_mean = 0.0
-            if self.n_contacts[None] > 0:
-                w_mean = self.w_sum[None] / float(self.n_contacts[None])
-            for i in range(self.n_nodes):
-                if self.node_w[i] > 0.0 and w_mean > 0.0:
-                    w_normalized = self.node_w[i] / w_mean
-                    scale_factor = 0.0
-                    if self.node_initial_springs[i] > 0:
-                        scale_factor = float(self.node_active_counts[i]) / float(
-                            self.node_initial_springs[i]
-                        )
+                w_mean = 0.0
+                if self.n_contacts[None] > 0:
+                    w_mean = self.w_sum[None] / float(self.n_contacts[None])
+                for i in range(self.n_nodes):
+                    if self.node_w[i] > 0.0 and w_mean > 0.0:
+                        w_normalized = self.node_w[i] / w_mean
+                        scale_factor = 0.0
+                        if self.node_initial_springs[i] > 0:
+                            scale_factor = float(self.node_active_counts[i]) / float(
+                                self.node_initial_springs[i]
+                            )
+                        ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
+            else:
+                # SDF bounding volume contact stiffness check
+                proj_pos = self.proj_position[None]
+                max_R = ti.max(self.radius_field[None], ti.max(self.length_field[None], self.span_field[None]))
+                cutoff = max_R + proximity_threshold
+                for i in range(self.n_nodes):
+                    dist = (self.positions[i] - proj_pos).norm()
+                    if dist <= cutoff:
+                        ti.atomic_add(self.node_stiffness[i], k_penalty)
 
-                    ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
-
-            # Inter-ply contact stiffness - Parallelized using compile-time constants!
+            # Inter-ply contact stiffness using absolute gap formulation
             if self.n_plies_val > 1:
                 for u in range((self.n_plies_val - 1) * self.n_nodes_per_layer_val):
                     v = u + self.n_nodes_per_layer_val
-                    delta = self.positions[u].z - self.positions[v].z + self.t_ply[None]
-                    if delta > 0.0:
+                    gap = ti.abs(self.positions[u].z - self.positions[v].z)
+                    penetration = self.t_ply[None] - gap
+                    if penetration > 0.0:
                         if self.node_active_counts[u] > 0 and self.node_active_counts[v] > 0:
                             ti.atomic_add(self.node_stiffness[u], k_penalty)
                             ti.atomic_add(self.node_stiffness[v], k_penalty)
@@ -394,6 +414,8 @@ class TaichiSolver:
                 self.node_active_counts[i] = 0
                 self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
             self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
+            self.contact_energy[None] = 0.0
+
 
             # Phase C: fused spring traversal
             for j in range(self.n_springs):
@@ -470,7 +492,7 @@ class TaichiSolver:
                 if rayleigh_beta > 0.0:
                     dv = self.velocities[v] - self.velocities[u]
                     v_proj = dv.dot(diff / length_safe)
-                    damp_mag = rayleigh_beta * self.stiffnesses[j] * v_proj
+                    damp_mag = rayleigh_beta * effective_k * v_proj
                     damp_vec = (damp_mag / length_safe) * diff
                     ti.atomic_add(self.forces[u], damp_vec)
                     ti.atomic_add(self.forces[v], -damp_vec)
@@ -496,12 +518,17 @@ class TaichiSolver:
             if self.n_plies_val > 1:
                 for u in range((self.n_plies_val - 1) * self.n_nodes_per_layer_val):
                     v = u + self.n_nodes_per_layer_val
-                    delta = self.positions[u].z - self.positions[v].z + t_ply
-                    if delta > 0.0:
-                        f_mag = k_penalty * delta
+                    zu = self.positions[u].z
+                    zv = self.positions[v].z
+                    gap = ti.abs(zu - zv)
+                    penetration = t_ply - gap
+                    if penetration > 0.0:
                         if self.node_active_counts[u] > 0 and self.node_active_counts[v] > 0:
-                            ti.atomic_add(self.forces[u].z, -f_mag)
-                            ti.atomic_add(self.forces[v].z, f_mag)
+                            f_mag = k_penalty * penetration
+                            direction = 1.0 if zu > zv else -1.0
+                            ti.atomic_add(self.forces[u].z, f_mag * direction)
+                            ti.atomic_add(self.forces[v].z, -f_mag * direction)
+                            ti.atomic_add(self.contact_energy[None], 0.5 * k_penalty * penetration * penetration)
 
         self.k_compute_interply_forces_graph = k_compute_interply_forces_g
 
@@ -530,7 +557,63 @@ class TaichiSolver:
         self.k_apply_impedance_boundary_graph = k_apply_impedance_boundary_g
 
         @ti.kernel
-        def k_fused_node_pass_g():
+        def k_compute_initial_accelerations_g():
+            rayleigh_alpha = self.rayleigh_alpha[None]
+            use_viscous = self.use_viscous[None]
+            for i in range(self.n_nodes):
+                if self.boundary_mask[i] == 1:
+                    self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
+                    self.velocities[i] = ti.Vector([0.0, 0.0, 0.0])
+                    self.accel[i] = ti.Vector([0.0, 0.0, 0.0])
+                    continue
+                damp_f = ti.Vector([0.0, 0.0, 0.0])
+                if use_viscous == 1:
+                    damp_f = -rayleigh_alpha * self.velocities[i]
+                else:
+                    damp_f = -rayleigh_alpha * self.masses[i] * self.velocities[i]
+                net_f = self.forces[i] + damp_f + self.nodal_external_forces[i]
+                self.accel[i] = net_f / self.masses[i]
+
+            self.proj_accel[None] = self.proj_reaction_force[None] / self.proj_mass[None]
+            if self.proj_shape_type[None] > 0:
+                self.proj_omega_dot[None] = self.proj_torque[None] * self.proj_inertia_inv[None]
+
+        self.k_compute_initial_accelerations_graph = k_compute_initial_accelerations_g
+
+        @ti.kernel
+        def k_integrate_nodes_half_step_g():
+            dt = self.dt[None]
+            for i in range(self.n_nodes):
+                if self.boundary_mask[i] == 1:
+                    continue
+                self.velocities[i] += 0.5 * self.accel[i] * dt
+                self.positions[i] += self.velocities[i] * dt
+
+            self.proj_velocity[None] += 0.5 * self.proj_accel[None] * dt
+            self.proj_position[None] += self.proj_velocity[None] * dt
+            
+            if self.proj_shape_type[None] > 0:
+                self.proj_omega[None] += 0.5 * self.proj_omega_dot[None] * dt
+                
+                omega = self.proj_omega[None]
+                q = self.proj_quat[None]
+                qw, qx, qy, qz = q[0], q[1], q[2], q[3]
+                ox, oy, oz = omega[0], omega[1], omega[2]
+                
+                dq_w = - ox*qx - oy*qy - oz*qz
+                dq_x = ox*qw + oy*qz - oz*qy
+                dq_y = - ox*qz + oy*qw + oz*qx
+                dq_z = ox*qy - oy*qx + oz*qw
+                
+                q_new = ti.Vector([qw, qx, qy, qz]) + 0.5 * dt * ti.Vector([dq_w, dq_x, dq_y, dq_z])
+                q_norm = q_new.norm()
+                if q_norm > 1e-8:
+                    self.proj_quat[None] = q_new / q_norm
+
+        self.k_integrate_nodes_half_step_graph = k_integrate_nodes_half_step_g
+
+        @ti.kernel
+        def k_integrate_nodes_full_step_g():
             self.E_artificial_kinetic[None] = 0.0
 
             dt = self.dt[None]
@@ -542,6 +625,7 @@ class TaichiSolver:
                 if self.boundary_mask[i] == 1:
                     self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
                     self.velocities[i] = ti.Vector([0.0, 0.0, 0.0])
+                    self.accel[i] = ti.Vector([0.0, 0.0, 0.0])
                     continue
 
                 damp_f = ti.Vector([0.0, 0.0, 0.0])
@@ -553,8 +637,9 @@ class TaichiSolver:
                 ti.atomic_add(self.damp_dissipated[None], -p_damp * dt)
 
                 net_f = self.forces[i] + damp_f + self.nodal_external_forces[i]
-                accel = net_f / self.masses[i]
-                self.velocities[i] += accel * dt
+                self.accel[i] = net_f / self.masses[i]
+                
+                self.velocities[i] += 0.5 * self.accel[i] * dt
 
                 v_mag = self.velocities[i].norm()
                 v_sq = self.velocities[i].norm_sqr()
@@ -565,20 +650,27 @@ class TaichiSolver:
                     self.velocities[i] *= scale
                     v_sq = v_max * v_max
 
-                self.positions[i] += self.velocities[i] * dt
-
                 # Compute artificial KE inline
                 m_scaled = self.masses[i]
                 m_phys = self.masses_physical[i]
                 ti.atomic_add(self.E_artificial_kinetic[None], 0.5 * (m_scaled - m_phys) * v_sq)
 
             # Projectile integration (scalar)
-            proj_accel = self.proj_reaction_force[None] / self.proj_mass[None]
-            self.proj_velocity[None] += proj_accel * dt
-            self.proj_position[None] += self.proj_velocity[None] * dt
+            self.proj_accel[None] = self.proj_reaction_force[None] / self.proj_mass[None]
+            self.proj_velocity[None] += 0.5 * self.proj_accel[None] * dt
             self.t_sim[None] += dt
 
-        self.k_fused_node_pass_graph = k_fused_node_pass_g
+            if self.proj_shape_type[None] > 0:
+                self.proj_omega_dot[None] = self.proj_torque[None] * self.proj_inertia_inv[None]
+                self.proj_omega[None] += 0.5 * self.proj_omega_dot[None] * dt
+
+            # Telemetry peak deceleration
+            accel_mag = self.proj_accel[None].norm()
+            accel_mag_g = accel_mag / 9.80665
+            if accel_mag_g > self.peak_deceleration_g[None]:
+                self.peak_deceleration_g[None] = accel_mag_g
+
+        self.k_integrate_nodes_full_step_graph = k_integrate_nodes_full_step_g
 
         @ti.kernel
         def k_guardrail_check_g():
@@ -595,6 +687,7 @@ class TaichiSolver:
             # sync barrier
             e_total_int = (
                 e_int
+                + self.contact_energy[None]
                 + self.failure_dissipated[None]
                 + self.damp_dissipated[None]
                 + self.clamp_dissipated[None]
@@ -745,6 +838,8 @@ class TaichiSolver:
             self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
         self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
         self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
+        self.contact_energy[None] = 0.0
+
 
     @ti.func
     def compute_spring_forces(
@@ -779,7 +874,7 @@ class TaichiSolver:
             if rayleigh_beta > 0.0:
                 dv = self.velocities[v] - self.velocities[u]
                 v_proj = dv.dot(diff / length_safe)
-                damp_mag = rayleigh_beta * self.stiffnesses[j] * v_proj
+                damp_mag = rayleigh_beta * effective_k * v_proj
                 damp_vec = (damp_mag / length_safe) * diff
                 ti.atomic_add(self.forces[u], damp_vec)
                 ti.atomic_add(self.forces[v], -damp_vec)
@@ -792,12 +887,15 @@ class TaichiSolver:
         """Compute contact force penalty values preventing interply penetration."""
         for u in range((n_plies - 1) * n_nodes_per_layer):
             v = u + n_nodes_per_layer
-            delta = self.positions[u].z - self.positions[v].z + t_ply
-            if delta > 0.0:
-                f_mag = k_penalty * delta
+            gap = ti.abs(self.positions[u].z - self.positions[v].z)
+            penetration = t_ply - gap
+            if penetration > 0.0:
                 if self.node_active_counts[u] > 0 and self.node_active_counts[v] > 0:
-                    ti.atomic_add(self.forces[u].z, -f_mag)
-                    ti.atomic_add(self.forces[v].z, f_mag)
+                    f_mag = k_penalty * penetration
+                    direction = 1.0 if self.positions[u].z > self.positions[v].z else -1.0
+                    ti.atomic_add(self.forces[u].z, f_mag * direction)
+                    ti.atomic_add(self.forces[v].z, -f_mag * direction)
+                    ti.atomic_add(self.contact_energy[None], 0.5 * k_penalty * penetration**2)
 
     @ti.func
     def compute_active_counts(self):
@@ -908,7 +1006,8 @@ class TaichiSolver:
                     F_contact = f_mag * n_world * scale_factor
                     self.forces[i] += F_contact
                     ti.atomic_add(self.proj_reaction_force[None], -F_contact)
-                    ti.atomic_add(self.proj_torque[None], P_rel.cross(-F_contact))
+                    P_contact = P_rel - delta * n_world
+                    ti.atomic_add(self.proj_torque[None], P_contact.cross(-F_contact))
 
     @ti.func
     def apply_impedance_boundary(self, dt: ti.f32):
@@ -1359,7 +1458,7 @@ class TaichiSolver:
             if rayleigh_beta > 0.0:
                 dv = self.velocities[v] - self.velocities[u]
                 v_proj = dv.dot(diff / length_safe)
-                damp_mag = rayleigh_beta * self.stiffnesses[j] * v_proj
+                damp_mag = rayleigh_beta * effective_k * v_proj
                 damp_vec = (damp_mag / length_safe) * diff
                 ti.atomic_add(self.forces[u], damp_vec)
                 ti.atomic_add(self.forces[v], -damp_vec)
@@ -1476,12 +1575,21 @@ class TaichiSolver:
             se += 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
             if strain > peak:
                 ti.atomic_max(peak, strain)  # parallel-safe max
-        self.telem_se[None] = se
+        self.telem_se[None] = se + self.contact_energy[None]
         self.telem_peak_strain[None] = peak
         self.telem_failed_count[None] = n_failed
 
-        # Projectile KE
-        self.telem_proj_ke[None] = 0.5 * self.proj_mass[None] * self.proj_velocity[None].norm_sqr()
+        # Projectile KE (translational + rotational)
+        rot_ke = 0.0
+        if self.proj_shape_type[None] > 0:
+            omega = self.proj_omega[None]
+            inertia_inv = self.proj_inertia_inv[None]
+            rot_ke = 0.5 * (
+                (1.0 / ti.max(inertia_inv[0], 1e-15)) * omega[0]**2 +
+                (1.0 / ti.max(inertia_inv[1], 1e-15)) * omega[1]**2 +
+                (1.0 / ti.max(inertia_inv[2], 1e-15)) * omega[2]**2
+            )
+        self.telem_proj_ke[None] = 0.5 * self.proj_mass[None] * self.proj_velocity[None].norm_sqr() + rot_ke
 
     def get_telemetry(self) -> dict:
         """Read GPU-computed telemetry scalars (a few float transfers, no arrays)."""
@@ -1498,17 +1606,22 @@ class TaichiSolver:
     def build_simulation_graph(self, num_substeps, use_cfl, use_interply, cfl_recompute_interval):
         builder = ti.graph.GraphBuilder()
         for step in range(num_substeps):
+            # Step 1: half step velocity and position update
+            builder.dispatch(self.k_integrate_nodes_half_step_graph)
+
             if use_cfl and step % cfl_recompute_interval == 0:
                 builder.dispatch(self.k_compute_active_counts_graph)
                 builder.dispatch(self.k_update_cfl_graph)
 
-            # k_reset_forces_graph is now fused into k_fused_spring_pass_graph
+            # Step 2: compute forces at updated positions/velocities
             builder.dispatch(self.k_fused_spring_pass_graph)
             builder.dispatch(self.k_compute_projectile_forces_graph)
             if use_interply:
                 builder.dispatch(self.k_compute_interply_forces_graph)
             builder.dispatch(self.k_apply_impedance_boundary_graph)
-            builder.dispatch(self.k_fused_node_pass_graph)
+            
+            # Step 3: full step velocity update
+            builder.dispatch(self.k_integrate_nodes_full_step_graph)
 
             # Amortized guardrail check (only every 20 steps, and at the end of the chunk)
             if step % cfl_recompute_interval == 0 or step == num_substeps - 1:
@@ -1574,6 +1687,16 @@ class TaichiSolver:
         # Compile or retrieve graph
         use_cfl = cfl_factor > 0.0
         use_interply = n_plies > 1
+
+        if self.t_sim[None] == 0.0:
+            self.k_compute_active_counts_graph()
+            self.k_fused_spring_pass_graph()
+            self.k_compute_projectile_forces_graph()
+            if use_interply:
+                self.k_compute_interply_forces_graph()
+            self.k_apply_impedance_boundary_graph()
+            self.k_compute_initial_accelerations_graph()
+
         graph = self.get_or_compile_graph(
             num_substeps, use_cfl, use_interply, cfl_recompute_interval
         )
@@ -1736,6 +1859,7 @@ def taichi_leapfrog_loop(
     proj_c_damping: float = 0.0,
     proj_inertia_inv: np.ndarray | None = None,
     hist_proj_quat: np.ndarray | None = None,
+    contact_energy_init: float = 0.0,
 ) -> tuple[
     np.ndarray,
     np.ndarray,
@@ -1754,6 +1878,7 @@ def taichi_leapfrog_loop(
     np.ndarray,
     np.ndarray,
     np.ndarray,
+    float,
 ]:
     """Execute a block chunk of explicit time steps entirely in GPU compilation."""
     if ti is None:
@@ -1898,6 +2023,7 @@ def taichi_leapfrog_loop(
     solver.damp_dissipated[None] = damp_dissipated_init
     solver.failure_dissipated[None] = failure_dissipated_init
     solver.clamp_dissipated[None] = clamp_dissipated_init
+    solver.contact_energy[None] = contact_energy_init
     solver.t_sim[None] = float(t_sim_init)
 
     # Pre-allocate dynamic history traces
@@ -2033,4 +2159,5 @@ def taichi_leapfrog_loop(
         hist_se,
         hist_proj_ke,
         hist_peak_strain,
+        float(solver.contact_energy[None]),
     )

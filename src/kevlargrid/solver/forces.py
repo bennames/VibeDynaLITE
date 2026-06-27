@@ -296,30 +296,32 @@ def compute_interply_contact_forces(
         z_n = positions[start_idx:end_idx, 2]
         z_n1 = positions[end_idx : end_idx + n_nodes_per_layer, 2]
 
-        # Penetration depth: delta = z_n - z_n1 + t_ply
-        delta = z_n - z_n1 + t_ply
-        penetration = maximum(0.0, delta)
+        # Penetration depth using absolute distance formulation (Issue 2)
+        gap = np.abs(z_n - z_n1)
+        penetration = t_ply - gap
+        penetrating = penetration > 0.0
 
         if active_counts is not None:
             active_n = active_counts[start_idx:end_idx] > 0
             active_n1 = active_counts[end_idx : end_idx + n_nodes_per_layer] > 0
             both_active = active_n & active_n1
-            penetration = where(both_active, penetration, 0.0)
+            penetrating = penetrating & both_active
 
         # Force magnitude
-        f_mag = k_penalty * penetration
+        f_mag = where(penetrating, k_penalty * penetration, 0.0)
+        direction = where(z_n > z_n1, 1.0, -1.0)
 
-        # Accumulate forces: layer n is pushed in -Z, layer n+1 in +Z
+        # Accumulate forces: layer n and layer n+1 repelled along Z based on relative position
         indices_n = np.arange(start_idx, end_idx)
         indices_n1 = np.arange(end_idx, end_idx + n_nodes_per_layer)
 
-        forces_n = stack_z(-f_mag)
-        forces_n1 = stack_z(f_mag)
+        forces_n = stack_z(f_mag * direction)
+        forces_n1 = stack_z(-f_mag * direction)
 
         forces = scatter_add(forces, indices_n, forces_n)
         forces = scatter_add(forces, indices_n1, forces_n1)
 
         # Potential energy: 0.5 * k * x^2
-        total_energy += sum(0.5 * k_penalty * penetration**2)
+        total_energy += sum(where(penetrating, 0.5 * k_penalty * penetration**2, 0.0))
 
     return forces, total_energy

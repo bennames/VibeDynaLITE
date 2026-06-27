@@ -91,6 +91,28 @@ def get_active_device() -> str:
         return f"CPU ({platform.machine()}) with NumPy fallback"
 
 
+_decorated_functions: list[tuple[Callable[..., Any], dict[str, Any], Callable[..., Any]]] = []
+
+def _compile_func(func: Callable[..., Any], backend_name: str, **kwargs: Any) -> Callable[..., Any]:
+    if backend_name == "jax" and HAS_JAX:
+        jax_kwargs = {}
+        if "static_argnums" in kwargs:
+            jax_kwargs["static_argnums"] = kwargs["static_argnums"]
+        if "static_argnames" in kwargs:
+            jax_kwargs["static_argnames"] = kwargs["static_argnames"]
+        return jax.jit(func, **jax_kwargs)  # type: ignore[no-any-return]
+    elif backend_name == "numba" and HAS_NUMBA:
+        numba_kwargs = {
+            k: v for k, v in kwargs.items() if k not in ("static_argnums", "static_argnames")
+        }
+        if "parallel" not in numba_kwargs:
+            numba_kwargs["parallel"] = True
+        if "fastmath" not in numba_kwargs:
+            numba_kwargs["fastmath"] = True
+        return numba.jit(nopython=True, cache=NUMBA_CACHE, **numba_kwargs)(func)  # type: ignore[no-any-return]
+    return func
+
+
 def jit(fn: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., Any]:
     """Decorator to JIT-compile a function using the active backend.
 
@@ -103,27 +125,14 @@ def jit(fn: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., An
     """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        if BACKEND == "jax" and HAS_JAX:
-            jax_kwargs = {}
-            if "static_argnums" in kwargs:
-                jax_kwargs["static_argnums"] = kwargs["static_argnums"]
-            if "static_argnames" in kwargs:
-                jax_kwargs["static_argnames"] = kwargs["static_argnames"]
-            return jax.jit(func, **jax_kwargs)  # type: ignore[no-any-return]
-        elif BACKEND == "numba" and HAS_NUMBA:
-            numba_kwargs = {
-                k: v for k, v in kwargs.items() if k not in ("static_argnums", "static_argnames")
-            }
-            if "parallel" not in numba_kwargs:
-                numba_kwargs["parallel"] = True
-            if "fastmath" not in numba_kwargs:
-                numba_kwargs["fastmath"] = True
-            return numba.jit(nopython=True, cache=NUMBA_CACHE, **numba_kwargs)(func)  # type: ignore[no-any-return]
-        return func
+        compiled = _compile_func(func, BACKEND, **kwargs)
+        _decorated_functions.append((func, kwargs, compiled))
+        return compiled
 
     if fn is None:
         return decorator
     return decorator(fn)
+
 
 
 def vmap(
@@ -290,34 +299,93 @@ def py_clamp_boundary(forces: Any, mask: Any) -> Any:
     return forces
 
 
-# Assign active variables
-if BACKEND == "numba" and HAS_NUMBA:
-    zeros = np.zeros  # type: ignore[assignment]
-    ones = np.ones  # type: ignore[assignment]
-    array = py_array  # type: ignore[assignment]
-    sqrt = np.sqrt  # type: ignore[assignment]
-    maximum = np.maximum  # type: ignore[assignment]
-    minimum = np.minimum  # type: ignore[assignment]
-    where = np.where  # type: ignore[assignment]
-    sum = np.sum  # type: ignore[assignment]
-    min = np.min  # type: ignore[assignment]
-    max = np.max  # type: ignore[assignment]
-    abs = np.abs  # type: ignore[assignment]
-    scatter_add = numba_scatter_add  # type: ignore[assignment]
-    stack_z = numba_stack_z  # type: ignore[assignment]
-    clamp_boundary = numba_clamp_boundary  # type: ignore[assignment]
-else:
-    zeros = py_zeros  # type: ignore[assignment]
-    ones = py_ones  # type: ignore[assignment]
-    array = py_array  # type: ignore[assignment]
-    sqrt = py_sqrt  # type: ignore[assignment]
-    maximum = py_maximum  # type: ignore[assignment]
-    minimum = py_minimum  # type: ignore[assignment]
-    where = py_where  # type: ignore[assignment]
-    sum = py_sum  # type: ignore[assignment]
-    min = py_min  # type: ignore[assignment]
-    max = py_max  # type: ignore[assignment]
-    abs = py_abs  # type: ignore[assignment]
-    scatter_add = py_scatter_add  # type: ignore[assignment]
-    stack_z = py_stack_z  # type: ignore[assignment]
-    clamp_boundary = py_clamp_boundary  # type: ignore[assignment]
+def set_backend(backend_name: str) -> None:
+    """Set the active compute backend dynamically and update all math aliases."""
+    global BACKEND, zeros, ones, array, sqrt, maximum, minimum, where, sum, min, max, abs, scatter_add, stack_z, clamp_boundary
+    BACKEND = backend_name
+    if BACKEND == "numba" and HAS_NUMBA:
+        zeros = np.zeros  # type: ignore[assignment]
+        ones = np.ones  # type: ignore[assignment]
+        array = py_array  # type: ignore[assignment]
+        sqrt = np.sqrt  # type: ignore[assignment]
+        maximum = np.maximum  # type: ignore[assignment]
+        minimum = np.minimum  # type: ignore[assignment]
+        where = np.where  # type: ignore[assignment]
+        sum = np.sum  # type: ignore[assignment]
+        min = np.min  # type: ignore[assignment]
+        max = np.max  # type: ignore[assignment]
+        abs = np.abs  # type: ignore[assignment]
+        scatter_add = numba_scatter_add  # type: ignore[assignment]
+        stack_z = numba_stack_z  # type: ignore[assignment]
+        clamp_boundary = numba_clamp_boundary  # type: ignore[assignment]
+    else:
+        zeros = py_zeros  # type: ignore[assignment]
+        ones = py_ones  # type: ignore[assignment]
+        array = py_array  # type: ignore[assignment]
+        sqrt = py_sqrt  # type: ignore[assignment]
+        maximum = py_maximum  # type: ignore[assignment]
+        minimum = py_minimum  # type: ignore[assignment]
+        where = py_where  # type: ignore[assignment]
+        sum = py_sum  # type: ignore[assignment]
+        min = py_min  # type: ignore[assignment]
+        max = py_max  # type: ignore[assignment]
+        abs = py_abs  # type: ignore[assignment]
+        scatter_add = py_scatter_add  # type: ignore[assignment]
+        stack_z = py_stack_z  # type: ignore[assignment]
+        clamp_boundary = py_clamp_boundary  # type: ignore[assignment]
+
+    # Re-compile all decorated functions and update their references in sys.modules
+    import sys
+    for i, (func, kwargs, old_compiled) in enumerate(_decorated_functions):
+        new_compiled = _compile_func(func, BACKEND, **kwargs)
+        _decorated_functions[i] = (func, kwargs, new_compiled)
+        
+        # Update references in sys.modules
+        for mod in list(sys.modules.values()):
+            if mod is None:
+                continue
+            try:
+                for attr_name, attr_val in list(mod.__dict__.items()):
+                    if attr_val is old_compiled or attr_val is func:
+                        mod.__dict__[attr_name] = new_compiled
+            except Exception:
+                pass
+
+    # Dynamically update the imported names in already loaded modules
+    for mod_name in ("kevlargrid.solver.fused", "kevlargrid.solver.forces"):
+        if mod_name in sys.modules:
+            mod = sys.modules[mod_name]
+            for var_name in (
+                "zeros", "ones", "array", "sqrt", "maximum", "minimum", "where",
+                "sum", "min", "max", "abs", "scatter_add", "stack_z", "clamp_boundary"
+            ):
+                if hasattr(mod, var_name):
+                    setattr(mod, var_name, globals()[var_name])
+
+    # Update set_index helpers in fused module
+    if "kevlargrid.solver.fused" in sys.modules:
+        mod = sys.modules["kevlargrid.solver.fused"]
+        if BACKEND == "numba" and HAS_NUMBA:
+            mod.set_index_3d = getattr(mod, "numba_set_index_3d", None)
+            mod.set_index_2d_bool = getattr(mod, "numba_set_index_2d_bool", None)
+            mod.set_index_2d_float = getattr(mod, "numba_set_index_2d_float", None)
+            mod.set_index_1d = getattr(mod, "numba_set_index_1d", None)
+        else:
+            mod.set_index_3d = getattr(mod, "py_set_index_3d", None)
+            mod.set_index_2d_bool = getattr(mod, "py_set_index_2d_bool", None)
+            mod.set_index_2d_float = getattr(mod, "py_set_index_2d_float", None)
+            mod.set_index_1d = getattr(mod, "py_set_index_1d", None)
+
+# Initialize variables with the default BACKEND
+set_backend(BACKEND)
+
+# Custom module class to hook assignments to BACKEND
+class _BackendModule(sys.modules[__name__].__class__):
+    def __setattr__(self, name, value):
+        super().__setattr__(name, value)
+        if name == "BACKEND":
+            set_backend(value)
+
+sys.modules[__name__].__class__ = _BackendModule
+
+

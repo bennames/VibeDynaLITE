@@ -399,6 +399,58 @@ AUTOSAVE_DIR = ".autosave"
 AUTOSAVE_PATH = f"{AUTOSAVE_DIR}/session.toml"
 
 
+def enforce_projectile_tangency(config: dict, update_widget: bool = True) -> float:
+    """Check if the projectile overlaps the grid and adjust its Z coordinate to ensure tangent contact."""
+    proj_cfg = config["projectile"]
+    grid_cfg = config["grid"]
+
+    shape_type = proj_cfg.get("shape_type", "box")
+    radius = proj_cfg.get("radius", 0.005)
+    length = proj_cfg.get("length", 0.01)
+    edge_thickness = proj_cfg.get("edge_thickness", 0.005)
+
+    # Calculate half-height along Z axis based on shape
+    s_lower = shape_type.lower()
+    if s_lower == "box":
+        h_half = edge_thickness / 2.0
+    elif s_lower == "sphere":
+        h_half = radius
+    elif s_lower == "cylinder":
+        h_half = length / 2.0
+    elif s_lower == "bullet":
+        h_half = length / 2.0
+    else:
+        h_half = radius
+
+    # Check for initial penetration Z-overlap
+    z_pos = proj_cfg["position"][2]
+    strike_direction = -1.0 if proj_cfg["velocity"][2] < 0.0 else 1.0
+
+    n_plies = grid_cfg.get("n_plies", 1)
+    t_ply = grid_cfg.get("t_ply", None)
+    n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
+    t_ply_val = t_ply if t_ply is not None else 0.0
+    z_grid_bottom = 0.0
+    z_grid_top = (n_layers - 1) * t_ply_val
+
+    adjusted = False
+    if strike_direction > 0.0:
+        # Striking from below: top of projectile must start below or at grid bottom (0.0)
+        if z_pos + h_half > z_grid_bottom:
+            z_pos = z_grid_bottom - h_half
+            adjusted = True
+    else:
+        # Striking from above: bottom of projectile must start above or at grid top
+        if z_pos - h_half < z_grid_top:
+            z_pos = z_grid_top + h_half
+            adjusted = True
+
+    if adjusted and update_widget and dpg is not None:
+        dpg.set_value(config_panel.proj_pz, z_pos)
+
+    return z_pos
+
+
 def launch() -> None:
     """Initialise and launch the KevlarGrid GUI application."""
     if dpg is None:
@@ -521,6 +573,8 @@ def launch() -> None:
     # Core Thread-Safe Control Callbacks
     def _on_start_btn():
         cfg = config_panel.get_config()
+        z_pos = enforce_projectile_tangency(cfg, update_widget=True)
+        cfg["projectile"]["position"][2] = z_pos
         try:
             validate_config(cfg)
 
@@ -539,6 +593,18 @@ def launch() -> None:
                 n_nodes_per_layer=cfg["grid"]["nx"] * cfg["grid"]["ny"],
                 blade_width=cfg["projectile"]["blade_width"],
                 edge_thickness=cfg["projectile"]["edge_thickness"],
+                shape_type=cfg["projectile"].get("shape_type", "box"),
+                radius=cfg["projectile"].get("radius", 0.005),
+                length=cfg["projectile"].get("length", 0.01),
+                edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+                ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+                span=cfg["projectile"].get("span", 0.05),
+                root_chord=cfg["projectile"].get("root_chord", 0.01),
+                tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+                twist=cfg["projectile"].get("twist", 15.0),
+                thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+                tip_radius=cfg["projectile"].get("tip_radius", 0.002),
+                t_ply=cfg["grid"].get("t_ply", None),
             )
             viewport3d.draw_projectile(
                 np.array(cfg["projectile"]["position"], dtype=np.float64),
@@ -596,6 +662,8 @@ def launch() -> None:
 
         # Redraw blank viewport S6.5.3
         reset_cfg = config_panel.get_config()
+        z_pos = enforce_projectile_tangency(reset_cfg, update_widget=True)
+        reset_cfg["projectile"]["position"][2] = z_pos
         blank_grid = generate_rectangular_grid(
             nx=reset_cfg["grid"]["nx"],
             ny=reset_cfg["grid"]["ny"],
@@ -606,8 +674,22 @@ def launch() -> None:
         )
         viewport3d.reset(
             blank_grid,
+            n_plies=reset_cfg["grid"]["n_plies"],
+            n_nodes_per_layer=reset_cfg["grid"]["nx"] * reset_cfg["grid"]["ny"],
             blade_width=reset_cfg["projectile"]["blade_width"],
             edge_thickness=reset_cfg["projectile"]["edge_thickness"],
+            shape_type=reset_cfg["projectile"].get("shape_type", "box"),
+            radius=reset_cfg["projectile"].get("radius", 0.005),
+            length=reset_cfg["projectile"].get("length", 0.01),
+            edge_radius=reset_cfg["projectile"].get("edge_radius", 0.0),
+            ogive_multiplier=reset_cfg["projectile"].get("ogive_multiplier", 2.0),
+            span=reset_cfg["projectile"].get("span", 0.05),
+            root_chord=reset_cfg["projectile"].get("root_chord", 0.01),
+            tip_chord=reset_cfg["projectile"].get("tip_chord", 0.005),
+            twist=reset_cfg["projectile"].get("twist", 15.0),
+            thickness_ratio=reset_cfg["projectile"].get("thickness_ratio", 12.0),
+            tip_radius=reset_cfg["projectile"].get("tip_radius", 0.002),
+            t_ply=reset_cfg["grid"].get("t_ply", None),
         )
         viewport3d.draw_projectile(
             np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
@@ -725,6 +807,8 @@ def launch() -> None:
 
     # Create dynamic initial grid for screen renders S6.5.3
     initial_cfg = config_panel.get_config()
+    z_pos = enforce_projectile_tangency(initial_cfg, update_widget=True)
+    initial_cfg["projectile"]["position"][2] = z_pos
     init_grid = generate_rectangular_grid(
         nx=initial_cfg["grid"]["nx"],
         ny=initial_cfg["grid"]["ny"],
@@ -735,8 +819,22 @@ def launch() -> None:
     )
     viewport3d.reset(
         init_grid,
+        n_plies=initial_cfg["grid"]["n_plies"],
+        n_nodes_per_layer=initial_cfg["grid"]["nx"] * initial_cfg["grid"]["ny"],
         blade_width=initial_cfg["projectile"]["blade_width"],
         edge_thickness=initial_cfg["projectile"]["edge_thickness"],
+        shape_type=initial_cfg["projectile"].get("shape_type", "box"),
+        radius=initial_cfg["projectile"].get("radius", 0.005),
+        length=initial_cfg["projectile"].get("length", 0.01),
+        edge_radius=initial_cfg["projectile"].get("edge_radius", 0.0),
+        ogive_multiplier=initial_cfg["projectile"].get("ogive_multiplier", 2.0),
+        span=initial_cfg["projectile"].get("span", 0.05),
+        root_chord=initial_cfg["projectile"].get("root_chord", 0.01),
+        tip_chord=initial_cfg["projectile"].get("tip_chord", 0.005),
+        twist=initial_cfg["projectile"].get("twist", 15.0),
+        thickness_ratio=initial_cfg["projectile"].get("thickness_ratio", 12.0),
+        tip_radius=initial_cfg["projectile"].get("tip_radius", 0.002),
+        t_ply=initial_cfg["grid"].get("t_ply", None),
     )
     viewport3d.draw_projectile(
         np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
@@ -801,6 +899,11 @@ def launch() -> None:
             if current_grid_key != last_grid_key:
                 last_grid_key = current_grid_key
                 try:
+                    # Enforce tangency on param change and get updated config
+                    cfg = config_panel.get_config()
+                    z_pos = enforce_projectile_tangency(cfg, update_widget=True)
+                    cfg["projectile"]["position"][2] = z_pos
+
                     preview_grid = generate_rectangular_grid(
                         nx=cfg["grid"]["nx"],
                         ny=cfg["grid"]["ny"],
@@ -811,8 +914,22 @@ def launch() -> None:
                     )
                     viewport3d.reset(
                         preview_grid,
+                        n_plies=cfg["grid"]["n_plies"],
+                        n_nodes_per_layer=cfg["grid"]["nx"] * cfg["grid"]["ny"],
                         blade_width=cfg["projectile"]["blade_width"],
                         edge_thickness=cfg["projectile"]["edge_thickness"],
+                        shape_type=cfg["projectile"].get("shape_type", "box"),
+                        radius=cfg["projectile"].get("radius", 0.005),
+                        length=cfg["projectile"].get("length", 0.01),
+                        edge_radius=cfg["projectile"].get("edge_radius", 0.0),
+                        ogive_multiplier=cfg["projectile"].get("ogive_multiplier", 2.0),
+                        span=cfg["projectile"].get("span", 0.05),
+                        root_chord=cfg["projectile"].get("root_chord", 0.01),
+                        tip_chord=cfg["projectile"].get("tip_chord", 0.005),
+                        twist=cfg["projectile"].get("twist", 15.0),
+                        thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
+                        tip_radius=cfg["projectile"].get("tip_radius", 0.002),
+                        t_ply=cfg["grid"].get("t_ply", None),
                     )
                     viewport3d.draw_projectile(
                         np.array(cfg["projectile"]["position"], dtype=np.float64),

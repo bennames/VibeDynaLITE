@@ -70,6 +70,9 @@ class ConfigPanel:
         self.proj_px = "proj_px"
         self.proj_py = "proj_py"
         self.proj_pz = "proj_pz"
+        self.proj_wx = "proj_wx"
+        self.proj_wy = "proj_wy"
+        self.proj_wz = "proj_wz"
         self.proj_width = "proj_width"
         self.proj_thickness = "proj_thickness"
         self.proj_shape = "proj_shape"
@@ -353,6 +356,30 @@ class ConfigPanel:
                     dpg.add_input_float(label="Y0", width=70, tag=self.proj_py, default_value=0.0)
                     dpg.add_input_float(
                         label="Z0", width=70, tag=self.proj_pz, default_value=-0.005
+                    )
+
+                dpg.add_text("Initial Rotation (rad/s):")
+                with dpg.group(horizontal=True):
+                    dpg.add_input_float(
+                        label="Wx",
+                        width=70,
+                        tag=self.proj_wx,
+                        default_value=0.0,
+                        callback=self._on_projectile_change,
+                    )
+                    dpg.add_input_float(
+                        label="Wy",
+                        width=70,
+                        tag=self.proj_wy,
+                        default_value=0.0,
+                        callback=self._on_projectile_change,
+                    )
+                    dpg.add_input_float(
+                        label="Wz",
+                        width=70,
+                        tag=self.proj_wz,
+                        default_value=0.0,
+                        callback=self._on_projectile_change,
                     )
 
                 with dpg.table(header_row=False):
@@ -672,9 +699,19 @@ class ConfigPanel:
         vx = dpg.get_value(self.proj_vx)
         vy = dpg.get_value(self.proj_vy)
         vz = dpg.get_value(self.proj_vz)
+        wx = dpg.get_value(self.proj_wx)
+        wy = dpg.get_value(self.proj_wy)
+        wz = dpg.get_value(self.proj_wz)
 
-        v_sq = vx**2 + vy**2 + vz**2
-        ke = 0.5 * mass * v_sq
+        v_mag = math.sqrt(vx**2 + vy**2 + vz**2)
+        trans_ke = 0.5 * mass * v_mag**2
+
+        # Estimate rotational KE (assuming spherical inertia for simple feedback)
+        # I = 2/5 M R^2 (we use 0.01 as a dummy characteristic length for the UI display)
+        inertia_approx = 0.4 * mass * (0.01)**2
+        w_mag = math.sqrt(wx**2 + wy**2 + wz**2)
+        rot_ke = 0.5 * inertia_approx * w_mag**2
+        ke = trans_ke + rot_ke
         dpg.set_value(self.proj_ke_display, ke)
 
     def _on_projectile_shape_change(self, sender: str | None, app_data: str | None) -> None:
@@ -887,6 +924,11 @@ class ConfigPanel:
                     dpg.get_value(self.proj_vy),
                     dpg.get_value(self.proj_vz),
                 ],
+                "omega": [
+                    dpg.get_value(self.proj_wx),
+                    dpg.get_value(self.proj_wy),
+                    dpg.get_value(self.proj_wz),
+                ],
                 "position": [
                     dpg.get_value(self.proj_px),
                     dpg.get_value(self.proj_py),
@@ -989,6 +1031,16 @@ class ConfigPanel:
         dpg.set_value(self.proj_vx, vel[0])
         dpg.set_value(self.proj_vy, vel[1])
         dpg.set_value(self.proj_vz, vel[2])
+
+        if "omega" in proj:
+            omega = proj["omega"]
+            dpg.set_value(self.proj_wx, omega[0])
+            dpg.set_value(self.proj_wy, omega[1])
+            dpg.set_value(self.proj_wz, omega[2])
+        else:
+            dpg.set_value(self.proj_wx, 0.0)
+            dpg.set_value(self.proj_wy, 0.0)
+            dpg.set_value(self.proj_wz, 0.0)
 
         pos = proj.get("position", [0.0, 0.0, -0.005])
         dpg.set_value(self.proj_px, pos[0])

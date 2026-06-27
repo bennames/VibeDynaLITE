@@ -202,3 +202,125 @@ class TestProjectile:
         assert report["exit_velocity_m_s"] == 40.0
         assert report["residual_ke_j"] == 0.5 * 0.2 * 40.0**2  # 160 J
         assert report["energy_absorbed_j"] == initial_ke - 160.0
+
+    def test_run_solver_process_tangency(self) -> None:
+        """Verify that run_solver_process auto-adjusts projectile positions to ensure tangency."""
+        from kevlargrid.solver.worker import run_solver_process
+        import queue
+        import multiprocessing
+
+        config = {
+            "material": {
+                "name": "Kevlar 29",
+                "tensile_modulus_gpa": 71.0,
+                "failure_strain": 0.036,
+                "tensile_strength_gpa": 2.92,
+                "fiber_density_gcc": 1.44,
+                "areal_density_kgm2": 0.47,
+                "shear_ratio": 0.0004,
+            },
+            "grid": {
+                "nx": 5,
+                "ny": 5,
+                "dx": 0.01,
+                "n_plies": 1,
+                "t_ply": None,
+                "boundary_type": "fixed"
+            },
+            "projectile": {
+                "mass": 0.05,
+                "velocity": [0.0, 0.0, 400.0],
+                "position": [0.0, 0.0, 0.005],  # Overlaps grid (z=0)
+                "shape_type": "sphere",
+                "radius": 0.01,
+            },
+            "simulation": {
+                "duration": 1e-6,
+                "cfl_factor": 0.8,
+                "damping_model": "rayleigh",
+                "snapshot_interval": 1,
+                "backend": "numba",
+            }
+        }
+
+        mock_queue = queue.Queue()
+        parent_conn, child_conn = multiprocessing.Pipe()
+        parent_conn.send("stop")
+
+        run_solver_process(config, mock_queue, child_conn)
+
+        init_msg = None
+        while not mock_queue.empty():
+            msg = mock_queue.get()
+            if msg.get("type") == "init":
+                init_msg = msg
+                break
+
+        assert init_msg is not None
+        # Auto-adjusted position for a sphere of R=0.01 striking from below must be z <= -0.01
+        np.testing.assert_allclose(init_msg["projectile_pos"], [0.0, 0.0, -0.01])
+
+    def test_numba_solver_execution(self) -> None:
+        """Verify that the Numba backend runs and JIT compiles without errors."""
+        from kevlargrid.solver.worker import run_solver_process
+        import queue
+        import multiprocessing
+
+        config = {
+            "material": {
+                "name": "Kevlar 29",
+                "tensile_modulus_gpa": 71.0,
+                "failure_strain": 0.036,
+                "tensile_strength_gpa": 2.92,
+                "fiber_density_gcc": 1.44,
+                "areal_density_kgm2": 0.47,
+                "shear_ratio": 0.0004,
+            },
+            "grid": {
+                "nx": 5,
+                "ny": 5,
+                "dx": 0.01,
+                "n_plies": 1,
+                "t_ply": None,
+                "boundary_type": "fixed"
+            },
+            "projectile": {
+                "mass": 0.05,
+                "velocity": [0.0, 0.0, 400.0],
+                "position": [0.0, 0.0, -0.015],
+                "shape_type": "sphere",
+                "radius": 0.01,
+            },
+            "simulation": {
+                "duration": 1.5e-6,
+                "dt": 3e-7,
+                "cfl_factor": 0.8,
+                "damping_model": "rayleigh",
+                "snapshot_interval": 1,
+                "backend": "numba",
+            }
+        }
+
+        mock_queue = queue.Queue()
+        parent_conn, child_conn = multiprocessing.Pipe()
+
+        run_solver_process(config, mock_queue, child_conn)
+
+        messages = []
+        while not mock_queue.empty():
+            messages.append(mock_queue.get())
+
+        types = [m.get("type") for m in messages]
+        
+        errors = [m for m in messages if m.get("type") == "error"]
+        if errors:
+            print("\nSOLVER SUBPROCESS ERROR DETECTED:")
+            print("Message:", errors[0].get("message"))
+            print("Traceback:")
+            print(errors[0].get("traceback"))
+            
+        assert "init" in types
+        assert "completed" in types
+        assert "error" not in types
+
+
