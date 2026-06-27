@@ -2075,7 +2075,7 @@ def taichi_leapfrog_loop(
     solver.t_sim[None] = float(t_sim_init)
 
     # Pre-allocate dynamic history traces
-    m_frames = n_steps // save_interval
+    m_frames = max(1, n_steps // save_interval)
     n_nodes = len(positions)
     n_springs = len(grid_springs)
 
@@ -2094,7 +2094,7 @@ def taichi_leapfrog_loop(
     use_visc_val = 1 if use_viscous else 0
 
     # Running explicit integration loop in chunks of save_interval
-    n_chunks = n_steps // save_interval
+    n_chunks = max(1, n_steps // save_interval)
     for chunk in range(n_chunks):
         # Run save_interval steps on GPU
         dt = solver.run_substeps(

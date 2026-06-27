@@ -206,7 +206,6 @@ class TestProjectile:
     def test_run_solver_process_tangency(self) -> None:
         """Verify that run_solver_process auto-adjusts projectile positions to ensure tangency."""
         import multiprocessing
-        import queue
 
         from kevlargrid.solver.worker import run_solver_process
 
@@ -249,8 +248,7 @@ class TestProjectile:
         parent_conn.send("stop")
 
         proc = multiprocessing.Process(
-            target=run_solver_process,
-            args=(config, mock_queue, child_conn)
+            target=run_solver_process, args=(config, mock_queue, child_conn)
         )
         proc.start()
         proc.join(timeout=10)
@@ -269,7 +267,6 @@ class TestProjectile:
     def test_numba_solver_execution(self) -> None:
         """Verify that the Numba backend runs and JIT compiles without errors."""
         import multiprocessing
-        import queue
 
         from kevlargrid.solver.worker import run_solver_process
 
@@ -312,8 +309,7 @@ class TestProjectile:
         parent_conn, child_conn = multiprocessing.Pipe()
 
         proc = multiprocessing.Process(
-            target=run_solver_process,
-            args=(config, mock_queue, child_conn)
+            target=run_solver_process, args=(config, mock_queue, child_conn)
         )
         proc.start()
         proc.join(timeout=15)

@@ -787,7 +787,7 @@ def _fused_leapfrog_loop_jit(
 ):
     n_nodes = len(positions)
     n_springs = len(grid_springs)
-    m_frames = n_steps // save_interval
+    m_frames = max(1, n_steps // save_interval)
 
     # Pre-allocate history structures (compatible with JIT vector allocations)
     hist_positions = zeros((m_frames, n_nodes, 3), dtype=positions.dtype)
@@ -1407,7 +1407,7 @@ def fused_leapfrog_loop(
     if proj_peak_deceleration is None:
         proj_peak_deceleration = np.zeros(1, dtype=np.float64)
     if hist_proj_quat is None:
-        hist_proj_quat = np.zeros((n_steps // save_interval, 4), dtype=np.float64)
+        hist_proj_quat = np.zeros((max(1, n_steps // save_interval), 4), dtype=np.float64)
 
     # Map shape type to integer code
     shape_map = {"box": 0, "sphere": 1, "cylinder": 2, "bullet": 3, "propeller": 4}
