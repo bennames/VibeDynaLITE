@@ -36,19 +36,19 @@ setup: ## Create venv, install deps, detect hardware
 	@echo "✅ Setup complete! Activate with: source $(VENV)/bin/activate"
 
 test: ## Run unit tests (fast)
-	$(PYTEST) tests/unit/ -v --tb=short
+	OMP_NUM_THREADS=1 $(PYTEST) tests/unit/ -v --tb=short
 
 test-all: ## Run all tests including integration and slow
-	$(PYTEST) tests/ -v --tb=short
+	OMP_NUM_THREADS=1 $(PYTEST) tests/ -v --tb=short
 
 test-unit: ## Run only unit tests
-	$(PYTEST) tests/unit/ -v --tb=short
+	OMP_NUM_THREADS=1 $(PYTEST) tests/unit/ -v --tb=short
 
 test-integration: ## Run integration tests
-	$(PYTEST) tests/integration/ -v --tb=short -m "not slow"
+	OMP_NUM_THREADS=1 $(PYTEST) tests/integration/ -v --tb=short -m "not slow"
 
 test-slow: ## Run slow integration tests
-	$(PYTEST) tests/ -v --tb=short -m slow
+	OMP_NUM_THREADS=1 $(PYTEST) tests/ -v --tb=short -m slow
 
 lint: ## Run ruff linter and mypy type checker
 	@echo "==> Running ruff check..."

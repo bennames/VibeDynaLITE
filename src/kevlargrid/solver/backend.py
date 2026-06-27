@@ -91,7 +91,9 @@ def get_active_device() -> str:
         return f"CPU ({platform.machine()}) with NumPy fallback"
 
 
-_decorated_functions: list[tuple[Callable[..., Any], dict[str, Any], Callable[..., Any]]] = []
+_decorated_functions: list[
+    tuple[Callable[..., Any], dict[str, Any], dict[str, Callable[..., Any]]]
+] = []
 
 
 def _compile_func(func: Callable[..., Any], backend_name: str, **kwargs: Any) -> Callable[..., Any]:
@@ -127,7 +129,8 @@ def jit(fn: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., An
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         compiled = _compile_func(func, BACKEND, **kwargs)
-        _decorated_functions.append((func, kwargs, compiled))
+        cache = {BACKEND: compiled}
+        _decorated_functions.append((func, kwargs, cache))
         return compiled
 
     if fn is None:
@@ -314,11 +317,14 @@ scatter_add: Any = py_scatter_add
 stack_z: Any = py_stack_z
 clamp_boundary: Any = py_clamp_boundary
 
+_ACTIVE_BACKEND: str = BACKEND
+
 
 def set_backend(backend_name: str) -> None:
     """Set the active compute backend dynamically and update all math aliases."""
     global \
         BACKEND, \
+        _ACTIVE_BACKEND, \
         zeros, \
         ones, \
         array, \
@@ -333,6 +339,10 @@ def set_backend(backend_name: str) -> None:
         scatter_add, \
         stack_z, \
         clamp_boundary
+    if backend_name == _ACTIVE_BACKEND:
+        return
+    old_backend = _ACTIVE_BACKEND
+    _ACTIVE_BACKEND = backend_name
     BACKEND = backend_name
     if BACKEND == "numba" and HAS_NUMBA:
         zeros = np.zeros  # type: ignore[assignment]
@@ -365,25 +375,9 @@ def set_backend(backend_name: str) -> None:
         stack_z = py_stack_z  # type: ignore[assignment]
         clamp_boundary = py_clamp_boundary  # type: ignore[assignment]
 
-    # Re-compile all decorated functions and update their references in sys.modules
     import sys
 
-    for i, (func, kwargs, old_compiled) in enumerate(_decorated_functions):
-        new_compiled = _compile_func(func, BACKEND, **kwargs)
-        _decorated_functions[i] = (func, kwargs, new_compiled)
-
-        # Update references in sys.modules
-        for mod in list(sys.modules.values()):
-            if mod is None:
-                continue
-            try:
-                for attr_name, attr_val in list(mod.__dict__.items()):
-                    if attr_val is old_compiled or attr_val is func:
-                        mod.__dict__[attr_name] = new_compiled
-            except Exception:
-                pass
-
-    # Dynamically update the imported names in already loaded modules
+    # 1. Update imported names in already loaded modules
     for mod_name in ("kevlargrid.solver.fused", "kevlargrid.solver.forces"):
         if mod_name in sys.modules:
             target_mod: Any = sys.modules[mod_name]
@@ -406,7 +400,7 @@ def set_backend(backend_name: str) -> None:
                 if hasattr(target_mod, var_name):
                     setattr(target_mod, var_name, globals()[var_name])
 
-    # Update set_index helpers in fused module
+    # 2. Update set_index helpers in fused module
     if "kevlargrid.solver.fused" in sys.modules:
         fused_mod: Any = sys.modules["kevlargrid.solver.fused"]
         if BACKEND == "numba" and HAS_NUMBA:
@@ -420,9 +414,25 @@ def set_backend(backend_name: str) -> None:
             fused_mod.set_index_2d_float = getattr(fused_mod, "py_set_index_2d_float", None)
             fused_mod.set_index_1d = getattr(fused_mod, "py_set_index_1d", None)
 
+    # 3. Re-compile (or retrieve cached) decorated functions and update references in sys.modules
+    for func, kwargs, cache in _decorated_functions:
+        old_compiled = cache.get(old_backend, func)
+        if backend_name in cache:
+            new_compiled = cache[backend_name]
+        else:
+            new_compiled = _compile_func(func, backend_name, **kwargs)
+            cache[backend_name] = new_compiled
 
-# Initialize variables with the default BACKEND
-set_backend(BACKEND)
+        # Update references in sys.modules
+        for mod in list(sys.modules.values()):
+            if mod is None:
+                continue
+            try:
+                for attr_name, attr_val in list(mod.__dict__.items()):
+                    if attr_val is old_compiled or attr_val in cache.values() or attr_val is func:
+                        mod.__dict__[attr_name] = new_compiled
+            except Exception:
+                pass
 
 
 # Custom module class to hook assignments to BACKEND

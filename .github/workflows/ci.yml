@@ -39,4 +39,6 @@ jobs:
         run: |
           pip install -e ".[dev,compute]"
       - name: Run unit tests
+        env:
+          OMP_NUM_THREADS: "1"
         run: pytest tests/unit -v --tb=short
