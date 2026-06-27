@@ -243,13 +243,12 @@ class TestProjectile:
             },
         }
 
-        mock_queue = multiprocessing.Queue()
-        parent_conn, child_conn = multiprocessing.Pipe()
+        ctx = multiprocessing.get_context("spawn")
+        mock_queue = ctx.Queue()
+        parent_conn, child_conn = ctx.Pipe()
         parent_conn.send("stop")
 
-        proc = multiprocessing.Process(
-            target=run_solver_process, args=(config, mock_queue, child_conn)
-        )
+        proc = ctx.Process(target=run_solver_process, args=(config, mock_queue, child_conn))
         proc.start()
         proc.join(timeout=10)
 
@@ -305,12 +304,11 @@ class TestProjectile:
             },
         }
 
-        mock_queue = multiprocessing.Queue()
-        parent_conn, child_conn = multiprocessing.Pipe()
+        ctx = multiprocessing.get_context("spawn")
+        mock_queue = ctx.Queue()
+        parent_conn, child_conn = ctx.Pipe()
 
-        proc = multiprocessing.Process(
-            target=run_solver_process, args=(config, mock_queue, child_conn)
-        )
+        proc = ctx.Process(target=run_solver_process, args=(config, mock_queue, child_conn))
         proc.start()
         proc.join(timeout=15)
 
