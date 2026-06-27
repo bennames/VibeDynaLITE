@@ -244,11 +244,16 @@ class TestProjectile:
             },
         }
 
-        mock_queue = queue.Queue()
+        mock_queue = multiprocessing.Queue()
         parent_conn, child_conn = multiprocessing.Pipe()
         parent_conn.send("stop")
 
-        run_solver_process(config, mock_queue, child_conn)
+        proc = multiprocessing.Process(
+            target=run_solver_process,
+            args=(config, mock_queue, child_conn)
+        )
+        proc.start()
+        proc.join(timeout=10)
 
         init_msg = None
         while not mock_queue.empty():
@@ -303,10 +308,15 @@ class TestProjectile:
             },
         }
 
-        mock_queue = queue.Queue()
+        mock_queue = multiprocessing.Queue()
         parent_conn, child_conn = multiprocessing.Pipe()
 
-        run_solver_process(config, mock_queue, child_conn)
+        proc = multiprocessing.Process(
+            target=run_solver_process,
+            args=(config, mock_queue, child_conn)
+        )
+        proc.start()
+        proc.join(timeout=15)
 
         messages = []
         while not mock_queue.empty():
