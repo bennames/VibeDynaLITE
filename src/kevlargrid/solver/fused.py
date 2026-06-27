@@ -24,12 +24,12 @@ from kevlargrid.solver.backend import (
     minimum,
     scatter_add,
     sqrt,
-    stack_z,
     sum,
     where,
     zeros,
 )
 from kevlargrid.solver.energy import compute_kinetic_energy, compute_strain_energy
+from kevlargrid.solver.failure import scale_failure_strain
 from kevlargrid.solver.forces import compute_interply_contact_forces
 
 # Define helper to set values JAX/Numba-compatibly
@@ -107,12 +107,15 @@ else:
 def numba_q_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
     w1, x1, y1, z1 = q1[0], q1[1], q1[2], q1[3]
     w2, x2, y2, z2 = q2[0], q2[1], q2[2], q2[3]
-    return np.array([
-        w1*w2 - x1*x2 - y1*y2 - z1*z2,
-        w1*x2 + x1*w2 + y1*z2 - z1*y2,
-        w1*y2 - x1*z2 + y1*w2 + z1*x2,
-        w1*z2 + x1*y2 - y1*x2 + z1*w2
-    ], dtype=np.float64)
+    return np.array(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ],
+        dtype=np.float64,
+    )
 
 
 @backend.jit(fastmath=True, parallel=False)
@@ -146,18 +149,18 @@ def numba_eval_sdf(
 ) -> float:
     x, y, z = p[0], p[1], p[2]
     val = 0.0
-    if shape_code == 1: # sphere
+    if shape_code == 1:  # sphere
         val = np.sqrt(x**2 + y**2 + z**2) - R
-    elif shape_code == 2: # cylinder
+    elif shape_code == 2:  # cylinder
         d_cyl = np.sqrt(x**2 + y**2) - (R - R_e)
-        d_len = np.abs(z) - (L/2.0 - R_e)
+        d_len = np.abs(z) - (L / 2.0 - R_e)
         c_cyl = d_cyl if d_cyl > 0.0 else 0.0
         c_len = d_len if d_len > 0.0 else 0.0
         ext_d = np.sqrt(c_cyl**2 + c_len**2)
         max_d = d_cyl if d_cyl > d_len else d_len
-        int_d = 0.0 if 0.0 < max_d else max_d
+        int_d = 0.0 if max_d > 0.0 else max_d
         val = ext_d + int_d - R_e
-    elif shape_code == 3: # bullet
+    elif shape_code == 3:  # bullet
         z_geom = z + z_com
         r = np.sqrt(x**2 + y**2)
         if z_geom < 0.0:
@@ -166,26 +169,31 @@ def numba_eval_sdf(
             val = d_cyl if d_cyl > d_cap else d_cap
         else:
             if z_geom > L_nose:
-                val = np.sqrt(r**2 + (z_geom - L_nose)**2)
+                val = np.sqrt(r**2 + (z_geom - L_nose) ** 2)
             else:
                 r_c = R - R_og
-                dist_to_center = np.sqrt((r - r_c)**2 + z_geom**2)
+                dist_to_center = np.sqrt((r - r_c) ** 2 + z_geom**2)
                 val = dist_to_center - R_og
-    elif shape_code == 4: # propeller
+    elif shape_code == 4:  # propeller
         y_geom = y + y_com
         if y_geom > S - R_tip:
-            val = np.sqrt(x**2 + (y_geom - (S - R_tip))**2 + z**2) - R_tip
+            val = np.sqrt(x**2 + (y_geom - (S - R_tip)) ** 2 + z**2) - R_tip
         elif y_geom < 0.0:
-            u = (x + c_r/2.0) / c_r
+            u = (x + c_r / 2.0) / c_r
             u_temp = u if u > 0.0 else 0.0
             u_clamped = u_temp if u_temp < 1.0 else 1.0
-            t = 5.0 * (thickness_ratio / 100.0) * (
-                0.2969 * np.sqrt(u_clamped)
-                - 0.1260 * u_clamped
-                - 0.3516 * (u_clamped**2)
-                + 0.2843 * (u_clamped**3)
-                - 0.1015 * (u_clamped**4)
-            ) * c_r
+            t = (
+                5.0
+                * (thickness_ratio / 100.0)
+                * (
+                    0.2969 * np.sqrt(u_clamped)
+                    - 0.1260 * u_clamped
+                    - 0.3516 * (u_clamped**2)
+                    + 0.2843 * (u_clamped**3)
+                    - 0.1015 * (u_clamped**4)
+                )
+                * c_r
+            )
             t_half = t / 2.0
             half_t = t_half if t_half > R_tip else R_tip
             d_slice = np.abs(z) - half_t
@@ -195,34 +203,39 @@ def numba_eval_sdf(
             theta = np.radians(twist_deg) * (y_geom / S)
             xr = x * np.cos(theta) + z * np.sin(theta)
             zr = -x * np.sin(theta) + z * np.cos(theta)
-            
-            u = (xr + c/2.0) / c
+
+            u = (xr + c / 2.0) / c
             u_temp = u if u > 0.0 else 0.0
             u_clamped = u_temp if u_temp < 1.0 else 1.0
-            t = 5.0 * (thickness_ratio / 100.0) * (
-                0.2969 * np.sqrt(u_clamped)
-                - 0.1260 * u_clamped
-                - 0.3516 * (u_clamped**2)
-                + 0.2843 * (u_clamped**3)
-                - 0.1015 * (u_clamped**4)
-            ) * c
+            t = (
+                5.0
+                * (thickness_ratio / 100.0)
+                * (
+                    0.2969 * np.sqrt(u_clamped)
+                    - 0.1260 * u_clamped
+                    - 0.3516 * (u_clamped**2)
+                    + 0.2843 * (u_clamped**3)
+                    - 0.1015 * (u_clamped**4)
+                )
+                * c
+            )
             t_half = t / 2.0
             half_t = t_half if t_half > R_tip else R_tip
-            
-            if xr < -c/2.0 + R_tip:
-                dist_le = np.sqrt((xr - (-c/2.0 + R_tip))**2 + zr**2)
+
+            if xr < -c / 2.0 + R_tip:
+                dist_le = np.sqrt((xr - (-c / 2.0 + R_tip)) ** 2 + zr**2)
                 val = dist_le - R_tip
-            elif xr > c/2.0 - R_tip:
-                dist_te = np.sqrt((xr - (c/2.0 - R_tip))**2 + zr**2)
+            elif xr > c / 2.0 - R_tip:
+                dist_te = np.sqrt((xr - (c / 2.0 - R_tip)) ** 2 + zr**2)
                 val = dist_te - R_tip
             else:
                 val = np.abs(zr) - half_t
-    else: # box / legacy
+    else:  # box / legacy
         x_min = x if x < w_h else w_h
         x_proj = -w_h if -w_h > x_min else x_min
         y_min = y if y < t_h else t_h
         y_proj = -t_h if -t_h > y_min else y_min
-        val = np.sqrt((x - x_proj) ** 2 + (y - y_proj) ** 2 + z ** 2)
+        val = np.sqrt((x - x_proj) ** 2 + (y - y_proj) ** 2 + z**2)
     return val
 
 
@@ -253,23 +266,143 @@ def numba_eval_sdf_normal(
     p_px[0] += h
     p_mx = p.copy()
     p_mx[0] -= h
-    grad[0] = (numba_eval_sdf(p_px, shape_code, R, L, R_e, R_og, L_body, L_nose, z_com, S, c_r, c_t, twist_deg, thickness_ratio, R_tip, y_com, w_h, t_h) -
-               numba_eval_sdf(p_mx, shape_code, R, L, R_e, R_og, L_body, L_nose, z_com, S, c_r, c_t, twist_deg, thickness_ratio, R_tip, y_com, w_h, t_h)) / (2.0 * h)
-    
+    grad[0] = (
+        numba_eval_sdf(
+            p_px,
+            shape_code,
+            R,
+            L,
+            R_e,
+            R_og,
+            L_body,
+            L_nose,
+            z_com,
+            S,
+            c_r,
+            c_t,
+            twist_deg,
+            thickness_ratio,
+            R_tip,
+            y_com,
+            w_h,
+            t_h,
+        )
+        - numba_eval_sdf(
+            p_mx,
+            shape_code,
+            R,
+            L,
+            R_e,
+            R_og,
+            L_body,
+            L_nose,
+            z_com,
+            S,
+            c_r,
+            c_t,
+            twist_deg,
+            thickness_ratio,
+            R_tip,
+            y_com,
+            w_h,
+            t_h,
+        )
+    ) / (2.0 * h)
+
     p_py = p.copy()
     p_py[1] += h
     p_my = p.copy()
     p_my[1] -= h
-    grad[1] = (numba_eval_sdf(p_py, shape_code, R, L, R_e, R_og, L_body, L_nose, z_com, S, c_r, c_t, twist_deg, thickness_ratio, R_tip, y_com, w_h, t_h) -
-               numba_eval_sdf(p_my, shape_code, R, L, R_e, R_og, L_body, L_nose, z_com, S, c_r, c_t, twist_deg, thickness_ratio, R_tip, y_com, w_h, t_h)) / (2.0 * h)
-               
+    grad[1] = (
+        numba_eval_sdf(
+            p_py,
+            shape_code,
+            R,
+            L,
+            R_e,
+            R_og,
+            L_body,
+            L_nose,
+            z_com,
+            S,
+            c_r,
+            c_t,
+            twist_deg,
+            thickness_ratio,
+            R_tip,
+            y_com,
+            w_h,
+            t_h,
+        )
+        - numba_eval_sdf(
+            p_my,
+            shape_code,
+            R,
+            L,
+            R_e,
+            R_og,
+            L_body,
+            L_nose,
+            z_com,
+            S,
+            c_r,
+            c_t,
+            twist_deg,
+            thickness_ratio,
+            R_tip,
+            y_com,
+            w_h,
+            t_h,
+        )
+    ) / (2.0 * h)
+
     p_pz = p.copy()
     p_pz[2] += h
     p_mz = p.copy()
     p_mz[2] -= h
-    grad[2] = (numba_eval_sdf(p_pz, shape_code, R, L, R_e, R_og, L_body, L_nose, z_com, S, c_r, c_t, twist_deg, thickness_ratio, R_tip, y_com, w_h, t_h) -
-               numba_eval_sdf(p_mz, shape_code, R, L, R_e, R_og, L_body, L_nose, z_com, S, c_r, c_t, twist_deg, thickness_ratio, R_tip, y_com, w_h, t_h)) / (2.0 * h)
-               
+    grad[2] = (
+        numba_eval_sdf(
+            p_pz,
+            shape_code,
+            R,
+            L,
+            R_e,
+            R_og,
+            L_body,
+            L_nose,
+            z_com,
+            S,
+            c_r,
+            c_t,
+            twist_deg,
+            thickness_ratio,
+            R_tip,
+            y_com,
+            w_h,
+            t_h,
+        )
+        - numba_eval_sdf(
+            p_mz,
+            shape_code,
+            R,
+            L,
+            R_e,
+            R_og,
+            L_body,
+            L_nose,
+            z_com,
+            S,
+            c_r,
+            c_t,
+            twist_deg,
+            thickness_ratio,
+            R_tip,
+            y_com,
+            w_h,
+            t_h,
+        )
+    ) / (2.0 * h)
+
     norm = np.linalg.norm(grad)
     return grad / norm if norm > 1e-8 else np.array([0.0, 0.0, 1.0], dtype=np.float64)
 
@@ -680,18 +813,24 @@ def _fused_leapfrog_loop_jit(
     omega_dot = zeros(3, dtype=np.float64)
     proj_reaction_force = zeros(3, dtype=np.float64)
     proj_torque = zeros(3, dtype=np.float64)
-    
+
     # Precompute ogive parameters if bullet
     R0_val = proj_radius
     R_og_val = R0_val * proj_ogive_multiplier
-    L_nose_val = np.sqrt(max(0.0, 2.0 * R_og_val * R0_val - R0_val ** 2))
+    L_nose_val = np.sqrt(max(0.0, 2.0 * R_og_val * R0_val - R0_val**2))
     L_body_val = max(0.0, proj_length - L_nose_val)
 
     # Pre-compute effective_k at step 0 so we can compute initial forces
     if backend.BACKEND == "numba" and backend.HAS_NUMBA:
         effective_k = numba_compute_effective_k(
-            positions, grid_springs, grid_stiffnesses, grid_rest_lengths,
-            grid_failed, damage_onset_strain, failure_strain, grid_damage
+            positions,
+            grid_springs,
+            grid_stiffnesses,
+            grid_rest_lengths,
+            grid_failed,
+            damage_onset_strain,
+            failure_strain,
+            grid_damage,
         )
     else:
         p1 = positions[grid_springs[:, 0]]
@@ -709,8 +848,13 @@ def _fused_leapfrog_loop_jit(
     # Initial force calculation to populate `accel`
     if backend.BACKEND == "numba" and backend.HAS_NUMBA:
         spring_stiff_damp_forces = numba_compute_spring_forces(
-            positions, velocities, grid_springs, effective_k, grid_rest_lengths,
-            grid_tension_only, rayleigh_beta,
+            positions,
+            velocities,
+            grid_springs,
+            effective_k,
+            grid_rest_lengths,
+            grid_tension_only,
+            rayleigh_beta,
         )
     else:
         p1 = positions[grid_springs[:, 0]]
@@ -732,19 +876,25 @@ def _fused_leapfrog_loop_jit(
         f_vecs = f_mags[:, np.newaxis] * dirs
         spring_stiff_damp_forces = zeros((n_nodes, 3), dtype=positions.dtype)
         spring_stiff_damp_forces = scatter_add(spring_stiff_damp_forces, grid_springs[:, 0], f_vecs)
-        spring_stiff_damp_forces = scatter_add(spring_stiff_damp_forces, grid_springs[:, 1], -f_vecs)
-    
+        spring_stiff_damp_forces = scatter_add(
+            spring_stiff_damp_forces, grid_springs[:, 1], -f_vecs
+        )
+
     interply_forces, contact_e_step = compute_interply_contact_forces(
-        positions, n_nodes_per_layer, n_plies, t_ply, k_penalty, zeros(n_nodes, dtype=positions.dtype) + 1.0
+        positions,
+        n_nodes_per_layer,
+        n_plies,
+        t_ply,
+        k_penalty,
+        zeros(n_nodes, dtype=positions.dtype) + 1.0,
     )
     contact_energy = contact_e_step
-
 
     if use_viscous:
         f_mass_damp = -rayleigh_alpha * velocities
     else:
         f_mass_damp = -rayleigh_alpha * masses_col * velocities
-    
+
     net_forces = spring_stiff_damp_forces + interply_forces + f_mass_damp + nodal_external_forces
     net_forces = clamp_boundary(net_forces, boundary_mask)
     accel = net_forces / masses_col
@@ -754,12 +904,14 @@ def _fused_leapfrog_loop_jit(
         v_half = velocities + 0.5 * accel * dt
         proj_v_half = proj_velocity + 0.5 * proj_accel * dt
         proj_omega_half = proj_omega + 0.5 * omega_dot * dt
-        
+
         positions = positions + v_half * dt
         proj_position = proj_position + proj_v_half * dt
-        
+
         if shape_code > 0:
-            omega_q = np.array([0.0, proj_omega_half[0], proj_omega_half[1], proj_omega_half[2]], dtype=np.float64)
+            omega_q = np.array(
+                [0.0, proj_omega_half[0], proj_omega_half[1], proj_omega_half[2]], dtype=np.float64
+            )
             q_dot = numba_q_mul(omega_q, proj_quat)
             q_new = proj_quat + 0.5 * dt * q_dot
             q_new_norm = np.linalg.norm(q_new)
@@ -772,10 +924,18 @@ def _fused_leapfrog_loop_jit(
         # 2. Compute Nodal Stiffnesses & CFL Timestep
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
             effective_k = numba_compute_effective_k(
-                positions, grid_springs, grid_stiffnesses, grid_rest_lengths,
-                grid_failed, damage_onset_strain, failure_strain, grid_damage
+                positions,
+                grid_springs,
+                grid_stiffnesses,
+                grid_rest_lengths,
+                grid_failed,
+                damage_onset_strain,
+                failure_strain,
+                grid_damage,
             )
-            active_counts = numba_gather_active_counts(grid_failed, node_spring_offsets, node_spring_ids)
+            active_counts = numba_gather_active_counts(
+                grid_failed, node_spring_offsets, node_spring_ids
+            )
         else:
             p1 = positions[grid_springs[:, 0]]
             p2 = positions[grid_springs[:, 1]]
@@ -795,7 +955,9 @@ def _fused_leapfrog_loop_jit(
 
         if cfl_factor > 0.0:
             if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-                nodal_k_springs = numba_sum_nodal_k_springs(effective_k, node_spring_offsets, node_spring_ids)
+                nodal_k_springs = numba_sum_nodal_k_springs(
+                    effective_k, node_spring_offsets, node_spring_ids
+                )
             else:
                 nodal_k_springs = zeros(n_nodes, dtype=positions.dtype)
                 nodal_k_springs = scatter_add(nodal_k_springs, grid_springs[:, 0], effective_k)
@@ -803,9 +965,17 @@ def _fused_leapfrog_loop_jit(
 
             # Contact mask & weights
             if shape_code == 0:
-                x_proj = maximum(proj_position[0] - w_h, minimum(positions[:, 0], proj_position[0] + w_h))
-                y_proj = maximum(proj_position[1] - t_h, minimum(positions[:, 1], proj_position[1] + t_h))
-                dists = sqrt((positions[:, 0] - x_proj) ** 2 + (positions[:, 1] - y_proj) ** 2 + (positions[:, 2] - proj_position[2]) ** 2)
+                x_proj = maximum(
+                    proj_position[0] - w_h, minimum(positions[:, 0], proj_position[0] + w_h)
+                )
+                y_proj = maximum(
+                    proj_position[1] - t_h, minimum(positions[:, 1], proj_position[1] + t_h)
+                )
+                dists = sqrt(
+                    (positions[:, 0] - x_proj) ** 2
+                    + (positions[:, 1] - y_proj) ** 2
+                    + (positions[:, 2] - proj_position[2]) ** 2
+                )
                 contact_mask = dists <= proximity_threshold
                 w_i = where(contact_mask, 1.0 / maximum(dists, 1e-4), 0.0)
                 n_contacts = sum(contact_mask)
@@ -813,13 +983,17 @@ def _fused_leapfrog_loop_jit(
                 w_mean = w_sum / where(n_contacts > 0, n_contacts, 1)
                 w_mean_safe = where(w_mean > 0.0, w_mean, 1.0)
                 w_normalized = where(contact_mask, w_i / w_mean_safe, 0.0)
-                scale_factor = where(node_initial_springs > 0, active_counts / node_initial_springs, 0.0)
+                scale_factor = where(
+                    node_initial_springs > 0, active_counts / node_initial_springs, 0.0
+                )
                 nodal_k_contact = where(contact_mask, k_penalty * w_normalized * scale_factor, 0.0)
             else:
                 max_R = max(proj_radius, max(proj_length, proj_span))
-                dists = sqrt((positions[:, 0] - proj_position[0]) ** 2 + 
-                             (positions[:, 1] - proj_position[1]) ** 2 + 
-                             (positions[:, 2] - proj_position[2]) ** 2)
+                dists = sqrt(
+                    (positions[:, 0] - proj_position[0]) ** 2
+                    + (positions[:, 1] - proj_position[1]) ** 2
+                    + (positions[:, 2] - proj_position[2]) ** 2
+                )
                 contact_mask = dists <= (max_R + proximity_threshold)
                 nodal_k_contact = where(contact_mask, k_penalty, 0.0)
 
@@ -852,8 +1026,13 @@ def _fused_leapfrog_loop_jit(
         # 3. Compute Forces at x_full, v_half
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
             spring_stiff_damp_forces = numba_compute_spring_forces(
-                positions, v_half, grid_springs, effective_k, grid_rest_lengths,
-                grid_tension_only, rayleigh_beta,
+                positions,
+                v_half,
+                grid_springs,
+                effective_k,
+                grid_rest_lengths,
+                grid_tension_only,
+                rayleigh_beta,
             )
         else:
             p1 = positions[grid_springs[:, 0]]
@@ -874,8 +1053,12 @@ def _fused_leapfrog_loop_jit(
             f_mags = f_stiff_mags + f_damp_mags
             f_vecs = f_mags[:, np.newaxis] * dirs
             spring_stiff_damp_forces = zeros((n_nodes, 3), dtype=positions.dtype)
-            spring_stiff_damp_forces = scatter_add(spring_stiff_damp_forces, grid_springs[:, 0], f_vecs)
-            spring_stiff_damp_forces = scatter_add(spring_stiff_damp_forces, grid_springs[:, 1], -f_vecs)
+            spring_stiff_damp_forces = scatter_add(
+                spring_stiff_damp_forces, grid_springs[:, 0], f_vecs
+            )
+            spring_stiff_damp_forces = scatter_add(
+                spring_stiff_damp_forces, grid_springs[:, 1], -f_vecs
+            )
 
         # Contact forces
         proj_forces = zeros((n_nodes, 3), dtype=positions.dtype)
@@ -897,83 +1080,133 @@ def _fused_leapfrog_loop_jit(
                 proj_reaction_force[1] = -sum(proj_forces[:, 1])
                 proj_reaction_force[2] = -sum(proj_forces[:, 2])
         else:
-            q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
+            q_conj = np.array(
+                [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
+            )
             for i in range(n_nodes):
                 P_rel = positions[i] - proj_position
                 P_loc = numba_q_rotate(q_conj, P_rel)
-                dist = numba_eval_sdf(P_loc, shape_code, proj_radius, proj_length, proj_edge_radius,
-                                      R_og_val, L_body_val, L_nose_val, proj_z_com,
-                                      proj_span, proj_root_chord, proj_tip_chord, proj_twist,
-                                      proj_thickness_ratio, proj_tip_radius, proj_y_com, 0.0, 0.0)
+                dist = numba_eval_sdf(
+                    P_loc,
+                    shape_code,
+                    proj_radius,
+                    proj_length,
+                    proj_edge_radius,
+                    R_og_val,
+                    L_body_val,
+                    L_nose_val,
+                    proj_z_com,
+                    proj_span,
+                    proj_root_chord,
+                    proj_tip_chord,
+                    proj_twist,
+                    proj_thickness_ratio,
+                    proj_tip_radius,
+                    proj_y_com,
+                    0.0,
+                    0.0,
+                )
                 delta = -dist
                 if delta > 0.0:
-                    n_loc = numba_eval_sdf_normal(P_loc, shape_code, proj_radius, proj_length, proj_edge_radius,
-                                                  R_og_val, L_body_val, L_nose_val, proj_z_com,
-                                                  proj_span, proj_root_chord, proj_tip_chord, proj_twist,
-                                                  proj_thickness_ratio, proj_tip_radius, proj_y_com, 0.0, 0.0)
+                    n_loc = numba_eval_sdf_normal(
+                        P_loc,
+                        shape_code,
+                        proj_radius,
+                        proj_length,
+                        proj_edge_radius,
+                        R_og_val,
+                        L_body_val,
+                        L_nose_val,
+                        proj_z_com,
+                        proj_span,
+                        proj_root_chord,
+                        proj_tip_chord,
+                        proj_twist,
+                        proj_thickness_ratio,
+                        proj_tip_radius,
+                        proj_y_com,
+                        0.0,
+                        0.0,
+                    )
                     n_world = numba_q_rotate(proj_quat, n_loc)
-                    
+
                     # Compute relative velocity and contact damping
-                    v_proj_point = proj_v_half + np.array([
-                        proj_omega_half[1]*P_rel[2] - proj_omega_half[2]*P_rel[1],
-                        proj_omega_half[2]*P_rel[0] - proj_omega_half[0]*P_rel[2],
-                        proj_omega_half[0]*P_rel[1] - proj_omega_half[1]*P_rel[0]
-                    ], dtype=np.float64)
-                    
+                    v_proj_point = proj_v_half + np.array(
+                        [
+                            proj_omega_half[1] * P_rel[2] - proj_omega_half[2] * P_rel[1],
+                            proj_omega_half[2] * P_rel[0] - proj_omega_half[0] * P_rel[2],
+                            proj_omega_half[0] * P_rel[1] - proj_omega_half[1] * P_rel[0],
+                        ],
+                        dtype=np.float64,
+                    )
+
                     v_rel = v_half[i] - v_proj_point
-                    delta_dot = -(v_rel[0]*n_world[0] + v_rel[1]*n_world[1] + v_rel[2]*n_world[2])
-                    
+                    delta_dot = -(
+                        v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
+                    )
+
                     f_mag = k_penalty * delta + proj_c_damping * delta_dot
                     if f_mag < 0.0:
                         f_mag = 0.0
-                    
+
                     node_scale_factor = 1.0
                     if node_initial_springs[i] > 0:
                         node_scale_factor = float(active_counts[i]) / float(node_initial_springs[i])
-                    
+
                     F_contact = f_mag * n_world * node_scale_factor
                     proj_forces[i, 0] = F_contact[0]
                     proj_forces[i, 1] = F_contact[1]
                     proj_forces[i, 2] = F_contact[2]
-                    
+
                     proj_reaction_force[0] -= F_contact[0]
                     proj_reaction_force[1] -= F_contact[1]
                     proj_reaction_force[2] -= F_contact[2]
-                    
+
                     # Surface projection for torque moment arm
                     P_contact = P_rel - delta * n_world
-                    proj_torque[0] += P_contact[1] * (-F_contact[2]) - P_contact[2] * (-F_contact[1])
-                    proj_torque[1] += P_contact[2] * (-F_contact[0]) - P_contact[0] * (-F_contact[2])
-                    proj_torque[2] += P_contact[0] * (-F_contact[1]) - P_contact[1] * (-F_contact[0])
+                    proj_torque[0] += P_contact[1] * (-F_contact[2]) - P_contact[2] * (
+                        -F_contact[1]
+                    )
+                    proj_torque[1] += P_contact[2] * (-F_contact[0]) - P_contact[0] * (
+                        -F_contact[2]
+                    )
+                    proj_torque[2] += P_contact[0] * (-F_contact[1]) - P_contact[1] * (
+                        -F_contact[0]
+                    )
 
         interply_forces, contact_e_step = compute_interply_contact_forces(
             positions, n_nodes_per_layer, n_plies, t_ply, k_penalty, active_counts
         )
         contact_energy = contact_e_step
 
-
         if use_viscous:
             f_mass_damp = -rayleigh_alpha * v_half
         else:
             f_mass_damp = -rayleigh_alpha * masses_col * v_half
-            
+
         p_mass_damp = sum(f_mass_damp * v_half)
         damp_dissipated += -p_mass_damp * dt
 
-        net_forces = spring_stiff_damp_forces + proj_forces + interply_forces + f_mass_damp + nodal_external_forces
+        net_forces = (
+            spring_stiff_damp_forces
+            + proj_forces
+            + interply_forces
+            + f_mass_damp
+            + nodal_external_forces
+        )
         net_forces = clamp_boundary(net_forces, boundary_mask)
 
         # 4. Update Accelerations and Finalize v_full (Velocity Verlet Step 2)
         accel = net_forces / masses_col
         proj_accel = proj_reaction_force / proj_mass
-        
+
         if shape_code > 0:
             omega_dot[0] = proj_inertia_inv_diag[0] * proj_torque[0]
             omega_dot[1] = proj_inertia_inv_diag[1] * proj_torque[1]
             omega_dot[2] = proj_inertia_inv_diag[2] * proj_torque[2]
-        
+
         velocities = v_half + 0.5 * accel * dt
-        
+
         # CFL velocity clamping (Part B.4)
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
             velocities, excess_ke = numba_clamp_velocities(velocities, grid_masses, v_max)
@@ -984,13 +1217,20 @@ def _fused_leapfrog_loop_jit(
             excess_ke = sum(0.5 * grid_masses * (v_mag**2) * (1.0 - scale**2))
             clamp_dissipated += excess_ke
             velocities = velocities * scale[:, np.newaxis]
-            
+
         velocities = clamp_boundary(velocities, boundary_mask)
-        
+
         proj_velocity = proj_v_half + 0.5 * proj_accel * dt
         proj_omega[:] = proj_omega_half + 0.5 * omega_dot * dt
 
-        accel_mag = np.sqrt(proj_reaction_force[0]**2 + proj_reaction_force[1]**2 + proj_reaction_force[2]**2) / proj_mass
+        accel_mag = (
+            np.sqrt(
+                proj_reaction_force[0] ** 2
+                + proj_reaction_force[1] ** 2
+                + proj_reaction_force[2] ** 2
+            )
+            / proj_mass
+        )
         accel_mag_g = accel_mag / 9.80665
         if accel_mag_g > proj_peak_deceleration[0]:
             proj_peak_deceleration[0] = accel_mag_g
@@ -999,8 +1239,14 @@ def _fused_leapfrog_loop_jit(
 
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
             failure_dissipated = numba_compute_failure_dissipated(
-                positions, grid_springs, grid_stiffnesses, grid_rest_lengths,
-                grid_failed, damage_onset_strain, failure_strain, fracture_energy_multiplier,
+                positions,
+                grid_springs,
+                grid_stiffnesses,
+                grid_rest_lengths,
+                grid_failed,
+                damage_onset_strain,
+                failure_strain,
+                fracture_energy_multiplier,
             )
         else:
             failure_dissipated = 0.0
@@ -1014,15 +1260,19 @@ def _fused_leapfrog_loop_jit(
             ke = compute_kinetic_energy(velocities, grid_masses)
             denom = failure_strain - damage_onset_strain
             denom_safe = where(denom == 0.0, 1.0, denom)
-            damage_telem = minimum(maximum((strains_telem - damage_onset_strain) / denom_safe, 0.0), 1.0)
-            se = compute_strain_energy(strains_telem, grid_stiffnesses, grid_rest_lengths, grid_failed, damage_telem)
-            
+            damage_telem = minimum(
+                maximum((strains_telem - damage_onset_strain) / denom_safe, 0.0), 1.0
+            )
+            se = compute_strain_energy(
+                strains_telem, grid_stiffnesses, grid_rest_lengths, grid_failed, damage_telem
+            )
+
             proj_rot_ke = 0.0
             if shape_code > 0:
                 proj_rot_ke = 0.5 * (
-                    (1.0/proj_inertia_inv_diag[0]) * proj_omega[0]**2 +
-                    (1.0/proj_inertia_inv_diag[1]) * proj_omega[1]**2 +
-                    (1.0/proj_inertia_inv_diag[2]) * proj_omega[2]**2
+                    (1.0 / proj_inertia_inv_diag[0]) * proj_omega[0] ** 2
+                    + (1.0 / proj_inertia_inv_diag[1]) * proj_omega[1] ** 2
+                    + (1.0 / proj_inertia_inv_diag[2]) * proj_omega[2] ** 2
                 )
             proj_ke = 0.5 * proj_mass * sum(proj_velocity**2) + proj_rot_ke
 
@@ -1031,7 +1281,9 @@ def _fused_leapfrog_loop_jit(
             hist_proj_pos = set_index_2d_float(hist_proj_pos, frame_idx, proj_position)
             hist_time = set_index_1d(hist_time, frame_idx, t_sim)
             hist_ke = set_index_1d(hist_ke, frame_idx, ke)
-            hist_se = set_index_1d(hist_se, frame_idx, se + contact_energy) # Propagate contact energy to total SE
+            hist_se = set_index_1d(
+                hist_se, frame_idx, se + contact_energy
+            )  # Propagate contact energy to total SE
             hist_proj_ke = set_index_1d(hist_proj_ke, frame_idx, proj_ke)
             hist_proj_quat[frame_idx, 0] = proj_quat[0]
             hist_proj_quat[frame_idx, 1] = proj_quat[1]
@@ -1058,7 +1310,6 @@ def _fused_leapfrog_loop_jit(
         contact_energy,
     )
 
-from kevlargrid.solver.failure import scale_failure_strain
 
 def fused_leapfrog_loop(
     positions: np.ndarray,
@@ -1150,7 +1401,9 @@ def fused_leapfrog_loop(
     if proj_inertia_inv is None:
         proj_inertia_inv_diag = np.array([1.0, 1.0, 1.0], dtype=np.float64)
     else:
-        proj_inertia_inv_diag = np.diagonal(proj_inertia_inv) if proj_inertia_inv.ndim == 2 else proj_inertia_inv
+        proj_inertia_inv_diag = (
+            np.diagonal(proj_inertia_inv) if proj_inertia_inv.ndim == 2 else proj_inertia_inv
+        )
     if proj_peak_deceleration is None:
         proj_peak_deceleration = np.zeros(1, dtype=np.float64)
     if hist_proj_quat is None:
@@ -1231,4 +1484,3 @@ def fused_leapfrog_loop(
         proj_edge_thickness / 2.0,
         contact_energy_init,
     )
-

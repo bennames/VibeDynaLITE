@@ -26,8 +26,8 @@ from kevlargrid.gui.plots import EnergyPlot, StrainPlot
 from kevlargrid.gui.viewport3d import Viewport3D
 from kevlargrid.io.config import ValidationError, load_config, save_config, validate_config
 from kevlargrid.solver import (
-    generate_rectangular_grid,
     Projectile,
+    generate_rectangular_grid,
 )
 from kevlargrid.utils import get_logger
 
@@ -267,7 +267,9 @@ class SimRunner:
                         self.grid_failed = msg["failed"]
                         self.projectile_pos = msg["projectile_pos"]
                         self.projectile_vel = msg.get("projectile_vel", np.zeros(3))
-                        self.projectile_quat = msg.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
+                        self.projectile_quat = msg.get(
+                            "projectile_quat", np.array([1.0, 0.0, 0.0, 0.0])
+                        )
                         self.projectile_omega = msg.get("projectile_omega", np.zeros(3))
 
                         # Append each frame in chunk history to self.history
@@ -317,7 +319,9 @@ class SimRunner:
                                     "nodes": hist_pos[idx],
                                     "failed": hist_failed[idx],
                                     "projectile_pos": hist_proj_pos[idx],
-                                    "projectile_quat": hist_proj_quat[idx] if hist_proj_quat is not None else np.array([1.0, 0.0, 0.0, 0.0]),
+                                    "projectile_quat": hist_proj_quat[idx]
+                                    if hist_proj_quat is not None
+                                    else np.array([1.0, 0.0, 0.0, 0.0]),
                                     "projectile_vel": self.projectile_vel.copy(),
                                     "projectile_omega": self.projectile_omega.copy(),
                                     "ke": float(hist_ke[idx]),
@@ -415,9 +419,7 @@ def enforce_projectile_tangency(config: dict, update_widget: bool = True) -> flo
         h_half = edge_thickness / 2.0
     elif s_lower == "sphere":
         h_half = radius
-    elif s_lower == "cylinder":
-        h_half = length / 2.0
-    elif s_lower == "bullet":
+    elif s_lower == "cylinder" or s_lower == "bullet":
         h_half = length / 2.0
     else:
         h_half = radius
@@ -610,7 +612,9 @@ def launch() -> None:
                 np.array(cfg["projectile"]["position"], dtype=np.float64),
                 cfg["projectile"]["blade_width"],
                 cfg["projectile"]["edge_thickness"],
-                quat=np.array(cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+                quat=np.array(
+                    cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64
+                ),
                 shape_type=cfg["projectile"].get("shape_type", "box"),
                 radius=cfg["projectile"].get("radius", 0.005),
                 length=cfg["projectile"].get("length", 0.01),
@@ -695,7 +699,9 @@ def launch() -> None:
             np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
             reset_cfg["projectile"]["blade_width"],
             reset_cfg["projectile"]["edge_thickness"],
-            quat=np.array(reset_cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+            quat=np.array(
+                reset_cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64
+            ),
             shape_type=reset_cfg["projectile"].get("shape_type", "box"),
             radius=reset_cfg["projectile"].get("radius", 0.005),
             length=reset_cfg["projectile"].get("length", 0.01),
@@ -840,7 +846,9 @@ def launch() -> None:
         np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
         initial_cfg["projectile"]["blade_width"],
         initial_cfg["projectile"]["edge_thickness"],
-        quat=np.array(initial_cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+        quat=np.array(
+            initial_cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64
+        ),
         shape_type=initial_cfg["projectile"].get("shape_type", "box"),
         radius=initial_cfg["projectile"].get("radius", 0.005),
         length=initial_cfg["projectile"].get("length", 0.01),
@@ -935,7 +943,9 @@ def launch() -> None:
                         np.array(cfg["projectile"]["position"], dtype=np.float64),
                         cfg["projectile"]["blade_width"],
                         cfg["projectile"]["edge_thickness"],
-                        quat=np.array(cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64),
+                        quat=np.array(
+                            cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float64
+                        ),
                         shape_type=cfg["projectile"].get("shape_type", "box"),
                         radius=cfg["projectile"].get("radius", 0.005),
                         length=cfg["projectile"].get("length", 0.01),
@@ -976,13 +986,25 @@ def launch() -> None:
                     if dpg.does_item_exist("dash_val_proj_vol"):
                         dpg.set_value("dash_val_proj_vol", f"{proj_temp.volume:.3e} m^3")
                     if dpg.does_item_exist("dash_val_proj_inertia"):
-                        dpg.set_value("dash_val_proj_inertia", f"[{proj_temp.inertia[0,0]:.3e}, {proj_temp.inertia[1,1]:.3e}, {proj_temp.inertia[2,2]:.3e}] kg*m^2")
+                        dpg.set_value(
+                            "dash_val_proj_inertia",
+                            f"[{proj_temp.inertia[0, 0]:.3e}, {proj_temp.inertia[1, 1]:.3e}, {proj_temp.inertia[2, 2]:.3e}] kg*m^2",
+                        )
                     if dpg.does_item_exist("dash_val_proj_vel"):
-                        dpg.set_value("dash_val_proj_vel", f"[{proj_temp.vel[0]:.2f}, {proj_temp.vel[1]:.2f}, {proj_temp.vel[2]:.2f}] m/s")
+                        dpg.set_value(
+                            "dash_val_proj_vel",
+                            f"[{proj_temp.vel[0]:.2f}, {proj_temp.vel[1]:.2f}, {proj_temp.vel[2]:.2f}] m/s",
+                        )
                     if dpg.does_item_exist("dash_val_proj_omega"):
-                        dpg.set_value("dash_val_proj_omega", f"[{proj_temp.omega[0]:.2f}, {proj_temp.omega[1]:.2f}, {proj_temp.omega[2]:.2f}] rad/s")
+                        dpg.set_value(
+                            "dash_val_proj_omega",
+                            f"[{proj_temp.omega[0]:.2f}, {proj_temp.omega[1]:.2f}, {proj_temp.omega[2]:.2f}] rad/s",
+                        )
                     if dpg.does_item_exist("dash_val_proj_quat"):
-                        dpg.set_value("dash_val_proj_quat", f"[{proj_temp.quat[0]:.4f}, {proj_temp.quat[1]:.4f}, {proj_temp.quat[2]:.4f}, {proj_temp.quat[3]:.4f}]")
+                        dpg.set_value(
+                            "dash_val_proj_quat",
+                            f"[{proj_temp.quat[0]:.4f}, {proj_temp.quat[1]:.4f}, {proj_temp.quat[2]:.4f}, {proj_temp.quat[3]:.4f}]",
+                        )
 
                 except Exception as e:
                     logger.error(f"Idle preview generation failed: {e}")
@@ -1003,11 +1025,18 @@ def launch() -> None:
             omega = tel.get("projectile_omega", np.zeros(3))
             quat = tel.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
             if dpg.does_item_exist("dash_val_proj_vel"):
-                dpg.set_value("dash_val_proj_vel", f"[{vel[0]:.2f}, {vel[1]:.2f}, {vel[2]:.2f}] m/s")
+                dpg.set_value(
+                    "dash_val_proj_vel", f"[{vel[0]:.2f}, {vel[1]:.2f}, {vel[2]:.2f}] m/s"
+                )
             if dpg.does_item_exist("dash_val_proj_omega"):
-                dpg.set_value("dash_val_proj_omega", f"[{omega[0]:.2f}, {omega[1]:.2f}, {omega[2]:.2f}] rad/s")
+                dpg.set_value(
+                    "dash_val_proj_omega", f"[{omega[0]:.2f}, {omega[1]:.2f}, {omega[2]:.2f}] rad/s"
+                )
             if dpg.does_item_exist("dash_val_proj_quat"):
-                dpg.set_value("dash_val_proj_quat", f"[{quat[0]:.4f}, {quat[1]:.4f}, {quat[2]:.4f}, {quat[3]:.4f}]")
+                dpg.set_value(
+                    "dash_val_proj_quat",
+                    f"[{quat[0]:.4f}, {quat[1]:.4f}, {quat[2]:.4f}, {quat[3]:.4f}]",
+                )
 
             # Live Plotting Traces Update S6.5.5
             strain_plot.update(tel["elapsed_time"], tel["peak_strain"])
@@ -1202,9 +1231,13 @@ def _render_playback_frame(frame_idx: int) -> None:
     if dpg.does_item_exist("dash_val_proj_vel"):
         dpg.set_value("dash_val_proj_vel", f"[{vel[0]:.2f}, {vel[1]:.2f}, {vel[2]:.2f}] m/s")
     if dpg.does_item_exist("dash_val_proj_omega"):
-        dpg.set_value("dash_val_proj_omega", f"[{omega[0]:.2f}, {omega[1]:.2f}, {omega[2]:.2f}] rad/s")
+        dpg.set_value(
+            "dash_val_proj_omega", f"[{omega[0]:.2f}, {omega[1]:.2f}, {omega[2]:.2f}] rad/s"
+        )
     if dpg.does_item_exist("dash_val_proj_quat"):
-        dpg.set_value("dash_val_proj_quat", f"[{quat[0]:.4f}, {quat[1]:.4f}, {quat[2]:.4f}, {quat[3]:.4f}]")
+        dpg.set_value(
+            "dash_val_proj_quat", f"[{quat[0]:.4f}, {quat[1]:.4f}, {quat[2]:.4f}, {quat[3]:.4f}]"
+        )
 
     # 3. Update plot timeline markers S6.5.4
     strain_plot.set_playback_marker(frame["time"], frame.get("peak_strain", 0.0))

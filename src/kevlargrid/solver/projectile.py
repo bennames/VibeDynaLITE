@@ -19,12 +19,15 @@ def q_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
     """Perform quaternion multiplication q1 * q2."""
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
-    return np.array([
-        w1*w2 - x1*x2 - y1*y2 - z1*z2,
-        w1*x2 + x1*w2 + y1*z2 - z1*y2,
-        w1*y2 - x1*z2 + y1*w2 + z1*x2,
-        w1*z2 + x1*y2 - y1*x2 + z1*w2
-    ], dtype=np.float64)
+    return np.array(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ],
+        dtype=np.float64,
+    )
 
 
 def q_conjugate(q: np.ndarray) -> np.ndarray:
@@ -132,7 +135,7 @@ class Projectile:
         self.tip_radius = float(tip_radius)
         self.blade_width = float(blade_width)
         self.edge_thickness = float(edge_thickness)
-        
+
         self.contact_nodes = np.array([], dtype=np.int32)
 
         # Compute volume and inertia tensor based on shape
@@ -159,24 +162,24 @@ class Projectile:
     def _initialize_inertia(self) -> None:
         """Calculate volume and exact moments of inertia assuming uniform density."""
         m = self.mass
-        I = np.zeros(3)  # Principal moments: [Ixx, Iyy, Izz]
+        I_diag = np.zeros(3)  # Principal moments: [Ixx, Iyy, Izz]
 
         if self.shape_type == "sphere":
             R = self.radius
-            self.volume = (4.0 / 3.0) * np.pi * (R ** 3)
-            I[0] = I[1] = I[2] = 0.4 * m * (R ** 2)
+            self.volume = (4.0 / 3.0) * np.pi * (R**3)
+            I_diag[0] = I_diag[1] = I_diag[2] = 0.4 * m * (R**2)
 
         elif self.shape_type == "cylinder":
             R = self.radius
             L = self.length
-            self.volume = np.pi * (R ** 2) * L
-            I[2] = 0.5 * m * (R ** 2)
-            I[0] = I[1] = (1.0 / 12.0) * m * (3.0 * (R ** 2) + L ** 2)
+            self.volume = np.pi * (R**2) * L
+            I_diag[2] = 0.5 * m * (R**2)
+            I_diag[0] = I_diag[1] = (1.0 / 12.0) * m * (3.0 * (R**2) + L**2)
 
         elif self.shape_type == "bullet":
             R0 = self.radius
             R_og = R0 * self.ogive_multiplier
-            L_nose = np.sqrt(2.0 * R_og * R0 - R0 ** 2)
+            L_nose = np.sqrt(2.0 * R_og * R0 - R0**2)
             L_body = max(0.0, self.length - L_nose)
 
             # Numerical integration along bullet Z-axis
@@ -193,7 +196,7 @@ class Projectile:
                 else:
                     r = R0 - R_og + np.sqrt(R_og**2 - z**2)
                 rs[idx] = r
-                dV = np.pi * (r ** 2) * dz
+                dV = np.pi * (r**2) * dz
                 dV_sum += dV
                 z_dV_sum += z * dV
 
@@ -207,16 +210,16 @@ class Projectile:
             I_zz_sum = 0.0
             for idx, z in enumerate(zs):
                 r = rs[idx]
-                dV = np.pi * (r ** 2) * dz
+                dV = np.pi * (r**2) * dz
                 dm = rho * dV
-                dI_zz = 0.5 * dm * (r ** 2)
-                dI_xx = (1.0 / 12.0) * dm * (3.0 * (r ** 2) + dz ** 2) + dm * ((z - z_com) ** 2)
+                dI_zz = 0.5 * dm * (r**2)
+                dI_xx = (1.0 / 12.0) * dm * (3.0 * (r**2) + dz**2) + dm * ((z - z_com) ** 2)
                 I_xx_sum += dI_xx
                 I_zz_sum += dI_zz
 
-            I[0] = I_xx_sum
-            I[1] = I_xx_sum
-            I[2] = I_zz_sum
+            I_diag[0] = I_xx_sum
+            I_diag[1] = I_xx_sum
+            I_diag[2] = I_zz_sum
 
         elif self.shape_type == "propeller":
             S = self.span
@@ -237,7 +240,7 @@ class Projectile:
             for idx, y in enumerate(ys):
                 c = c_r + (y / S) * (c_t - c_r)
                 t = c * tau
-                area = 0.60 * (c ** 2) * tau
+                area = 0.60 * (c**2) * tau
                 areas[idx] = area
                 chords[idx] = c
                 thicknesses[idx] = t
@@ -260,37 +263,41 @@ class Projectile:
                 dV = areas[idx] * dy
                 dm = rho * dV
 
-                I_y_sec = (1.0 / 12.0) * dm * (c ** 2)
-                I_x_sec = (1.0 / 12.0) * dm * (t ** 2)
+                I_y_sec = (1.0 / 12.0) * dm * (c**2)
+                I_x_sec = (1.0 / 12.0) * dm * (t**2)
 
-                dI_xx = (I_x_sec * (np.cos(theta)**2) + I_y_sec * (np.sin(theta)**2)) + dm * ((y - y_com) ** 2)
+                dI_xx = (I_x_sec * (np.cos(theta) ** 2) + I_y_sec * (np.sin(theta) ** 2)) + dm * (
+                    (y - y_com) ** 2
+                )
                 dI_yy = I_y_sec + I_x_sec
-                dI_zz = (I_x_sec * (np.sin(theta)**2) + I_y_sec * (np.cos(theta)**2)) + dm * ((y - y_com) ** 2)
+                dI_zz = (I_x_sec * (np.sin(theta) ** 2) + I_y_sec * (np.cos(theta) ** 2)) + dm * (
+                    (y - y_com) ** 2
+                )
 
                 I_xx_sum += dI_xx
                 I_yy_sum += dI_yy
                 I_zz_sum += dI_zz
 
-            I[0] = I_xx_sum
-            I[1] = I_yy_sum
-            I[2] = I_zz_sum
+            I_diag[0] = I_xx_sum
+            I_diag[1] = I_yy_sum
+            I_diag[2] = I_zz_sum
 
         else:
             w_h = self.blade_width / 2.0
             t_h = self.edge_thickness / 2.0
             h_h = 0.005
             self.volume = 8.0 * w_h * t_h * h_h
-            I[0] = (1.0 / 12.0) * m * ((2.0 * t_h)**2 + (2.0 * h_h)**2)
-            I[1] = (1.0 / 12.0) * m * ((2.0 * w_h)**2 + (2.0 * h_h)**2)
-            I[2] = (1.0 / 12.0) * m * ((2.0 * w_h)**2 + (2.0 * t_h)**2)
+            I_diag[0] = (1.0 / 12.0) * m * ((2.0 * t_h) ** 2 + (2.0 * h_h) ** 2)
+            I_diag[1] = (1.0 / 12.0) * m * ((2.0 * w_h) ** 2 + (2.0 * h_h) ** 2)
+            I_diag[2] = (1.0 / 12.0) * m * ((2.0 * w_h) ** 2 + (2.0 * t_h) ** 2)
 
-        self.inertia = np.diag(I)
+        self.inertia = np.diag(I_diag)
         I_inv = np.zeros(3)
         for i in range(3):
-            I_inv[i] = 1.0 / I[i] if I[i] > 0.0 else 0.0
+            I_inv[i] = 1.0 / I_diag[i] if I_diag[i] > 0.0 else 0.0
         self.inertia_inv = np.diag(I_inv)
 
-    def sdf(self, p: np.ndarray) -> float:
+    def sdf(self, p: np.ndarray) -> Any:
         """Evaluate the signed distance field at query point p (local frame)."""
         shape = self.shape_type
         if shape == "sphere":
@@ -299,32 +306,32 @@ class Projectile:
             R = self.radius
             L = self.length
             R_e = self.edge_radius
-            d_cyl = np.sqrt(p[0]**2 + p[1]**2) - (R - R_e)
-            d_len = np.abs(p[2]) - (L/2.0 - R_e)
-            ext_d = np.sqrt(max(0.0, d_cyl)**2 + max(0.0, d_len)**2)
+            d_cyl = np.sqrt(p[0] ** 2 + p[1] ** 2) - (R - R_e)
+            d_len = np.abs(p[2]) - (L / 2.0 - R_e)
+            ext_d = np.sqrt(max(0.0, d_cyl) ** 2 + max(0.0, d_len) ** 2)
             int_d = min(0.0, max(d_cyl, d_len))
             return ext_d + int_d - R_e
         elif shape == "bullet":
             R0 = self.radius
             R_og = R0 * self.ogive_multiplier
-            L_nose = np.sqrt(2.0 * R_og * R0 - R0 ** 2)
+            L_nose = np.sqrt(2.0 * R_og * R0 - R0**2)
             L_body = max(0.0, self.length - L_nose)
             z_com = getattr(self, "z_com", 0.0)
-            
+
             x, y, z = p[0], p[1], p[2]
             z_geom = z + z_com
             r = np.sqrt(x**2 + y**2)
-            
+
             if z_geom < 0.0:
                 d_cyl = r - R0
                 d_cap = -z_geom - L_body
                 return max(d_cyl, d_cap)
             else:
                 if z_geom > L_nose:
-                    return np.sqrt(r**2 + (z_geom - L_nose)**2)
+                    return np.sqrt(r**2 + (z_geom - L_nose) ** 2)
                 else:
                     r_c = R0 - R_og
-                    dist_to_center = np.sqrt((r - r_c)**2 + z_geom**2)
+                    dist_to_center = np.sqrt((r - r_c) ** 2 + z_geom**2)
                     return dist_to_center - R_og
         elif shape == "propeller":
             S = self.span
@@ -334,23 +341,28 @@ class Projectile:
             thickness_ratio = self.thickness_ratio
             R_tip = self.tip_radius
             y_com = getattr(self, "y_com", 0.0)
-            
+
             x, y, z = p[0], p[1], p[2]
             y_geom = y + y_com
-            
+
             if y_geom > S - R_tip:
-                return np.sqrt(x**2 + (y_geom - (S - R_tip))**2 + z**2) - R_tip
+                return np.sqrt(x**2 + (y_geom - (S - R_tip)) ** 2 + z**2) - R_tip
             elif y_geom < 0.0:
                 # Flat root cap
-                u = (x + c_r/2.0) / c_r
+                u = (x + c_r / 2.0) / c_r
                 u_clamped = min(max(u, 0.0), 1.0)
-                t = 5.0 * (thickness_ratio / 100.0) * (
-                    0.2969 * np.sqrt(u_clamped)
-                    - 0.1260 * u_clamped
-                    - 0.3516 * (u_clamped**2)
-                    + 0.2843 * (u_clamped**3)
-                    - 0.1015 * (u_clamped**4)
-                ) * c_r
+                t = (
+                    5.0
+                    * (thickness_ratio / 100.0)
+                    * (
+                        0.2969 * np.sqrt(u_clamped)
+                        - 0.1260 * u_clamped
+                        - 0.3516 * (u_clamped**2)
+                        + 0.2843 * (u_clamped**3)
+                        - 0.1015 * (u_clamped**4)
+                    )
+                    * c_r
+                )
                 half_t = max(t / 2.0, R_tip)
                 d_slice = np.abs(z) - half_t
                 return max(-y_geom, d_slice)
@@ -359,23 +371,28 @@ class Projectile:
                 theta = np.radians(twist_deg) * (y_geom / S)
                 xr = x * np.cos(theta) + z * np.sin(theta)
                 zr = -x * np.sin(theta) + z * np.cos(theta)
-                
-                u = (xr + c/2.0) / c
+
+                u = (xr + c / 2.0) / c
                 u_clamped = min(max(u, 0.0), 1.0)
-                t = 5.0 * (thickness_ratio / 100.0) * (
-                    0.2969 * np.sqrt(u_clamped)
-                    - 0.1260 * u_clamped
-                    - 0.3516 * (u_clamped**2)
-                    + 0.2843 * (u_clamped**3)
-                    - 0.1015 * (u_clamped**4)
-                ) * c
+                t = (
+                    5.0
+                    * (thickness_ratio / 100.0)
+                    * (
+                        0.2969 * np.sqrt(u_clamped)
+                        - 0.1260 * u_clamped
+                        - 0.3516 * (u_clamped**2)
+                        + 0.2843 * (u_clamped**3)
+                        - 0.1015 * (u_clamped**4)
+                    )
+                    * c
+                )
                 half_t = max(t / 2.0, R_tip)
-                
-                if xr < -c/2.0 + R_tip:
-                    dist_le = np.sqrt((xr - (-c/2.0 + R_tip))**2 + zr**2)
+
+                if xr < -c / 2.0 + R_tip:
+                    dist_le = np.sqrt((xr - (-c / 2.0 + R_tip)) ** 2 + zr**2)
                     return dist_le - R_tip
-                elif xr > c/2.0 - R_tip:
-                    dist_te = np.sqrt((xr - (c/2.0 - R_tip))**2 + zr**2)
+                elif xr > c / 2.0 - R_tip:
+                    dist_te = np.sqrt((xr - (c / 2.0 - R_tip)) ** 2 + zr**2)
                     return dist_te - R_tip
                 else:
                     return np.abs(zr) - half_t
@@ -420,7 +437,7 @@ def update_contact_zone(
         p_loc[i] = q_rotate_vector(q_inv, p_rel[i])
 
     contact_mask = np.zeros(len(p_loc), dtype=bool)
-    
+
     if projectile.shape_type == "sphere":
         dists = np.sqrt(np.sum(p_loc**2, axis=1))
         contact_mask = dists <= (projectile.radius + proximity_threshold)
@@ -428,20 +445,20 @@ def update_contact_zone(
     elif projectile.shape_type == "cylinder":
         R = projectile.radius
         L = projectile.length
-        d_cyl = np.sqrt(p_loc[:, 0]**2 + p_loc[:, 1]**2) - R
-        d_len = np.abs(p_loc[:, 2]) - L/2.0
+        d_cyl = np.sqrt(p_loc[:, 0] ** 2 + p_loc[:, 1] ** 2) - R
+        d_len = np.abs(p_loc[:, 2]) - L / 2.0
         dists = np.maximum(d_cyl, d_len)
         contact_mask = dists <= proximity_threshold
 
     elif projectile.shape_type == "bullet":
         R0 = projectile.radius
         R_og = R0 * projectile.ogive_multiplier
-        L_nose = np.sqrt(2.0 * R_og * R0 - R0 ** 2)
-        L_body = max(0.0, projectile.length - L_nose)
+        L_nose = np.sqrt(2.0 * R_og * R0 - R0**2)
+        max(0.0, projectile.length - L_nose)
 
         for i in range(len(p_loc)):
             z = p_loc[i, 2]
-            r = np.sqrt(p_loc[i, 0]**2 + p_loc[i, 1]**2)
+            r = np.sqrt(p_loc[i, 0] ** 2 + p_loc[i, 1] ** 2)
             if z < 0:
                 dist = r - R0
             else:
@@ -459,14 +476,25 @@ def update_contact_zone(
         for i in range(len(p_loc)):
             x, y, z = p_loc[i]
             if y > S - R_tip:
-                dist = np.sqrt(x**2 + (y - (S - R_tip))**2 + z**2) - R_tip
+                dist = np.sqrt(x**2 + (y - (S - R_tip)) ** 2 + z**2) - R_tip
             else:
                 c = c_r + (y / S) * (c_t - c_r)
                 theta = theta_t * (y / S)
                 xr = x * np.cos(theta) + z * np.sin(theta)
                 zr = -x * np.sin(theta) + z * np.cos(theta)
                 u = xr / c
-                t = 5.0 * tau * (0.2969*np.sqrt(max(0.0, u)) - 0.1260*u - 0.3516*(u**2) + 0.2843*(u**3) - 0.1015*(u**4)) * c
+                t = (
+                    5.0
+                    * tau
+                    * (
+                        0.2969 * np.sqrt(max(0.0, u))
+                        - 0.1260 * u
+                        - 0.3516 * (u**2)
+                        + 0.2843 * (u**3)
+                        - 0.1015 * (u**4)
+                    )
+                    * c
+                )
                 dist = np.abs(zr) - t
             contact_mask[i] = dist <= proximity_threshold
 
@@ -476,7 +504,9 @@ def update_contact_zone(
         x_proj = np.clip(p_loc[:, 0], -w_h, w_h)
         y_proj = np.clip(p_loc[:, 1], -t_h, t_h)
         z_proj = 0.0
-        dists = np.sqrt((p_loc[:, 0] - x_proj) ** 2 + (p_loc[:, 1] - y_proj) ** 2 + (p_loc[:, 2] - z_proj) ** 2)
+        dists = np.sqrt(
+            (p_loc[:, 0] - x_proj) ** 2 + (p_loc[:, 1] - y_proj) ** 2 + (p_loc[:, 2] - z_proj) ** 2
+        )
         contact_mask = dists <= proximity_threshold
 
     contact_nodes = np.flatnonzero(contact_mask).astype(np.int32)
@@ -518,7 +548,7 @@ def distribute_contact_forces(
             (c_pos[:, 0] - x_proj) ** 2 + (c_pos[:, 1] - y_proj) ** 2 + (c_pos[:, 2] - z_proj) ** 2
         )
     else:
-        d_i = np.sqrt(np.sum((c_pos - projectile.pos)**2, axis=1))
+        d_i = np.sqrt(np.sum((c_pos - projectile.pos) ** 2, axis=1))
     penetration = np.maximum(0.0, (projectile.pos[2] - c_pos[:, 2]) * direction)
 
     k_val = k_contact if k_contact is not None else 10.0 * np.mean(grid.stiffnesses)
@@ -545,10 +575,7 @@ def check_termination(
     initial_velocity_z: float,
 ) -> str | None:
     """Check if the simulation should terminate."""
-    if (
-        np.sign(projectile.vel[2]) != np.sign(initial_velocity_z)
-        or projectile.vel[2] == 0.0
-    ):
+    if np.sign(projectile.vel[2]) != np.sign(initial_velocity_z) or projectile.vel[2] == 0.0:
         return "arrest"
 
     if t_current >= t_max:

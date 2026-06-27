@@ -59,7 +59,6 @@ def run_benchmark(arch_name: str, size: int, mode: str, n_steps: int = 50) -> fl
         grid = generate_rectangular_grid(size, size, 0.05, MOCK_MATERIAL, n_plies=n_plies, t_ply=t_ply)
 
     n_nodes = grid.n_nodes
-    n_springs = grid.n_springs
 
     positions = grid.nodes
     velocities = np.zeros((n_nodes, 3), dtype=np.float64)
@@ -255,7 +254,7 @@ def run_all() -> None:
     try:
         import matplotlib.pyplot as plt
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+        _fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
         plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
 
         x_vals = [size * size for size in GRID_SIZES]

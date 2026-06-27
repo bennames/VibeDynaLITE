@@ -7,6 +7,7 @@ of Kevlar 29, extracts the residual velocities, fits them to the classical Jonas
 
 import time
 from pathlib import Path
+
 import numpy as np
 
 # Select the fastest JIT-compiled backend (Numba) for rapid sweep execution
@@ -155,7 +156,7 @@ def main() -> None:
 
     # Fit parameters to Jonas-Laval curve
     v50_fit, alpha_fit = fit_jonas_laval(strike_vels, residual_vels)
-    print(f"\nJonas-Laval (Lambert-Jonas) Fit Results:")
+    print("\nJonas-Laval (Lambert-Jonas) Fit Results:")
     print(f"  V50 Ballistic Limit: {v50_fit:.1f} m/s")
     print(f"  Velocity Scale (alpha): {alpha_fit:.3f}")
 

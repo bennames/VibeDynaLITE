@@ -188,7 +188,6 @@ class ConfigPanel:
                             tag=self.mat_yarn_count_y, default_value=17, enabled=False, width=-1
                         )
 
-
             # --- GRID GEOMETRY SECTION ---
             with dpg.collapsing_header(label="Grid Geometry & Boundaries", default_open=True):
                 with dpg.table(header_row=False):
@@ -405,7 +404,9 @@ class ConfigPanel:
                             dpg.add_input_float(tag=self.proj_width, default_value=0.02, width=-1)
                         with dpg.table_row():
                             dpg.add_text("Edge Thickness (m)")
-                            dpg.add_input_float(tag=self.proj_thickness, default_value=0.005, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_thickness, default_value=0.005, width=-1
+                            )
 
                 with dpg.group(tag="proj_sphere_group", show=False):
                     with dpg.table(header_row=False):
@@ -421,13 +422,19 @@ class ConfigPanel:
                         dpg.add_table_column()
                         with dpg.table_row():
                             dpg.add_text("Radius (m)")
-                            dpg.add_input_float(tag=self.proj_radius_cyl, default_value=0.005, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_radius_cyl, default_value=0.005, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Length (m)")
-                            dpg.add_input_float(tag=self.proj_length_cyl, default_value=0.01, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_length_cyl, default_value=0.01, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Edge Radius (m)")
-                            dpg.add_input_float(tag=self.proj_edge_radius, default_value=0.0, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_edge_radius, default_value=0.0, width=-1
+                            )
 
                 with dpg.group(tag="proj_bullet_group", show=False):
                     with dpg.table(header_row=False):
@@ -435,13 +442,19 @@ class ConfigPanel:
                         dpg.add_table_column()
                         with dpg.table_row():
                             dpg.add_text("Radius (m)")
-                            dpg.add_input_float(tag=self.proj_radius_bullet, default_value=0.005, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_radius_bullet, default_value=0.005, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Length (m)")
-                            dpg.add_input_float(tag=self.proj_length_bullet, default_value=0.01, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_length_bullet, default_value=0.01, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Ogive Multiplier")
-                            dpg.add_input_float(tag=self.proj_ogive_multiplier, default_value=2.0, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_ogive_multiplier, default_value=2.0, width=-1
+                            )
 
                 with dpg.group(tag="proj_propeller_group", show=False):
                     with dpg.table(header_row=False):
@@ -452,19 +465,27 @@ class ConfigPanel:
                             dpg.add_input_float(tag=self.proj_span, default_value=0.05, width=-1)
                         with dpg.table_row():
                             dpg.add_text("Root Chord (m)")
-                            dpg.add_input_float(tag=self.proj_root_chord, default_value=0.01, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_root_chord, default_value=0.01, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Tip Chord (m)")
-                            dpg.add_input_float(tag=self.proj_tip_chord, default_value=0.005, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_tip_chord, default_value=0.005, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Twist (deg)")
                             dpg.add_input_float(tag=self.proj_twist, default_value=15.0, width=-1)
                         with dpg.table_row():
                             dpg.add_text("Thickness Ratio (%)")
-                            dpg.add_input_float(tag=self.proj_thickness_ratio, default_value=12.0, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_thickness_ratio, default_value=12.0, width=-1
+                            )
                         with dpg.table_row():
                             dpg.add_text("Tip Radius (m)")
-                            dpg.add_input_float(tag=self.proj_tip_radius, default_value=0.002, width=-1)
+                            dpg.add_input_float(
+                                tag=self.proj_tip_radius, default_value=0.002, width=-1
+                            )
 
                 with dpg.table(header_row=False):
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
@@ -708,7 +729,7 @@ class ConfigPanel:
 
         # Estimate rotational KE (assuming spherical inertia for simple feedback)
         # I = 2/5 M R^2 (we use 0.01 as a dummy characteristic length for the UI display)
-        inertia_approx = 0.4 * mass * (0.01)**2
+        inertia_approx = 0.4 * mass * (0.01) ** 2
         w_mag = math.sqrt(wx**2 + wy**2 + wz**2)
         rot_ke = 0.5 * inertia_approx * w_mag**2
         ke = trans_ke + rot_ke
@@ -938,8 +959,20 @@ class ConfigPanel:
                 "shape_type": dpg.get_value(self.proj_shape).lower(),
                 "blade_width": dpg.get_value(self.proj_width),
                 "edge_thickness": dpg.get_value(self.proj_thickness),
-                "radius": dpg.get_value(self.proj_radius_cyl) if dpg.get_value(self.proj_shape).lower() == "cylinder" else (dpg.get_value(self.proj_radius_bullet) if dpg.get_value(self.proj_shape).lower() == "bullet" else dpg.get_value(self.proj_radius)),
-                "length": dpg.get_value(self.proj_length_cyl) if dpg.get_value(self.proj_shape).lower() == "cylinder" else (dpg.get_value(self.proj_length_bullet) if dpg.get_value(self.proj_shape).lower() == "bullet" else 0.01),
+                "radius": dpg.get_value(self.proj_radius_cyl)
+                if dpg.get_value(self.proj_shape).lower() == "cylinder"
+                else (
+                    dpg.get_value(self.proj_radius_bullet)
+                    if dpg.get_value(self.proj_shape).lower() == "bullet"
+                    else dpg.get_value(self.proj_radius)
+                ),
+                "length": dpg.get_value(self.proj_length_cyl)
+                if dpg.get_value(self.proj_shape).lower() == "cylinder"
+                else (
+                    dpg.get_value(self.proj_length_bullet)
+                    if dpg.get_value(self.proj_shape).lower() == "bullet"
+                    else 0.01
+                ),
                 "edge_radius": dpg.get_value(self.proj_edge_radius),
                 "ogive_multiplier": dpg.get_value(self.proj_ogive_multiplier),
                 "span": dpg.get_value(self.proj_span),
@@ -1057,13 +1090,13 @@ class ConfigPanel:
             shape_cased = "Bullet"
         elif shape == "propeller":
             shape_cased = "Propeller"
-            
+
         dpg.set_value(self.proj_shape, shape_cased)
         self._on_projectile_shape_change(None, shape_cased)
 
         dpg.set_value(self.proj_width, proj.get("blade_width", 0.02))
         dpg.set_value(self.proj_thickness, proj.get("edge_thickness", 0.005))
-        
+
         radius = proj.get("radius", 0.005)
         length = proj.get("length", 0.01)
         dpg.set_value(self.proj_radius, radius)
@@ -1079,7 +1112,7 @@ class ConfigPanel:
         dpg.set_value(self.proj_twist, proj.get("twist", 15.0))
         dpg.set_value(self.proj_thickness_ratio, proj.get("thickness_ratio", 12.0))
         dpg.set_value(self.proj_tip_radius, proj.get("tip_radius", 0.002))
-        
+
         self._on_projectile_change(None, None)
 
         # 4. Update Simulation settings

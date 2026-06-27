@@ -207,7 +207,10 @@ def normalize_config_units(config: dict) -> None:
         if "position" in proj and isinstance(proj["position"], list):
             proj["position"] = [parse_unit_value(p, "m") for p in proj["position"]]
         if "omega" in proj and isinstance(proj["omega"], list):
-            proj["omega"] = [parse_unit_value(w, "m/s") if isinstance(w, str) else float(w) for w in proj["omega"]]
+            proj["omega"] = [
+                parse_unit_value(w, "m/s") if isinstance(w, str) else float(w)
+                for w in proj["omega"]
+            ]
         if "quat" in proj and isinstance(proj["quat"], list):
             proj["quat"] = [float(q) for q in proj["quat"]]
 
@@ -433,7 +436,9 @@ def validate_config(config: dict) -> bool:
 
     for key in required_keys:
         if key not in proj:
-            raise ValidationError(f"Projectile section missing required key: '{key}' for shape '{shape}'")
+            raise ValidationError(
+                f"Projectile section missing required key: '{key}' for shape '{shape}'"
+            )
 
     for key in ["mass"] + (["blade_width", "edge_thickness"] if shape == "box" else []):
         val = proj[key]
@@ -483,19 +488,23 @@ def validate_config(config: dict) -> bool:
             raise ValidationError(f"Sphere radius/caliber must be a positive number (got {r}).")
     elif shape == "cylinder":
         r = proj.get("radius", proj.get("caliber", None))
-        l = proj.get("length", proj.get("total_length", None))
+        length = proj.get("length", proj.get("total_length", None))
         if r is not None and (not isinstance(r, (int, float)) or r <= 0.0):
             raise ValidationError(f"Cylinder radius/caliber must be a positive number (got {r}).")
-        if l is not None and (not isinstance(l, (int, float)) or l <= 0.0):
-            raise ValidationError(f"Cylinder length/total_length must be a positive number (got {l}).")
+        if length is not None and (not isinstance(length, (int, float)) or length <= 0.0):
+            raise ValidationError(
+                f"Cylinder length/total_length must be a positive number (got {length})."
+            )
     elif shape == "bullet":
         r = proj.get("radius", proj.get("caliber", None))
-        l = proj.get("length", proj.get("total_length", None))
+        length = proj.get("length", proj.get("total_length", None))
         m = proj.get("ogive_multiplier", 2.0)
         if r is not None and (not isinstance(r, (int, float)) or r <= 0.0):
             raise ValidationError(f"Bullet radius/caliber must be a positive number (got {r}).")
-        if l is not None and (not isinstance(l, (int, float)) or l <= 0.0):
-            raise ValidationError(f"Bullet length/total_length must be a positive number (got {l}).")
+        if length is not None and (not isinstance(length, (int, float)) or length <= 0.0):
+            raise ValidationError(
+                f"Bullet length/total_length must be a positive number (got {length})."
+            )
         if not isinstance(m, (int, float)) or m <= 0.0:
             raise ValidationError(f"Bullet ogive_multiplier must be a positive number (got {m}).")
     elif shape == "propeller":
@@ -514,7 +523,9 @@ def validate_config(config: dict) -> bool:
         if not isinstance(twist, (int, float)):
             raise ValidationError(f"Propeller twist must be a number (got {twist}).")
         if not isinstance(thick, (int, float)) or thick <= 0.0:
-            raise ValidationError(f"Propeller thickness_ratio must be a positive number (got {thick}).")
+            raise ValidationError(
+                f"Propeller thickness_ratio must be a positive number (got {thick})."
+            )
         if not isinstance(t_r, (int, float)) or t_r <= 0.0:
             raise ValidationError(f"Propeller tip_radius must be a positive number (got {t_r}).")
 

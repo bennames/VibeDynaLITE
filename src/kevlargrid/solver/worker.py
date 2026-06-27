@@ -35,12 +35,12 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         import os
 
         os.environ["KEVLARGRID_BACKEND"] = solver_backend
-        
+
         # Import solver modules after backend environment variable is set
+        from kevlargrid.solver import backend
         from kevlargrid.solver.grid import generate_rectangular_grid
         from kevlargrid.solver.projectile import Projectile, check_termination, update_contact_zone
         from kevlargrid.solver.timestep import compute_cfl_timestep
-        from kevlargrid.solver import backend
 
         backend.BACKEND = solver_backend
 
@@ -104,9 +104,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             h_half = edge_thickness / 2.0
         elif s_lower == "sphere":
             h_half = radius
-        elif s_lower == "cylinder":
-            h_half = length / 2.0
-        elif s_lower == "bullet":
+        elif s_lower == "cylinder" or s_lower == "bullet":
             h_half = length / 2.0
         else:
             h_half = radius
@@ -122,14 +120,22 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             # Striking from below: top of projectile must start below or at grid bottom (0.0)
             if z_pos + h_half > z_grid_bottom:
                 z_pos = z_grid_bottom - h_half
-                logger.warning("Projectile initially overlaps Kevlar grid. Adjusted Z starting position to %f m to ensure tangent contact.", z_pos)
+                logger.warning(
+                    "Projectile initially overlaps Kevlar grid. Adjusted Z starting position to %f m to ensure tangent contact.",
+                    z_pos,
+                )
         else:
             # Striking from above: bottom of projectile must start above or at grid top
             if z_pos - h_half < z_grid_top:
                 z_pos = z_grid_top + h_half
-                logger.warning("Projectile initially overlaps Kevlar grid. Adjusted Z starting position to %f m to ensure tangent contact.", z_pos)
+                logger.warning(
+                    "Projectile initially overlaps Kevlar grid. Adjusted Z starting position to %f m to ensure tangent contact.",
+                    z_pos,
+                )
 
-        proj_position = np.array([proj_cfg["position"][0], proj_cfg["position"][1], z_pos], dtype=np.float64)
+        proj_position = np.array(
+            [proj_cfg["position"][0], proj_cfg["position"][1], z_pos], dtype=np.float64
+        )
 
         proj = Projectile(
             mass=proj_cfg["mass"],
@@ -172,7 +178,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         failure_dissipated = 0.0
         clamp_dissipated = 0.0
         contact_energy = 0.0
-        
+
         proj_peak_deceleration = np.zeros(1, dtype=np.float64)
 
         # Send configuration metadata back to GUI process
@@ -245,8 +251,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             solver_backend = sim_cfg.get("backend", "taichi")
             prev_clamp = clamp_dissipated
             if solver_backend == "numba":
-                from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
-                
+                from kevlargrid.solver.fused import fused_leapfrog_loop
+
                 extra_kwargs["proj_peak_deceleration"] = proj_peak_deceleration
 
                 (
@@ -267,7 +273,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     hist_se,
                     hist_proj_ke,
                     contact_energy,
-                ) = solver_loop(
+                ) = fused_leapfrog_loop(
                     positions,
                     velocities,
                     grid.springs,
@@ -325,12 +331,17 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                         lens_f = np.sqrt(dx_f**2 + dy_f**2 + dz_f**2)
                         strains_f = (lens_f - L0) / L0
                         active_strains = np.where(failed_f, 0.0, strains_f)
-                        hist_peak_strain[f] = np.max(active_strains) if len(active_strains) > 0 else 0.0
+                        hist_peak_strain[f] = (
+                            np.max(active_strains) if len(active_strains) > 0 else 0.0
+                        )
 
                 if clamp_dissipated > prev_clamp:
-                    logger.warning("Velocity clamping occurred in Numba solver: dissipated energy increased by %e J", clamp_dissipated - prev_clamp)
+                    logger.warning(
+                        "Velocity clamping occurred in Numba solver: dissipated energy increased by %e J",
+                        clamp_dissipated - prev_clamp,
+                    )
             else:
-                from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop as solver_loop
+                from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
 
                 (
                     positions,
@@ -351,7 +362,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     hist_proj_ke,
                     hist_peak_strain,
                     contact_energy,
-                ) = solver_loop(
+                ) = taichi_leapfrog_loop(
                     positions,
                     velocities,
                     grid.springs,
@@ -395,7 +406,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     **extra_kwargs,
                 )
                 if clamp_dissipated > prev_clamp:
-                    logger.warning("Velocity clamping occurred in Taichi solver: dissipated energy increased by %e J", clamp_dissipated - prev_clamp)
+                    logger.warning(
+                        "Velocity clamping occurred in Taichi solver: dissipated energy increased by %e J",
+                        clamp_dissipated - prev_clamp,
+                    )
 
             # Check for numerical instability (NaN/inf values)
             if np.isnan(positions[0, 0]) or np.any(np.isnan(positions)):
@@ -463,12 +477,12 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 break
 
         # Calculate final reports
-        final_velocity_z = float(proj.velocity[2])
-        is_penetrated = (reason == "penetration")
-        is_arrested = (reason == "arrest" or reason == "timeout" or reason is None)
+        float(proj.velocity[2])
+        is_penetrated = reason == "penetration"
+        is_arrested = reason == "arrest" or reason == "timeout" or reason is None
 
         initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)
-        final_ke = 0.5 * proj.mass * np.sum(proj.velocity ** 2)
+        final_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
         energy_eff = float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
 
         # Retrieve peak deceleration Gs
@@ -476,7 +490,12 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             peak_decel = float(proj_peak_deceleration[0])
         else:
             import kevlargrid.solver.taichi_solver as taichi_solver
-            peak_decel = float(taichi_solver._SOLVER_CACHE.peak_deceleration_g[None]) if taichi_solver._SOLVER_CACHE is not None else 0.0
+
+            peak_decel = (
+                float(taichi_solver._SOLVER_CACHE.peak_deceleration_g[None])
+                if taichi_solver._SOLVER_CACHE is not None
+                else 0.0
+            )
 
         # Find closest node in-plane in the base layer to identify center node per layer
         base_nodes = positions[:n_nodes_per_layer]
@@ -486,13 +505,13 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         center_idx = int(np.argmin(dists_in_plane))
 
         max_layer_perf = -1
-        for l in range(n_layers):
-            c = center_idx + l * n_nodes_per_layer
+        for layer in range(n_layers):
+            c = center_idx + layer * n_nodes_per_layer
             start_sp = grid.node_spring_offsets[c]
             end_sp = grid.node_spring_offsets[c + 1]
             sp_ids = grid.node_spring_ids[start_sp:end_sp]
             if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
-                max_layer_perf = l
+                max_layer_perf = layer
 
         diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
         lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
@@ -503,17 +522,36 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         report = {
             "arrested": bool(is_arrested),
             "peak_deceleration_g": float(peak_decel),
-            "yarn_rupture_percentage": float(np.sum(grid.failed) / len(grid.failed) * 100.0) if len(grid.failed) > 0 else 0.0,
+            "yarn_rupture_percentage": float(np.sum(grid.failed) / len(grid.failed) * 100.0)
+            if len(grid.failed) > 0
+            else 0.0,
             "residual_velocity_ms": float(np.linalg.norm(proj.velocity)) if is_penetrated else 0.0,
             "energy_dissipation_efficiency": float(energy_eff),
             "max_layer_perforated": int(max_layer_perf),
             # Detailed 6-DOF projectile metrics
             "projectile_shape": str(proj.shape_type),
             "projectile_volume": float(proj.volume),
-            "projectile_inertia": [float(proj.inertia[0, 0]), float(proj.inertia[1, 1]), float(proj.inertia[2, 2])],
-            "projectile_velocity_final": [float(proj.velocity[0]), float(proj.velocity[1]), float(proj.velocity[2])],
-            "projectile_omega_final": [float(proj.omega[0]), float(proj.omega[1]), float(proj.omega[2])],
-            "projectile_quat_final": [float(proj.quat[0]), float(proj.quat[1]), float(proj.quat[2]), float(proj.quat[3])],
+            "projectile_inertia": [
+                float(proj.inertia[0, 0]),
+                float(proj.inertia[1, 1]),
+                float(proj.inertia[2, 2]),
+            ],
+            "projectile_velocity_final": [
+                float(proj.velocity[0]),
+                float(proj.velocity[1]),
+                float(proj.velocity[2]),
+            ],
+            "projectile_omega_final": [
+                float(proj.omega[0]),
+                float(proj.omega[1]),
+                float(proj.omega[2]),
+            ],
+            "projectile_quat_final": [
+                float(proj.quat[0]),
+                float(proj.quat[1]),
+                float(proj.quat[2]),
+                float(proj.quat[3]),
+            ],
             # Keep legacy keys for any other potential backward compatibility
             "penetrated": bool(is_penetrated),
             "final_velocity": float(np.linalg.norm(proj.velocity)),

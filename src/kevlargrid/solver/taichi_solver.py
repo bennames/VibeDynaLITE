@@ -141,7 +141,7 @@ class TaichiSolver:
         self.proj_shape_type = ti.field(dtype=ti.i32, shape=())
         self.proj_accel = ti.Vector.field(3, dtype=real_type, shape=())
         self.proj_omega_dot = ti.Vector.field(3, dtype=real_type, shape=())
-        
+
         # Shape parameter fields
         self.radius_field = ti.field(dtype=real_type, shape=())
         self.length_field = ti.field(dtype=real_type, shape=())
@@ -288,7 +288,6 @@ class TaichiSolver:
 
         self.k_reset_forces_graph = k_reset_forces_g
 
-
         @ti.kernel
         def k_compute_active_counts_g():
             for i in range(self.n_nodes):
@@ -350,7 +349,9 @@ class TaichiSolver:
                     ):
                         x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
                         y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                        dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
+                        dist = ti.sqrt(
+                            (px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2
+                        )
 
                         if dist <= proximity_threshold:
                             w = 1.0 / ti.max(dist, 1e-4)
@@ -369,11 +370,15 @@ class TaichiSolver:
                             scale_factor = float(self.node_active_counts[i]) / float(
                                 self.node_initial_springs[i]
                             )
-                        ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
+                        ti.atomic_add(
+                            self.node_stiffness[i], k_penalty * w_normalized * scale_factor
+                        )
             else:
                 # SDF bounding volume contact stiffness check
                 proj_pos = self.proj_position[None]
-                max_R = ti.max(self.radius_field[None], ti.max(self.length_field[None], self.span_field[None]))
+                max_R = ti.max(
+                    self.radius_field[None], ti.max(self.length_field[None], self.span_field[None])
+                )
                 cutoff = max_R + proximity_threshold
                 for i in range(self.n_nodes):
                     dist = (self.positions[i] - proj_pos).norm()
@@ -415,7 +420,6 @@ class TaichiSolver:
                 self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
             self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
             self.contact_energy[None] = 0.0
-
 
             # Phase C: fused spring traversal
             for j in range(self.n_springs):
@@ -528,7 +532,10 @@ class TaichiSolver:
                             direction = 1.0 if zu > zv else -1.0
                             ti.atomic_add(self.forces[u].z, f_mag * direction)
                             ti.atomic_add(self.forces[v].z, -f_mag * direction)
-                            ti.atomic_add(self.contact_energy[None], 0.5 * k_penalty * penetration * penetration)
+                            ti.atomic_add(
+                                self.contact_energy[None],
+                                0.5 * k_penalty * penetration * penetration,
+                            )
 
         self.k_compute_interply_forces_graph = k_compute_interply_forces_g
 
@@ -591,20 +598,20 @@ class TaichiSolver:
 
             self.proj_velocity[None] += 0.5 * self.proj_accel[None] * dt
             self.proj_position[None] += self.proj_velocity[None] * dt
-            
+
             if self.proj_shape_type[None] > 0:
                 self.proj_omega[None] += 0.5 * self.proj_omega_dot[None] * dt
-                
+
                 omega = self.proj_omega[None]
                 q = self.proj_quat[None]
                 qw, qx, qy, qz = q[0], q[1], q[2], q[3]
                 ox, oy, oz = omega[0], omega[1], omega[2]
-                
-                dq_w = - ox*qx - oy*qy - oz*qz
-                dq_x = ox*qw + oy*qz - oz*qy
-                dq_y = - ox*qz + oy*qw + oz*qx
-                dq_z = ox*qy - oy*qx + oz*qw
-                
+
+                dq_w = -ox * qx - oy * qy - oz * qz
+                dq_x = ox * qw + oy * qz - oz * qy
+                dq_y = -ox * qz + oy * qw + oz * qx
+                dq_z = ox * qy - oy * qx + oz * qw
+
                 q_new = ti.Vector([qw, qx, qy, qz]) + 0.5 * dt * ti.Vector([dq_w, dq_x, dq_y, dq_z])
                 q_norm = q_new.norm()
                 if q_norm > 1e-8:
@@ -638,7 +645,7 @@ class TaichiSolver:
 
                 net_f = self.forces[i] + damp_f + self.nodal_external_forces[i]
                 self.accel[i] = net_f / self.masses[i]
-                
+
                 self.velocities[i] += 0.5 * self.accel[i] * dt
 
                 v_mag = self.velocities[i].norm()
@@ -703,12 +710,14 @@ class TaichiSolver:
     def ti_q_mul(self, q1, q2):
         w1, x1, y1, z1 = q1[0], q1[1], q1[2], q1[3]
         w2, x2, y2, z2 = q2[0], q2[1], q2[2], q2[3]
-        return ti.Vector([
-            w1*w2 - x1*x2 - y1*y2 - z1*z2,
-            w1*x2 + x1*w2 + y1*z2 - z1*y2,
-            w1*y2 - x1*z2 + y1*w2 + z1*x2,
-            w1*z2 + x1*y2 - y1*x2 + z1*w2
-        ])
+        return ti.Vector(
+            [
+                w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            ]
+        )
 
     @ti.func
     def ti_q_rotate(self, q, v):
@@ -724,8 +733,8 @@ class TaichiSolver:
     @ti.func
     def sdf_cylinder(self, p, R, L, R_e):
         d_cyl = ti.sqrt(p.x**2 + p.y**2) - (R - R_e)
-        d_len = ti.abs(p.z) - (L/2.0 - R_e)
-        ext_d = ti.sqrt(ti.max(0.0, d_cyl)**2 + ti.max(0.0, d_len)**2)
+        d_len = ti.abs(p.z) - (L / 2.0 - R_e)
+        ext_d = ti.sqrt(ti.max(0.0, d_cyl) ** 2 + ti.max(0.0, d_len) ** 2)
         int_d = ti.min(0.0, ti.max(d_cyl, d_len))
         return ext_d + int_d - R_e
 
@@ -740,31 +749,36 @@ class TaichiSolver:
             val = ti.max(d_cyl, d_cap)
         else:
             if z_geom > L_nose:
-                val = ti.sqrt(r**2 + (z_geom - L_nose)**2)
+                val = ti.sqrt(r**2 + (z_geom - L_nose) ** 2)
             else:
                 r_c = R0 - R_og
-                dist_to_center = ti.sqrt((r - r_c)**2 + z_geom**2)
+                dist_to_center = ti.sqrt((r - r_c) ** 2 + z_geom**2)
                 val = dist_to_center - R_og
         return val
 
     @ti.func
     def sdf_propeller_slice(self, x_prime, z_prime, c, tau, R_tip):
-        u = (x_prime + c/2.0) / c
+        u = (x_prime + c / 2.0) / c
         u_clamped = ti.min(ti.max(u, 0.0), 1.0)
-        t = 5.0 * tau * (
-            0.2969 * ti.sqrt(u_clamped)
-            - 0.1260 * u_clamped
-            - 0.3516 * (u_clamped**2)
-            + 0.2843 * (u_clamped**3)
-            - 0.1015 * (u_clamped**4)
-        ) * c
+        t = (
+            5.0
+            * tau
+            * (
+                0.2969 * ti.sqrt(u_clamped)
+                - 0.1260 * u_clamped
+                - 0.3516 * (u_clamped**2)
+                + 0.2843 * (u_clamped**3)
+                - 0.1015 * (u_clamped**4)
+            )
+            * c
+        )
         half_t = ti.max(t / 2.0, R_tip)
         val = 0.0
-        if x_prime < -c/2.0 + R_tip:
-            dist_le = ti.sqrt((x_prime - (-c/2.0 + R_tip))**2 + z_prime**2)
+        if x_prime < -c / 2.0 + R_tip:
+            dist_le = ti.sqrt((x_prime - (-c / 2.0 + R_tip)) ** 2 + z_prime**2)
             val = dist_le - R_tip
-        elif x_prime > c/2.0 - R_tip:
-            dist_te = ti.sqrt((x_prime - (c/2.0 - R_tip))**2 + z_prime**2)
+        elif x_prime > c / 2.0 - R_tip:
+            dist_te = ti.sqrt((x_prime - (c / 2.0 - R_tip)) ** 2 + z_prime**2)
             val = dist_te - R_tip
         else:
             val = ti.abs(z_prime) - half_t
@@ -775,17 +789,22 @@ class TaichiSolver:
         y_geom = p.y + y_com
         val = 0.0
         if y_geom > S - R_tip:
-            val = ti.sqrt(p.x**2 + (y_geom - (S - R_tip))**2 + p.z**2) - R_tip
+            val = ti.sqrt(p.x**2 + (y_geom - (S - R_tip)) ** 2 + p.z**2) - R_tip
         elif y_geom < 0.0:
-            u = (p.x + c_r/2.0) / c_r
+            u = (p.x + c_r / 2.0) / c_r
             u_clamped = ti.min(ti.max(u, 0.0), 1.0)
-            t = 5.0 * (thickness_ratio / 100.0) * (
-                0.2969 * ti.sqrt(u_clamped)
-                - 0.1260 * u_clamped
-                - 0.3516 * (u_clamped**2)
-                + 0.2843 * (u_clamped**3)
-                - 0.1015 * (u_clamped**4)
-            ) * c_r
+            t = (
+                5.0
+                * (thickness_ratio / 100.0)
+                * (
+                    0.2969 * ti.sqrt(u_clamped)
+                    - 0.1260 * u_clamped
+                    - 0.3516 * (u_clamped**2)
+                    + 0.2843 * (u_clamped**3)
+                    - 0.1015 * (u_clamped**4)
+                )
+                * c_r
+            )
             half_t = ti.max(t / 2.0, R_tip)
             d_slice = ti.abs(p.z) - half_t
             val = ti.max(-y_geom, d_slice)
@@ -794,7 +813,7 @@ class TaichiSolver:
             theta = (twist_deg * 3.141592653589793 / 180.0) * (y_geom / S)
             xr = p.x * ti.cos(theta) + p.z * ti.sin(theta)
             zr = -p.x * ti.sin(theta) + p.z * ti.cos(theta)
-            val = self.sdf_propeller_slice(xr, zr, c, thickness_ratio/100.0, R_tip)
+            val = self.sdf_propeller_slice(xr, zr, c, thickness_ratio / 100.0, R_tip)
         return val
 
     @ti.func
@@ -804,7 +823,9 @@ class TaichiSolver:
         if shape == 1:
             val = self.sdf_sphere(p, self.radius_field[None])
         elif shape == 2:
-            val = self.sdf_cylinder(p, self.radius_field[None], self.length_field[None], self.edge_radius_field[None])
+            val = self.sdf_cylinder(
+                p, self.radius_field[None], self.length_field[None], self.edge_radius_field[None]
+            )
         elif shape == 3:
             R0 = self.radius_field[None]
             R_og = R0 * self.ogive_multiplier_field[None]
@@ -812,22 +833,40 @@ class TaichiSolver:
             L_body = ti.max(0.0, self.length_field[None] - L_nose)
             val = self.sdf_bullet(p, R0, R_og, L_body, L_nose, self.z_com_field[None])
         elif shape == 4:
-            val = self.sdf_propeller(p, self.span_field[None], self.root_chord_field[None], self.tip_chord_field[None], self.twist_field[None], self.thickness_ratio_field[None], self.tip_radius_field[None], self.y_com_field[None])
+            val = self.sdf_propeller(
+                p,
+                self.span_field[None],
+                self.root_chord_field[None],
+                self.tip_chord_field[None],
+                self.twist_field[None],
+                self.thickness_ratio_field[None],
+                self.tip_radius_field[None],
+                self.y_com_field[None],
+            )
         else:
             w_h = self.w_h[None]
             t_h = self.t_h[None]
             x_proj = ti.max(-w_h, ti.min(p.x, w_h))
             y_proj = ti.max(-t_h, ti.min(p.y, t_h))
-            val = ti.sqrt((p.x - x_proj) ** 2 + (p.y - y_proj) ** 2 + p.z ** 2)
+            val = ti.sqrt((p.x - x_proj) ** 2 + (p.y - y_proj) ** 2 + p.z**2)
         return val
 
     @ti.func
     def eval_sdf_normal(self, p):
         h = 1e-5
         grad = ti.Vector([0.0, 0.0, 0.0])
-        grad.x = (self.eval_sdf(p + ti.Vector([h, 0.0, 0.0])) - self.eval_sdf(p - ti.Vector([h, 0.0, 0.0]))) / (2.0 * h)
-        grad.y = (self.eval_sdf(p + ti.Vector([0.0, h, 0.0])) - self.eval_sdf(p - ti.Vector([0.0, h, 0.0]))) / (2.0 * h)
-        grad.z = (self.eval_sdf(p + ti.Vector([0.0, 0.0, h])) - self.eval_sdf(p - ti.Vector([0.0, 0.0, h]))) / (2.0 * h)
+        grad.x = (
+            self.eval_sdf(p + ti.Vector([h, 0.0, 0.0]))
+            - self.eval_sdf(p - ti.Vector([h, 0.0, 0.0]))
+        ) / (2.0 * h)
+        grad.y = (
+            self.eval_sdf(p + ti.Vector([0.0, h, 0.0]))
+            - self.eval_sdf(p - ti.Vector([0.0, h, 0.0]))
+        ) / (2.0 * h)
+        grad.z = (
+            self.eval_sdf(p + ti.Vector([0.0, 0.0, h]))
+            - self.eval_sdf(p - ti.Vector([0.0, 0.0, h]))
+        ) / (2.0 * h)
         norm = grad.norm()
         return grad / norm if norm > 1e-8 else ti.Vector([0.0, 0.0, 1.0])
 
@@ -839,7 +878,6 @@ class TaichiSolver:
         self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
         self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
         self.contact_energy[None] = 0.0
-
 
     @ti.func
     def compute_spring_forces(
@@ -953,7 +991,11 @@ class TaichiSolver:
                 for i in range(self.n_nodes):
                     if self.node_w[i] > 0.0:
                         w_normalized = self.node_w[i] / w_mean if w_mean > 0.0 else self.node_w[i]
-                        n_nodes_layer = self.n_nodes_per_layer_val if self.n_nodes_per_layer_val > 0 else self.n_nodes
+                        n_nodes_layer = (
+                            self.n_nodes_per_layer_val
+                            if self.n_nodes_per_layer_val > 0
+                            else self.n_nodes
+                        )
                         layer_idx = i // n_nodes_layer
                         is_ruptured = (
                             self.spring_failed[self.center_springs[layer_idx, 0]] == 1
@@ -963,7 +1005,9 @@ class TaichiSolver:
                         )
                         penetration = 0.0
                         if not is_ruptured:
-                            penetration = ti.max(0.0, (proj_pos.z - self.positions[i].z) * direction)
+                            penetration = ti.max(
+                                0.0, (proj_pos.z - self.positions[i].z) * direction
+                            )
 
                         scale_factor = 0.0
                         if self.node_initial_springs[i] > 0:
@@ -983,7 +1027,7 @@ class TaichiSolver:
             q_conj = ti.Vector([q[0], -q[1], -q[2], -q[3]])
             omega = self.proj_omega[None]
             v_proj = self.proj_velocity[None]
-            
+
             for i in range(self.n_nodes):
                 P_rel = self.positions[i] - proj_pos
                 P_loc = self.ti_q_rotate(q_conj, P_rel)
@@ -991,18 +1035,20 @@ class TaichiSolver:
                 if delta > 0.0:
                     n_loc = self.eval_sdf_normal(P_loc)
                     n_world = self.ti_q_rotate(q, n_loc)
-                    
+
                     v_proj_point = v_proj + omega.cross(P_rel)
                     v_rel = self.velocities[i] - v_proj_point
-                    
+
                     delta_dot = -v_rel.dot(n_world)
                     f_mag = k_penalty * delta + self.c_damping[None] * delta_dot
                     f_mag = ti.max(0.0, f_mag)
-                    
+
                     scale_factor = 1.0
                     if self.node_initial_springs[i] > 0:
-                        scale_factor = float(self.node_active_counts[i]) / float(self.node_initial_springs[i])
-                    
+                        scale_factor = float(self.node_active_counts[i]) / float(
+                            self.node_initial_springs[i]
+                        )
+
                     F_contact = f_mag * n_world * scale_factor
                     self.forces[i] += F_contact
                     ti.atomic_add(self.proj_reaction_force[None], -F_contact)
@@ -1079,7 +1125,7 @@ class TaichiSolver:
         if self.proj_shape_type[None] > 0:
             omega_dot = self.proj_inertia_inv[None] * self.proj_torque[None]
             self.proj_omega[None] += omega_dot * dt
-            
+
             omega = self.proj_omega[None]
             q_old = self.proj_quat[None]
             q_dot = self.ti_q_mul(ti.Vector([0.0, omega.x, omega.y, omega.z]), q_old)
@@ -1585,11 +1631,13 @@ class TaichiSolver:
             omega = self.proj_omega[None]
             inertia_inv = self.proj_inertia_inv[None]
             rot_ke = 0.5 * (
-                (1.0 / ti.max(inertia_inv[0], 1e-15)) * omega[0]**2 +
-                (1.0 / ti.max(inertia_inv[1], 1e-15)) * omega[1]**2 +
-                (1.0 / ti.max(inertia_inv[2], 1e-15)) * omega[2]**2
+                (1.0 / ti.max(inertia_inv[0], 1e-15)) * omega[0] ** 2
+                + (1.0 / ti.max(inertia_inv[1], 1e-15)) * omega[1] ** 2
+                + (1.0 / ti.max(inertia_inv[2], 1e-15)) * omega[2] ** 2
             )
-        self.telem_proj_ke[None] = 0.5 * self.proj_mass[None] * self.proj_velocity[None].norm_sqr() + rot_ke
+        self.telem_proj_ke[None] = (
+            0.5 * self.proj_mass[None] * self.proj_velocity[None].norm_sqr() + rot_ke
+        )
 
     def get_telemetry(self) -> dict:
         """Read GPU-computed telemetry scalars (a few float transfers, no arrays)."""
@@ -1619,7 +1667,7 @@ class TaichiSolver:
             if use_interply:
                 builder.dispatch(self.k_compute_interply_forces_graph)
             builder.dispatch(self.k_apply_impedance_boundary_graph)
-            
+
             # Step 3: full step velocity update
             builder.dispatch(self.k_integrate_nodes_full_step_graph)
 
@@ -1914,8 +1962,8 @@ def taichi_leapfrog_loop(
             current_offset[n1] += 1
 
     center_springs_list = []
-    for l in range(n_plies):
-        c = center_idx + l * n_nodes_per_layer
+    for ply in range(n_plies):
+        c = center_idx + ply * n_nodes_per_layer
         start = offsets[c]
         end = offsets[c + 1]
         layer_c_springs = []
@@ -1996,7 +2044,7 @@ def taichi_leapfrog_loop(
     shape_map = {"box": 0, "sphere": 1, "cylinder": 2, "bullet": 3, "propeller": 4}
     shape_code = shape_map.get(proj_shape_type.lower(), 0)
     solver.proj_shape_type[None] = shape_code
-    
+
     if proj_quat is not None:
         solver.proj_quat[None] = proj_quat.astype(np.float32)
     if proj_omega is not None:
@@ -2017,7 +2065,7 @@ def taichi_leapfrog_loop(
     solver.z_com_field[None] = float(proj_z_com)
     solver.y_com_field[None] = float(proj_y_com)
     solver.c_damping[None] = float(proj_c_damping)
-    
+
     if t_sim_init == 0.0:
         solver.peak_deceleration_g[None] = 0.0
     solver.damp_dissipated[None] = damp_dissipated_init

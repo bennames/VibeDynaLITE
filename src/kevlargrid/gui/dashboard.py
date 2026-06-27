@@ -97,7 +97,7 @@ class ResultsDashboard:
                     dpg.add_text("Layer --", tag=self.val_penetration_ply)
 
             dpg.add_spacer(height=10)
-            
+
             with dpg.collapsing_header(label="6-DOF Projectile State Telemetry", default_open=True):
                 with dpg.table(
                     header_row=True,
@@ -108,7 +108,7 @@ class ResultsDashboard:
                 ):
                     dpg.add_table_column(label="State Property")
                     dpg.add_table_column(label="Value")
-                    
+
                     with dpg.table_row():
                         dpg.add_text("Shape Profile")
                         dpg.add_text("Pending...", tag="dash_val_proj_shape")
@@ -211,21 +211,33 @@ class ResultsDashboard:
         # Update 6-DOF Projectile Table values
         proj_shape = results.get("projectile_shape", "Box").capitalize()
         dpg.set_value("dash_val_proj_shape", proj_shape)
-        
+
         proj_vol = results.get("projectile_volume", 0.0)
         dpg.set_value("dash_val_proj_vol", f"{proj_vol:.3e} m^3")
-        
+
         proj_inertia = results.get("projectile_inertia", [0.0, 0.0, 0.0])
-        dpg.set_value("dash_val_proj_inertia", f"[{proj_inertia[0]:.3e}, {proj_inertia[1]:.3e}, {proj_inertia[2]:.3e}] kg*m^2")
-        
+        dpg.set_value(
+            "dash_val_proj_inertia",
+            f"[{proj_inertia[0]:.3e}, {proj_inertia[1]:.3e}, {proj_inertia[2]:.3e}] kg*m^2",
+        )
+
         proj_vel_final = results.get("projectile_velocity_final", [0.0, 0.0, 0.0])
-        dpg.set_value("dash_val_proj_vel", f"[{proj_vel_final[0]:.2f}, {proj_vel_final[1]:.2f}, {proj_vel_final[2]:.2f}] m/s")
-        
+        dpg.set_value(
+            "dash_val_proj_vel",
+            f"[{proj_vel_final[0]:.2f}, {proj_vel_final[1]:.2f}, {proj_vel_final[2]:.2f}] m/s",
+        )
+
         proj_omega_final = results.get("projectile_omega_final", [0.0, 0.0, 0.0])
-        dpg.set_value("dash_val_proj_omega", f"[{proj_omega_final[0]:.2f}, {proj_omega_final[1]:.2f}, {proj_omega_final[2]:.2f}] rad/s")
-        
+        dpg.set_value(
+            "dash_val_proj_omega",
+            f"[{proj_omega_final[0]:.2f}, {proj_omega_final[1]:.2f}, {proj_omega_final[2]:.2f}] rad/s",
+        )
+
         proj_quat_final = results.get("projectile_quat_final", [1.0, 0.0, 0.0, 0.0])
-        dpg.set_value("dash_val_proj_quat", f"[{proj_quat_final[0]:.4f}, {proj_quat_final[1]:.4f}, {proj_quat_final[2]:.4f}, {proj_quat_final[3]:.4f}]")
+        dpg.set_value(
+            "dash_val_proj_quat",
+            f"[{proj_quat_final[0]:.4f}, {proj_quat_final[1]:.4f}, {proj_quat_final[2]:.4f}, {proj_quat_final[3]:.4f}]",
+        )
 
         # Enable actionable export buttons
         dpg.configure_item("btn_export_hdf5", enabled=True)

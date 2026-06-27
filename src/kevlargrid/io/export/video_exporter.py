@@ -154,23 +154,26 @@ class VideoExporter:
                 # Add projectile mesh based on shape
                 proj_cfg = self.config.get("projectile", {})
                 shape = proj_cfg.get("shape", proj_cfg.get("shape_type", "box")).lower()
-                
+
                 if shape == "sphere":
                     pr = proj_cfg.get("radius", proj_cfg.get("caliber", 0.01))
                     proj_mesh = pv.Sphere(radius=pr, theta_resolution=16, phi_resolution=16)
                 elif shape == "cylinder":
                     pr = proj_cfg.get("radius", proj_cfg.get("caliber", 0.01))
                     pl = proj_cfg.get("length", proj_cfg.get("total_length", 0.02))
-                    proj_mesh = pv.Cylinder(center=(0, 0, 0), direction=(0, 0, 1), radius=pr, height=pl, resolution=16)
+                    proj_mesh = pv.Cylinder(
+                        center=(0, 0, 0), direction=(0, 0, 1), radius=pr, height=pl, resolution=16
+                    )
                 elif shape == "bullet":
                     from kevlargrid.gui.viewport3d import _make_bullet_mesh
+
                     pr = proj_cfg.get("radius", proj_cfg.get("caliber", 0.01))
                     pl = proj_cfg.get("length", proj_cfg.get("total_length", 0.02))
                     ogive_multiplier = proj_cfg.get("ogive_multiplier", 2.0)
-                    
+
                     R0 = pr
                     R_og = R0 * ogive_multiplier
-                    L_nose = math.sqrt(max(0.0, 2.0 * R_og * R0 - R0 ** 2))
+                    L_nose = math.sqrt(max(0.0, 2.0 * R_og * R0 - R0**2))
                     L_body = max(0.0, pl - L_nose)
                     N = 100
                     zs = np.linspace(-L_body, L_nose, N)
@@ -179,20 +182,21 @@ class VideoExporter:
                     z_dV_sum = 0.0
                     for z in zs:
                         r = R0 if z < 0 else R0 - R_og + math.sqrt(max(0.0, R_og**2 - z**2))
-                        dV = math.pi * (r ** 2) * dz
+                        dV = math.pi * (r**2) * dz
                         dV_sum += dV
                         z_dV_sum += z * dV
                     z_com = z_dV_sum / dV_sum if dV_sum > 0 else 0.0
                     proj_mesh = _make_bullet_mesh(pr, pl, ogive_multiplier, z_com)
                 elif shape == "propeller":
                     from kevlargrid.gui.viewport3d import _make_propeller_mesh
+
                     span = proj_cfg.get("span", 0.05)
                     root_chord = proj_cfg.get("root_chord", 0.01)
                     tip_chord = proj_cfg.get("tip_chord", 0.005)
                     twist = proj_cfg.get("twist", 15.0)
                     thickness_ratio = proj_cfg.get("thickness_ratio", 12.0)
                     tip_radius = proj_cfg.get("tip_radius", 0.002)
-                    
+
                     tau = thickness_ratio / 100.0
                     N = 100
                     ys = np.linspace(0.0, span, N)
@@ -201,18 +205,20 @@ class VideoExporter:
                     y_dV_sum = 0.0
                     for y in ys:
                         c = root_chord + (y / span) * (tip_chord - root_chord)
-                        area = 0.60 * (c ** 2) * tau
+                        area = 0.60 * (c**2) * tau
                         dV = area * dy
                         dV_sum += dV
                         y_dV_sum += y * dV
                     y_com = y_dV_sum / dV_sum if dV_sum > 0 else 0.0
-                    proj_mesh = _make_propeller_mesh(span, root_chord, tip_chord, twist, thickness_ratio, tip_radius, y_com)
-                else: # box
+                    proj_mesh = _make_propeller_mesh(
+                        span, root_chord, tip_chord, twist, thickness_ratio, tip_radius, y_com
+                    )
+                else:  # box
                     pw = proj_cfg.get("blade_width", 0.02)
                     pt = proj_cfg.get("edge_thickness", 0.005)
                     ph = 0.005
                     proj_mesh = pv.Box(bounds=[-pw / 2, pw / 2, -pt / 2, pt / 2, -ph, ph])
-                
+
                 proj_actor = plotter.add_mesh(
                     proj_mesh,
                     color=[230, 230, 250],
@@ -283,24 +289,26 @@ class VideoExporter:
                 proj_actor.position = (0.0, 0.0, 0.0)
                 p_quat = frame.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
                 w, x, y, z = p_quat
-                r00 = 1.0 - 2.0 * (y*y + z*z)
-                r01 = 2.0 * (x*y - w*z)
-                r02 = 2.0 * (x*z + w*y)
-                
-                r10 = 2.0 * (x*y + w*z)
-                r11 = 1.0 - 2.0 * (x*x + z*z)
-                r12 = 2.0 * (y*z - w*x)
-                
-                r20 = 2.0 * (x*z - w*y)
-                r21 = 2.0 * (y*z + w*x)
-                r22 = 1.0 - 2.0 * (x*x + y*y)
-                
-                T = np.array([
-                    [r00, r01, r02, p_pos[0]],
-                    [r10, r11, r12, p_pos[1]],
-                    [r20, r21, r22, p_pos[2]],
-                    [0.0, 0.0, 0.0, 1.0]
-                ])
+                r00 = 1.0 - 2.0 * (y * y + z * z)
+                r01 = 2.0 * (x * y - w * z)
+                r02 = 2.0 * (x * z + w * y)
+
+                r10 = 2.0 * (x * y + w * z)
+                r11 = 1.0 - 2.0 * (x * x + z * z)
+                r12 = 2.0 * (y * z - w * x)
+
+                r20 = 2.0 * (x * z - w * y)
+                r21 = 2.0 * (y * z + w * x)
+                r22 = 1.0 - 2.0 * (x * x + y * y)
+
+                T = np.array(
+                    [
+                        [r00, r01, r02, p_pos[0]],
+                        [r10, r11, r12, p_pos[1]],
+                        [r20, r21, r22, p_pos[2]],
+                        [0.0, 0.0, 0.0, 1.0],
+                    ]
+                )
                 proj_actor.user_matrix = T
 
                 # Calculate strains
@@ -452,20 +460,20 @@ class VideoExporter:
                     pw = pt = ph = 2.0 * r
                 elif shape in ["cylinder", "bullet"]:
                     r = proj_cfg.get("radius", proj_cfg.get("caliber", 0.01))
-                    l = proj_cfg.get("length", proj_cfg.get("total_length", 0.02))
+                    length = proj_cfg.get("length", proj_cfg.get("total_length", 0.02))
                     pw = pt = 2.0 * r
-                    ph = l
+                    ph = length
                 elif shape == "propeller":
                     span = proj_cfg.get("span", 0.05)
                     c_r = proj_cfg.get("root_chord", 0.01)
                     pw = span
                     pt = c_r
                     ph = c_r * 0.12
-                else: # box
+                else:  # box
                     pw = proj_cfg.get("blade_width", 0.02)
                     pt = proj_cfg.get("edge_thickness", 0.005)
                     ph = 0.01
-                
+
                 p_offsets = np.array(
                     [
                         [-pw / 2, -pt / 2, -ph / 2],
@@ -478,25 +486,25 @@ class VideoExporter:
                         [-pw / 2, pt / 2, ph / 2],
                     ]
                 )
-                
+
                 # Apply rotation to wireframe offsets using the quaternion orientation
                 p_quat = frame.get("projectile_quat", np.array([1.0, 0.0, 0.0, 0.0]))
                 w, x, y, z = p_quat
-                r00 = 1.0 - 2.0 * (y*y + z*z)
-                r01 = 2.0 * (x*y - w*z)
-                r02 = 2.0 * (x*z + w*y)
-                
-                r10 = 2.0 * (x*y + w*z)
-                r11 = 1.0 - 2.0 * (x*x + z*z)
-                r12 = 2.0 * (y*z - w*x)
-                
-                r20 = 2.0 * (x*z - w*y)
-                r21 = 2.0 * (y*z + w*x)
-                r22 = 1.0 - 2.0 * (x*x + y*y)
-                
+                r00 = 1.0 - 2.0 * (y * y + z * z)
+                r01 = 2.0 * (x * y - w * z)
+                r02 = 2.0 * (x * z + w * y)
+
+                r10 = 2.0 * (x * y + w * z)
+                r11 = 1.0 - 2.0 * (x * x + z * z)
+                r12 = 2.0 * (y * z - w * x)
+
+                r20 = 2.0 * (x * z - w * y)
+                r21 = 2.0 * (y * z + w * x)
+                r22 = 1.0 - 2.0 * (x * x + y * y)
+
                 R = np.array([[r00, r01, r02], [r10, r11, r12], [r20, r21, r22]])
                 rotated_offsets = p_offsets @ R.T
-                
+
                 corners = p_pos + rotated_offsets
                 loop = [0, 1, 2, 3, 0, 4, 5, 6, 7, 4, 5, 1, 2, 6, 7, 3]
                 proj_line.set_data_3d(corners[loop, 0], corners[loop, 1], corners[loop, 2])

@@ -95,6 +95,7 @@ ignore = [
     "SIM108", # use ternary operator
     "RUF002", # ambiguous unicode characters (like en-dash and greek alpha in math equations)
     "N806",   # Variable in function should be lowercase (allow uppercase physics vars like L0, C_i)
+    "N803",   # Argument name should be lowercase (allow uppercase physics parameters like R, L, S)
     "SIM102", # Use a single if statement instead of nested if statements (nested ifs are fine)
     "SIM117", # Use a single with statement with multiple contexts (DearPyGui requires nested withs)
     "RUF001", # String contains ambiguous greek/math characters (allow alpha/beta symbols)

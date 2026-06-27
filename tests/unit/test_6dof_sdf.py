@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import math
+
 import numpy as np
 
-from kevlargrid.solver.projectile import Projectile, q_mul, q_rotate_vector
 from kevlargrid.solver.failure import scale_failure_strain
+from kevlargrid.solver.projectile import Projectile, q_mul
 
 
 def test_quaternion_integration() -> None:
@@ -14,7 +15,7 @@ def test_quaternion_integration() -> None:
     # In 1 second, it should rotate by pi/2 radians.
     q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
     omega = np.array([0.0, np.pi / 2, 0.0], dtype=np.float64)
-    
+
     dt = 0.001
     steps = 1000
     for _ in range(steps):
@@ -142,10 +143,10 @@ def test_propeller_edge_and_tip_rounding() -> None:
         tip_radius=0.002,
     )
     # Beyond span: y > S - R_tip -> should be evaluated as a sphere cap
-    p_tip = np.array([0.0, 0.05 - 0.002 + 0.003 - proj.y_com, 0.0]) # 1mm outside tip sphere center
+    p_tip = np.array([0.0, 0.05 - 0.002 + 0.003 - proj.y_com, 0.0])  # 1mm outside tip sphere center
     val = proj.sdf(p_tip)
     assert np.abs(val - 0.001) < 1e-5
-    
+
     # Check leading edge rounding
     # At root (y_geom = 0), chord = 0.02, twist = 0. Leading edge is at x = -0.01
     p_le = np.array([-0.011, -proj.y_com, 0.0])

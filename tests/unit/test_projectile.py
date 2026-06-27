@@ -205,9 +205,10 @@ class TestProjectile:
 
     def test_run_solver_process_tangency(self) -> None:
         """Verify that run_solver_process auto-adjusts projectile positions to ensure tangency."""
-        from kevlargrid.solver.worker import run_solver_process
-        import queue
         import multiprocessing
+        import queue
+
+        from kevlargrid.solver.worker import run_solver_process
 
         config = {
             "material": {
@@ -225,7 +226,7 @@ class TestProjectile:
                 "dx": 0.01,
                 "n_plies": 1,
                 "t_ply": None,
-                "boundary_type": "fixed"
+                "boundary_type": "fixed",
             },
             "projectile": {
                 "mass": 0.05,
@@ -240,7 +241,7 @@ class TestProjectile:
                 "damping_model": "rayleigh",
                 "snapshot_interval": 1,
                 "backend": "numba",
-            }
+            },
         }
 
         mock_queue = queue.Queue()
@@ -262,9 +263,10 @@ class TestProjectile:
 
     def test_numba_solver_execution(self) -> None:
         """Verify that the Numba backend runs and JIT compiles without errors."""
-        from kevlargrid.solver.worker import run_solver_process
-        import queue
         import multiprocessing
+        import queue
+
+        from kevlargrid.solver.worker import run_solver_process
 
         config = {
             "material": {
@@ -282,7 +284,7 @@ class TestProjectile:
                 "dx": 0.01,
                 "n_plies": 1,
                 "t_ply": None,
-                "boundary_type": "fixed"
+                "boundary_type": "fixed",
             },
             "projectile": {
                 "mass": 0.05,
@@ -298,7 +300,7 @@ class TestProjectile:
                 "damping_model": "rayleigh",
                 "snapshot_interval": 1,
                 "backend": "numba",
-            }
+            },
         }
 
         mock_queue = queue.Queue()
@@ -311,16 +313,14 @@ class TestProjectile:
             messages.append(mock_queue.get())
 
         types = [m.get("type") for m in messages]
-        
+
         errors = [m for m in messages if m.get("type") == "error"]
         if errors:
             print("\nSOLVER SUBPROCESS ERROR DETECTED:")
             print("Message:", errors[0].get("message"))
             print("Traceback:")
             print(errors[0].get("traceback"))
-            
+
         assert "init" in types
         assert "completed" in types
         assert "error" not in types
-
-

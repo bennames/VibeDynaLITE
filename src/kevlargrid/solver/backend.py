@@ -93,6 +93,7 @@ def get_active_device() -> str:
 
 _decorated_functions: list[tuple[Callable[..., Any], dict[str, Any], Callable[..., Any]]] = []
 
+
 def _compile_func(func: Callable[..., Any], backend_name: str, **kwargs: Any) -> Callable[..., Any]:
     if backend_name == "jax" and HAS_JAX:
         jax_kwargs = {}
@@ -132,7 +133,6 @@ def jit(fn: Callable[..., Any] | None = None, **kwargs: Any) -> Callable[..., An
     if fn is None:
         return decorator
     return decorator(fn)
-
 
 
 def vmap(
@@ -299,9 +299,40 @@ def py_clamp_boundary(forces: Any, mask: Any) -> Any:
     return forces
 
 
+zeros: Any = py_zeros
+ones: Any = py_ones
+array: Any = py_array
+sqrt: Any = py_sqrt
+maximum: Any = py_maximum
+minimum: Any = py_minimum
+where: Any = py_where
+sum: Any = py_sum
+min: Any = py_min
+max: Any = py_max
+abs: Any = py_abs
+scatter_add: Any = py_scatter_add
+stack_z: Any = py_stack_z
+clamp_boundary: Any = py_clamp_boundary
+
+
 def set_backend(backend_name: str) -> None:
     """Set the active compute backend dynamically and update all math aliases."""
-    global BACKEND, zeros, ones, array, sqrt, maximum, minimum, where, sum, min, max, abs, scatter_add, stack_z, clamp_boundary
+    global \
+        BACKEND, \
+        zeros, \
+        ones, \
+        array, \
+        sqrt, \
+        maximum, \
+        minimum, \
+        where, \
+        sum, \
+        min, \
+        max, \
+        abs, \
+        scatter_add, \
+        stack_z, \
+        clamp_boundary
     BACKEND = backend_name
     if BACKEND == "numba" and HAS_NUMBA:
         zeros = np.zeros  # type: ignore[assignment]
@@ -336,10 +367,11 @@ def set_backend(backend_name: str) -> None:
 
     # Re-compile all decorated functions and update their references in sys.modules
     import sys
+
     for i, (func, kwargs, old_compiled) in enumerate(_decorated_functions):
         new_compiled = _compile_func(func, BACKEND, **kwargs)
         _decorated_functions[i] = (func, kwargs, new_compiled)
-        
+
         # Update references in sys.modules
         for mod in list(sys.modules.values()):
             if mod is None:
@@ -354,38 +386,51 @@ def set_backend(backend_name: str) -> None:
     # Dynamically update the imported names in already loaded modules
     for mod_name in ("kevlargrid.solver.fused", "kevlargrid.solver.forces"):
         if mod_name in sys.modules:
-            mod = sys.modules[mod_name]
+            target_mod: Any = sys.modules[mod_name]
             for var_name in (
-                "zeros", "ones", "array", "sqrt", "maximum", "minimum", "where",
-                "sum", "min", "max", "abs", "scatter_add", "stack_z", "clamp_boundary"
+                "zeros",
+                "ones",
+                "array",
+                "sqrt",
+                "maximum",
+                "minimum",
+                "where",
+                "sum",
+                "min",
+                "max",
+                "abs",
+                "scatter_add",
+                "stack_z",
+                "clamp_boundary",
             ):
-                if hasattr(mod, var_name):
-                    setattr(mod, var_name, globals()[var_name])
+                if hasattr(target_mod, var_name):
+                    setattr(target_mod, var_name, globals()[var_name])
 
     # Update set_index helpers in fused module
     if "kevlargrid.solver.fused" in sys.modules:
-        mod = sys.modules["kevlargrid.solver.fused"]
+        fused_mod: Any = sys.modules["kevlargrid.solver.fused"]
         if BACKEND == "numba" and HAS_NUMBA:
-            mod.set_index_3d = getattr(mod, "numba_set_index_3d", None)
-            mod.set_index_2d_bool = getattr(mod, "numba_set_index_2d_bool", None)
-            mod.set_index_2d_float = getattr(mod, "numba_set_index_2d_float", None)
-            mod.set_index_1d = getattr(mod, "numba_set_index_1d", None)
+            fused_mod.set_index_3d = getattr(fused_mod, "numba_set_index_3d", None)
+            fused_mod.set_index_2d_bool = getattr(fused_mod, "numba_set_index_2d_bool", None)
+            fused_mod.set_index_2d_float = getattr(fused_mod, "numba_set_index_2d_float", None)
+            fused_mod.set_index_1d = getattr(fused_mod, "numba_set_index_1d", None)
         else:
-            mod.set_index_3d = getattr(mod, "py_set_index_3d", None)
-            mod.set_index_2d_bool = getattr(mod, "py_set_index_2d_bool", None)
-            mod.set_index_2d_float = getattr(mod, "py_set_index_2d_float", None)
-            mod.set_index_1d = getattr(mod, "py_set_index_1d", None)
+            fused_mod.set_index_3d = getattr(fused_mod, "py_set_index_3d", None)
+            fused_mod.set_index_2d_bool = getattr(fused_mod, "py_set_index_2d_bool", None)
+            fused_mod.set_index_2d_float = getattr(fused_mod, "py_set_index_2d_float", None)
+            fused_mod.set_index_1d = getattr(fused_mod, "py_set_index_1d", None)
+
 
 # Initialize variables with the default BACKEND
 set_backend(BACKEND)
 
+
 # Custom module class to hook assignments to BACKEND
-class _BackendModule(sys.modules[__name__].__class__):
+class _BackendModule(sys.modules[__name__].__class__):  # type: ignore[misc]
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if name == "BACKEND":
             set_backend(value)
 
+
 sys.modules[__name__].__class__ = _BackendModule
-
-

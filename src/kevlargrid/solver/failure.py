@@ -17,7 +17,6 @@ def scale_failure_strain(epsilon_0: float, dx: float) -> float:
     return epsilon_0
 
 
-
 def check_failures(
     strains: np.ndarray,
     failed: np.ndarray,
