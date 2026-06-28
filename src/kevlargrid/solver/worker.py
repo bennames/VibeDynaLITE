@@ -44,6 +44,32 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         backend.BACKEND = solver_backend
 
+        # Configure dynamic Numba threads
+        num_threads = sim_cfg.get("num_threads")
+        if solver_backend == "numba":
+            if num_threads:
+                backend.set_numba_threads(num_threads)
+            else:
+                try:
+                    import psutil
+                    num_threads = psutil.cpu_count(logical=False) or os.cpu_count() or 4
+                except ImportError:
+                    num_threads = os.cpu_count() or 4
+                backend.set_numba_threads(num_threads)
+
+        # Setup File Logger
+        log_to_file = sim_cfg.get("log_to_file", True)
+        if log_to_file:
+            import os
+            os.makedirs("logs", exist_ok=True)
+            log_filename = f"logs/simulation_run_{int(time.time())}.log"
+            file_handler = logging.FileHandler(log_filename, encoding="utf-8")
+            file_handler.setLevel(logging.INFO)
+            formatter = logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+            logger.setLevel(logging.INFO)
+
         nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
         n_plies = grid_cfg["n_plies"]
         t_ply = grid_cfg["t_ply"]
@@ -79,9 +105,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             nodal_external_forces = np.zeros((grid.n_nodes, 3), dtype=np.float64)
 
         # Calculate timestep
+        k_penalty = sim_cfg.get("k_penalty", 10.0 * np.mean(grid.stiffnesses))
         auto_cfl = sim_cfg.get("auto_cfl", True)
         if auto_cfl:
-            k_penalty = 10.0 * np.mean(grid.stiffnesses)
             k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
             dt = compute_cfl_timestep(
                 np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
@@ -178,8 +204,33 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         failure_dissipated = 0.0
         clamp_dissipated = 0.0
         contact_energy = 0.0
+        friction_dissipated = 0.0
 
         proj_peak_deceleration = np.zeros(1, dtype=np.float64)
+
+        # Calculate initial energy
+        initial_proj_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
+        initial_proj_rot_ke = 0.0
+        if getattr(proj, "omega", None) is not None:
+            initial_proj_rot_ke = 0.5 * np.sum(proj.omega**2 / np.diagonal(proj.inertia_inv))
+        initial_energy = initial_proj_ke + initial_proj_rot_ke
+
+        if log_to_file:
+            import platform
+            logger.info("=" * 60)
+            logger.info("VibeDynaLITE Solver Subprocess Started")
+            logger.info(f"OS: {platform.system()} {platform.release()} ({platform.machine()})")
+            logger.info(f"Python: {platform.python_version()}")
+            logger.info(f"Active Backend: {solver_backend}")
+            if solver_backend == "numba":
+                logger.info(f"Numba Threads Configured: {num_threads}")
+            elif solver_backend == "taichi":
+                logger.info("Taichi CPU/GPU Integration active")
+            logger.info(f"Grid Dimensions: {grid_cfg['nx']}x{grid_cfg['ny']} (plies: {grid_cfg['n_plies']})")
+            logger.info(f"Grid Nodes: {grid.n_nodes} | Springs: {grid.n_springs}")
+            logger.info(f"Projectile: Shape={proj_cfg.get('shape_type', 'box')} | Mass={proj_cfg['mass']:.5f} kg | Initial Velocity={proj_cfg['velocity']} m/s")
+            logger.info(f"Initial System Energy: {initial_energy:.4f} J")
+            logger.info("=" * 60)
 
         # Send configuration metadata back to GUI process
         queue.put(
@@ -249,6 +300,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")
+            mu_s = sim_cfg.get("mu_s", sim_cfg.get("friction_coefficient", 0.0))
             prev_clamp = clamp_dissipated
             if solver_backend == "numba":
                 from kevlargrid.solver.fused import fused_leapfrog_loop
@@ -273,6 +325,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     hist_se,
                     hist_proj_ke,
                     contact_energy,
+                    friction_dissipated,
                 ) = fused_leapfrog_loop(
                     positions,
                     velocities,
@@ -314,6 +367,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     use_viscous=(damping_model == "viscous"),
                     cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
                     contact_energy_init=contact_energy,
+                    mu_s=mu_s,
+                    friction_dissipated_init=friction_dissipated,
                     **extra_kwargs,
                 )
                 hist_peak_strain = np.zeros(len(hist_time))
@@ -362,6 +417,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     hist_proj_ke,
                     hist_peak_strain,
                     contact_energy,
+                    friction_dissipated,
                 ) = taichi_leapfrog_loop(
                     positions,
                     velocities,
@@ -403,6 +459,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     use_viscous=(damping_model == "viscous"),
                     cfl_factor=sim_cfg["cfl_factor"] if auto_cfl else 0.0,
                     contact_energy_init=contact_energy,
+                    mu_s=mu_s,
+                    friction_dissipated_init=friction_dissipated,
                     **extra_kwargs,
                 )
                 if clamp_dissipated > prev_clamp:
@@ -446,6 +504,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "damp_dissipated": float(damp_dissipated),
                     "failure_dissipated": float(failure_dissipated),
                     "clamp_dissipated": float(clamp_dissipated),
+                    "friction_dissipated": float(friction_dissipated),
                     "peak_strain": float(peak_strain),
                     "proj_ke": float(proj_ke),
                     "failed_count": int(failed_count),
@@ -460,6 +519,26 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "hist_peak_strain": np.asarray(hist_peak_strain),
                 }
             )
+
+            if log_to_file:
+                total_energy = ke + se + proj_ke + damp_dissipated + failure_dissipated + clamp_dissipated + contact_energy + friction_dissipated
+                drift_pct = abs(total_energy - initial_energy) / initial_energy * 100.0 if initial_energy > 0 else 0.0
+                try:
+                    import kevlargrid.solver.taichi_solver as taichi_solver
+                    taichi_decel = float(taichi_solver._SOLVER_CACHE.peak_deceleration_g[None]) if taichi_solver._SOLVER_CACHE is not None else 0.0
+                except Exception:
+                    taichi_decel = 0.0
+                decel_g = float(proj_peak_deceleration[0]) if solver_backend == "numba" else taichi_decel
+                logger.info(
+                    "Step %d: t=%.1f us | z_pos=%.3f mm | v_z=%.2f m/s | Decel=%.2f g | Failed=%d (%.2f%%) | Drift=%.4f%%",
+                    int(t_sim / dt) if dt > 0 else 0, t_sim * 1e6, proj.position[2] * 1000, proj.velocity[2],
+                    decel_g, failed_count, (failed_count / grid.n_springs) * 100.0 if grid.n_springs > 0 else 0.0, drift_pct
+                )
+                logger.info(
+                    "Energy (J): KE_grid=%.4f | SE_grid=%.4f | KE_proj=%.4f | Damp=%.4f | Fric=%.4f | Fail=%.4f | Clamp=%.4f | Contact=%.4f | Total=%.4f",
+                    ke, se, proj_ke, damp_dissipated, friction_dissipated, failure_dissipated,
+                    clamp_dissipated, contact_energy, total_energy
+                )
 
             # Check for termination condition S7.6.1
             proximity_threshold = dx * 2.0
@@ -571,8 +650,21 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         )
         queue.close()
         queue.join_thread()
-        import os
 
+        if log_to_file:
+            logger.info("=" * 60)
+            logger.info("Simulation Run Completed Successfully")
+            logger.info(f"Outcome: {'ARRESTED' if is_arrested else 'PENETRATED'}")
+            logger.info(f"Final Velocity: {report['final_velocity']:.2f} m/s")
+            logger.info(f"Peak Deceleration: {report['peak_deceleration_g']:.2f} g")
+            logger.info(f"Failed Springs: {report['failed_springs']} ({report['yarn_rupture_percentage']:.2f}%)")
+            logger.info(f"Max Layer Perforated: {report['max_layer_perforated']}")
+            logger.info(f"Energy Dissipation Efficiency: {report['energy_dissipation_efficiency']*100:.2f}%")
+            logger.info("=" * 60)
+            logger.removeHandler(file_handler)
+            file_handler.close()
+
+        import os
         os._exit(0)
 
     except Exception as e:
@@ -586,6 +678,12 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         )
         queue.close()
         queue.join_thread()
-        import os
 
+        if 'log_to_file' in locals() and log_to_file:
+            logger.error("Simulation run failed with exception:")
+            logger.error(tb)
+            logger.removeHandler(file_handler)
+            file_handler.close()
+
+        import os
         os._exit(1)

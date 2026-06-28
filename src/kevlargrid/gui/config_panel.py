@@ -104,6 +104,8 @@ class ConfigPanel:
         self.sim_dt = "sim_dt"
         self.compute_backend = "compute_backend"
         self.hardware_device = "hardware_device"
+        self.cpu_threads = "cpu_threads"
+        self.log_to_file = "log_to_file"
 
         self.row_damping_coeff = "row_damping_coeff"
         self.row_rayleigh_alpha = "row_rayleigh_alpha"
@@ -594,6 +596,22 @@ class ConfigPanel:
                             enabled=False,
                             width=-1,
                         )
+                    with dpg.table_row():
+                        import os
+                        dpg.add_text("CPU Threads")
+                        dpg.add_input_int(
+                            default_value=os.cpu_count() or 4,
+                            min_value=1,
+                            max_value=os.cpu_count() or 64,
+                            tag=self.cpu_threads,
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Log to File")
+                        dpg.add_checkbox(
+                            default_value=True,
+                            tag=self.log_to_file,
+                        )
 
             # --- CONFIGURATION PROFILES SECTION S6.5.9 ---
             with (
@@ -997,6 +1015,8 @@ class ConfigPanel:
                 "auto_cfl": dpg.get_value(self.sim_auto_cfl),
                 "dt": dpg.get_value(self.sim_dt),
                 "backend": dpg.get_value(self.compute_backend).lower(),
+                "num_threads": int(dpg.get_value(self.cpu_threads)) if dpg.does_item_exist(self.cpu_threads) else (os.cpu_count() or 4),
+                "log_to_file": bool(dpg.get_value(self.log_to_file)) if dpg.does_item_exist(self.log_to_file) else True,
             },
         }
 
@@ -1151,6 +1171,14 @@ class ConfigPanel:
         if dpg.does_item_exist(self.compute_backend):
             dpg.set_value(self.compute_backend, loaded_backend)
             self._on_backend_change(None, loaded_backend)
+
+        import os
+        loaded_threads = sim.get("num_threads", os.cpu_count() or 4)
+        if dpg.does_item_exist(self.cpu_threads):
+            dpg.set_value(self.cpu_threads, loaded_threads)
+        loaded_log_to_file = sim.get("log_to_file", True)
+        if dpg.does_item_exist(self.log_to_file):
+            dpg.set_value(self.log_to_file, loaded_log_to_file)
 
         # Re-sync boundary sizing calculation & file size estimate
         self._on_boundary_change(None, None)

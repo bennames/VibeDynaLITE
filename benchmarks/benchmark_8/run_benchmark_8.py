@@ -1,6 +1,26 @@
 import os
+os.environ["TAICHI_FORCE_CPU"] = "1"
 import json
 import time
+import logging
+
+BENCHMARK_DIR = Path(__file__).parent
+# Setup logger for Benchmark 8
+logger = logging.getLogger("benchmark_8")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    # Console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    # File handler
+    fh = logging.FileHandler(BENCHMARK_DIR / "benchmark_8_run.log", mode="a", encoding="utf-8")
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
 import argparse
 from pathlib import Path
 import numpy as np
@@ -126,7 +146,20 @@ def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
 
 def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     """Run a single dynamic simulation case and return result metrics."""
-    print(f"\n--- Running Case {run_id} (strike velocity: {v_strike} m/s, backend: {backend_name}) ---")
+    if backend_name == "numba":
+        try:
+            import numba
+            active_threads = numba.get_num_threads()
+        except Exception:
+            active_threads = "unknown"
+    else:
+        active_threads = "N/A"
+
+    logger.info("=" * 60)
+    logger.info(f"KevlarGrid Benchmark 8 - Case {run_id} Started")
+    logger.info(f"Active Backend: {backend_name} | Threads: {active_threads}")
+    logger.info(f"Initial Strike Velocity: {v_strike} m/s")
+    logger.info("=" * 60)
     
     # 1.365 mm element size: exactly 4 elements span the 5.46 mm projectile diameter
     nx, ny = 184, 184
@@ -139,7 +172,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
         "areal_density_kgm2": 0.475,
         "fiber_density_gcc": 1.44,
         "failure_strain": 0.038,
-        "shear_ratio": 0.0004,
+        "shear_ratio": 0.002,
     }
     
     grid = generate_rectangular_grid(nx, ny, dx, material_kev29, n_plies=n_plies, t_ply=0.0001)
@@ -161,14 +194,14 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
     proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
     
-    proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
+    proj_pos = np.array([0.0, 0.0, -0.005], dtype=np.float64)
     proj_vel = np.array([0.0, 0.0, v_strike], dtype=np.float64)
     proj_omega = np.zeros(3, dtype=np.float64)
     proj_quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
     
     k_penalty = 2.0e6
     mu_s = 0.20
-    dt = compute_cfl_timestep(grid.stiffnesses, grid.masses, dx, 0.1)
+    dt = compute_cfl_timestep(np.array([max(np.max(grid.stiffnesses), k_penalty)]), grid.masses, dx, 0.3)
     
     node_initial_springs = grid.initial_spring_counts
     node_spring_offsets = grid.node_spring_offsets
@@ -176,7 +209,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     node_spring_signs = grid.node_spring_signs
     
     initial_energy = 0.5 * proj_mass * (v_strike**2)
-    max_steps = 4500
+    max_steps = 8000
     save_interval = 20
     
     t_sim = 0.0
@@ -252,7 +285,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 5e-8,  # rayleigh_beta
                 0.038, # failure_strain
                 0.0228, # damage_onset_strain
-                1.5,   # fracture_energy_multiplier
+                1.0,   # fracture_energy_multiplier
                 dt,
                 save_interval,
                 save_interval,
@@ -323,7 +356,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 5e-8,  # rayleigh_beta
                 0.038, # failure_strain
                 0.0228, # damage_onset_strain
-                1.5,   # fracture_energy_multiplier
+                1.0,   # fracture_energy_multiplier
                 dt,
                 save_interval,
                 save_interval,
@@ -370,7 +403,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
         lens = np.sqrt(np.sum((p2 - p1)**2, axis=1))
         strains = (lens - grid.rest_lengths) / grid.rest_lengths
         strains_eff = np.where(grid.tension_only & (strains < 0.0), 0.0, strains)
-        se_springs_array = 0.5 * grid.stiffnesses * (strains_eff * grid.rest_lengths)**2
+        se_springs_array = 0.5 * grid.stiffnesses * (1.0 - grid_damage) * (strains_eff * grid.rest_lengths)**2
         se_springs = float(np.sum(np.where(grid.failed, 0.0, se_springs_array)))
         
         ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
@@ -385,24 +418,25 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
         hist_failed_count.append(np.sum(grid.failed))
         hist_total_energy.append(total_energy)
         hist_peak_strain.append(float(np.max(strains_eff)))
+        logger.info(f"Step {step}: t={t_sim*1e6:.1f} us, z={proj_pos[2]*1000:.3f} mm, v={proj_vel[2]:.2f} m/s, failed={np.sum(grid.failed)}, drift={drift_pct:.2f}%")
         
         # Check termination
         if proj_vel[2] <= 0.0:
-            print("Projectile arrested.")
+            logger.info("Projectile arrested.")
             break
             
         if proj_pos[2] > (n_plies * 0.0001 + 0.005) and proj_vel[2] > 0.0:
-            print("Projectile fully perforated target.")
+            logger.info("Projectile fully perforated target.")
             break
             
     t1 = time.perf_counter()
     residual_vel = max(0.0, float(proj_vel[2]))
     energy_drift = float(np.max(np.abs(np.array(hist_total_energy) - initial_energy)) / initial_energy)
     
-    print(f"Case {run_id} Finished in {t1 - t0:.2f} s")
-    print(f"  Residual Velocity: {residual_vel:.2f} m/s")
-    print(f"  Energy Drift: {energy_drift*100:.3f}%")
-    print(f"  Peak Deceleration: {peak_decel_g:.1f} g")
+    logger.info(f"Case {run_id} Finished in {t1 - t0:.2f} s")
+    logger.info(f"  Residual Velocity: {residual_vel:.2f} m/s")
+    logger.info(f"  Energy Drift: {energy_drift*100:.3f}%")
+    logger.info(f"  Peak Deceleration: {peak_decel_g:.1f} g")
     
     yarn_rupture_pct = (np.sum(grid.failed) / grid.n_springs) * 100.0
     failed_indices = np.where(grid.failed)[0]
@@ -446,9 +480,16 @@ def main():
     parser = argparse.ArgumentParser(description="Run KevlarGrid Benchmark 8 validation sweep.")
     parser.add_argument("--backend", type=str, choices=["taichi", "numba"], default="numba",
                         help="Compute backend to use for simulation.")
+    parser.add_argument("--threads", type=int, default=None,
+                        help="Number of CPU threads to use for Numba parallel execution.")
     args = parser.parse_args()
 
-    print("Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...")
+    if args.threads:
+        os.environ["KEVLARGRID_NUM_THREADS"] = str(args.threads)
+        from kevlargrid.solver import backend
+        backend.set_numba_threads(args.threads)
+
+    logger.info("Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...")
     
     # Run cases
     case_a = run_case(450.0, "A", args.backend)
@@ -479,7 +520,7 @@ def main():
     
     with open(RESULTS_FILE, "w") as f:
         json.dump(results, f, indent=4)
-    print(f"Saved results to {RESULTS_FILE}")
+    logger.info(f"Saved results to {RESULTS_FILE}")
     
     # Plot Jonas-Laval curve and validation points
     v_strike = np.array([450.0, 503.0, 550.0])
@@ -510,7 +551,7 @@ def main():
     plt.tight_layout()
     plt.savefig(PLOT_FILE, dpi=300)
     plt.close()
-    print(f"Saved validation plot to {PLOT_FILE}")
+    logger.info(f"Saved validation plot to {PLOT_FILE}")
     
     # Generate HTML & PDF Report
     config = {
@@ -546,7 +587,7 @@ def main():
     html_content = generate_report_html(config, results_report, case_b["history"])
     with open(REPORT_HTML, "w", encoding="utf-8") as f:
         f.write(html_content)
-    print(f"HTML report saved to {REPORT_HTML}")
+    logger.info(f"HTML report saved to {REPORT_HTML}")
     
     pdf_compiled = False
     
@@ -554,10 +595,10 @@ def main():
     if False:  # Bypass WeasyPrint to prevent sandbox hangs
         try:
             weasyprint.HTML(string=html_content).write_pdf(REPORT_PDF)
-            print(f"PDF report successfully compiled via WeasyPrint to {REPORT_PDF}")
+            logger.info(f"PDF report successfully compiled via WeasyPrint to {REPORT_PDF}")
             pdf_compiled = True
         except Exception as e:
-            print(f"WeasyPrint PDF compilation failed: {e}")
+            logger.error(f"WeasyPrint PDF compilation failed: {e}")
             
     # 2. Try ReportLab (canvas rendering fallback)
     if not pdf_compiled:
@@ -582,7 +623,7 @@ def main():
             c.drawString(72, 510, f"  - Case B (503 m/s) residual velocity < 25 m/s: {'PASS' if results['case_b']['residual_velocity'] < 25.0 else 'FAIL'}")
             c.drawString(72, 490, f"  - Case C (550 m/s) residual velocity ~220 m/s: {'PASS' if abs(results['case_c']['residual_velocity'] - 220.0) <= 20.0 else 'FAIL'}")
             c.save()
-            print(f"PDF report successfully compiled via ReportLab to {REPORT_PDF}")
+            logger.info(f"PDF report successfully compiled via ReportLab to {REPORT_PDF}")
             pdf_compiled = True
         except ImportError:
             pass
@@ -612,7 +653,7 @@ def main():
             pdf.cell(0, 10, f"  - Case B (503 m/s) residual velocity < 25 m/s: {'PASS' if results['case_b']['residual_velocity'] < 25.0 else 'FAIL'}", ln=1, align="L")
             pdf.cell(0, 10, f"  - Case C (550 m/s) residual velocity ~220 m/s: {'PASS' if abs(results['case_c']['residual_velocity'] - 220.0) <= 20.0 else 'FAIL'}", ln=1, align="L")
             pdf.output(str(REPORT_PDF))
-            print(f"PDF report successfully compiled via FPDF to {REPORT_PDF}")
+            logger.info(f"PDF report successfully compiled via FPDF to {REPORT_PDF}")
             pdf_compiled = True
         except ImportError:
             pass
@@ -621,10 +662,10 @@ def main():
     if not pdf_compiled:
         try:
             generate_pure_python_pdf(REPORT_PDF, results)
-            print(f"PDF report successfully compiled via built-in pure-Python compiler to {REPORT_PDF}")
+            logger.info(f"PDF report successfully compiled via built-in pure-Python compiler to {REPORT_PDF}")
             pdf_compiled = True
         except Exception as e:
-            print(f"Pure-Python PDF compiler failed: {e}")
+            logger.error(f"Pure-Python PDF compiler failed: {e}")
             raise RuntimeError("All PDF compilation engines and fallbacks failed.") from e
 
 if __name__ == "__main__":

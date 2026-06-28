@@ -110,7 +110,7 @@ class TestStrainComputation:
         )
 
         # 1. No penetration: separation is exactly t_ply
-        forces, energy = compute_interply_contact_forces(
+        forces, energy, _ = compute_interply_contact_forces(
             positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
         )
         assert np.all(forces == 0.0)
@@ -120,7 +120,7 @@ class TestStrainComputation:
         # Delta = 0.0015 - 0.002 + 0.002 = 0.0015 m
         positions[0, 2] = 0.0015
 
-        forces, energy = compute_interply_contact_forces(
+        forces, energy, _ = compute_interply_contact_forces(
             positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
         )
 
@@ -136,3 +136,45 @@ class TestStrainComputation:
 
         # Potential energy: 0.5 * k * x^2 = 0.5 * 1000.0 * 0.0015^2 = 0.001125 J
         assert energy == pytest.approx(0.001125)
+
+    def test_interply_contact_forces_friction(self) -> None:
+        """Verify inter-ply friction forces under relative velocity."""
+        from kevlargrid.solver.forces import compute_interply_contact_forces
+
+        n_nodes_per_layer = 4
+        n_plies = 2
+        t_ply = 0.002
+        k_penalty = 1000.0
+
+        # Layer 0 at Z=0.0015, Layer 1 at Z=0.002 (penetration = 0.0015m)
+        positions = np.array(
+            [
+                [0.0, 0.0, 0.0015],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                # Layer 1
+                [0.0, 0.0, 0.002],
+                [0.0, 0.0, 0.002],
+                [0.0, 0.0, 0.002],
+                [0.0, 0.0, 0.002],
+            ],
+            dtype=np.float64,
+        )
+
+        # Velocities: node 0 moving at +10m/s along X, node 4 stationary
+        velocities = np.zeros_like(positions)
+        velocities[0, 0] = 10.0
+
+        # F_normal = 1000.0 * 0.0015 = 1.5 N
+        # Friction with mu_s = 0.2
+        # v_rel = 10.0, v0 = 0.01 -> denom = sqrt(100.0 + 0.0001) = 10.000005
+        # f_fric = 0.2 * 1.5 * (10 / 10.000005) = 0.299999 N
+        forces, energy, fric_diss = compute_interply_contact_forces(
+            positions, n_nodes_per_layer, n_plies, t_ply, k_penalty,
+            velocities=velocities, mu_s=0.2, dt=1e-6
+        )
+
+        assert forces[0, 0] == pytest.approx(-0.3, abs=1e-3)
+        assert forces[4, 0] == pytest.approx(0.3, abs=1e-3)
+        assert fric_diss == pytest.approx(0.3 * 10.0 * 1e-6, abs=1e-6)

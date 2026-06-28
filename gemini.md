@@ -12,3 +12,6 @@ This document outlines the workflow and verification constraints for agent inter
 
 3. **Mandatory Test and Benchmark Execution**
    - You must run the entire unit test suite and execute all physical benchmarks as part of the standard verification process after modifying the code in any way. Never skip verification.
+
+4. **Wait for Explicit Approval Before Executing Plans**
+   - When in planning mode, you must NOT proceed to execute the implementation plan (i.e., do not begin making code changes, writing scripts, or running tests) when asked to review comments, address feedback, or update the plan document. You must update/revise the implementation plan as requested, request feedback again, and wait for the user's explicit approval to proceed to the execution phase.

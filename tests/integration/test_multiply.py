@@ -122,7 +122,7 @@ class TestMultiPlyImpact:
             )
 
             # 2. Inter-ply contact forces (between Layer 0 and Layer 1)
-            interply_forces, interply_energy = compute_interply_contact_forces(
+            interply_forces, interply_energy, _ = compute_interply_contact_forces(
                 positions, n_nodes_per_layer, n_plies, t_ply, k_penalty
             )
 
@@ -286,7 +286,7 @@ class TestMultiPlyImpact:
             proj_forces = proj_forces * scale_factor[:, np.newaxis]
 
             # 3. Inter-ply contact forces (using the updated symmetric function)
-            interply_forces, interply_energy = compute_interply_contact_forces(
+            interply_forces, interply_energy, _ = compute_interply_contact_forces(
                 positions, nx * ny, n_plies, t_ply, k_penalty, active_counts
             )
 

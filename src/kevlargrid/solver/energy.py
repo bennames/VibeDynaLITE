@@ -42,6 +42,7 @@ def compute_strain_energy(
     rest_lengths: np.ndarray,
     failed: np.ndarray | None = None,
     damage: np.ndarray | None = None,
+    tension_only: np.ndarray | None = None,
 ) -> float:
     """Compute the total elastic strain energy stored in all springs.
 
@@ -57,6 +58,8 @@ def compute_strain_energy(
         Boolean failure flags per spring, shape ``(n_springs,)``.
     damage : np.ndarray, optional
         Damage fraction per spring, shape ``(n_springs,)``.
+    tension_only : np.ndarray, optional
+        Boolean tension-only flags per spring, shape ``(n_springs,)``.
 
     Returns
     -------
@@ -67,7 +70,11 @@ def compute_strain_energy(
     eff_k = stiffnesses
     if damage is not None:
         eff_k = stiffnesses * (1.0 - damage)
-    se_springs = 0.5 * eff_k * (backend.maximum(0.0, strains) * rest_lengths) ** 2
+    if tension_only is not None:
+        strains_eff = backend.where(tension_only & (strains < 0.0), 0.0, strains)
+    else:
+        strains_eff = strains
+    se_springs = 0.5 * eff_k * (strains_eff * rest_lengths) ** 2
     if failed is not None:
         se_springs = backend.where(failed, 0.0, se_springs)
     return backend.sum(se_springs)
@@ -80,6 +87,7 @@ def compute_energy_balance(
     failure_dissipated: float = 0.0,
     clamp_dissipated: float = 0.0,
     proj_ke: float = 0.0,
+    friction_dissipated: float = 0.0,
 ) -> dict:
     """Return a summary dictionary of the energy balance.
 
@@ -97,19 +105,22 @@ def compute_energy_balance(
         Cumulative energy dissipated by velocity clamping (Joules).
     proj_ke : float, optional
         Projectile kinetic energy (Joules).
+    friction_dissipated : float, optional
+        Cumulative energy dissipated by friction (Joules).
 
     Returns
     -------
     dict
         Dictionary of energy components and the total system energy.
     """
-    total = ke + se + damped + failure_dissipated + clamp_dissipated + proj_ke
+    total = ke + se + damped + failure_dissipated + clamp_dissipated + proj_ke + friction_dissipated
     return {
         "kinetic": float(ke),
         "strain": float(se),
         "damped": float(damped),
         "failure_dissipated": float(failure_dissipated),
         "clamp_dissipated": float(clamp_dissipated),
+        "friction_dissipated": float(friction_dissipated),
         "projectile_kinetic": float(proj_ke),
         "total": float(total),
     }
@@ -163,6 +174,7 @@ def compute_layer_strain_energy(
     n_plies: int,
     failed: np.ndarray | None = None,
     damage: np.ndarray | None = None,
+    tension_only: np.ndarray | None = None,
 ) -> np.ndarray:
     """Compute the elastic strain energy per fabric layer.
 
@@ -184,6 +196,8 @@ def compute_layer_strain_energy(
         Boolean failure flags per spring, shape ``(n_springs,)``.
     damage : np.ndarray, optional
         Damage fraction per spring, shape ``(n_springs,)``.
+    tension_only : np.ndarray, optional
+        Boolean tension-only flags per spring, shape ``(n_springs,)``.
 
     Returns
     -------
@@ -194,7 +208,11 @@ def compute_layer_strain_energy(
     eff_k = stiffnesses
     if damage is not None:
         eff_k = stiffnesses * (1.0 - damage)
-    se_springs = 0.5 * eff_k * (np.maximum(0.0, strains) * rest_lengths) ** 2
+    if tension_only is not None:
+        strains_eff = np.where(tension_only & (strains < 0.0), 0.0, strains)
+    else:
+        strains_eff = strains
+    se_springs = 0.5 * eff_k * (strains_eff * rest_lengths) ** 2
     if failed is not None:
         se_springs = np.where(failed, 0.0, se_springs)
 

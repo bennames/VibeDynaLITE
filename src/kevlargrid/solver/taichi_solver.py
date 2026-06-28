@@ -20,12 +20,16 @@ class PhysicsViolationError(ValueError):
     pass
 
 
-# Initialize Taichi on GPU (Metal, CUDA, or Vulkan)
+# Initialize Taichi on GPU (Metal, CUDA, or Vulkan) or CPU if forced
 if ti is not None:
     import contextlib
+    import os
 
     try:
-        ti.init(arch=ti.gpu, default_fp=ti.f32)
+        if os.environ.get("TAICHI_FORCE_CPU") == "1":
+            ti.init(arch=ti.cpu, default_fp=ti.f32)
+        else:
+            ti.init(arch=ti.gpu, default_fp=ti.f32)
     except Exception:
         # Fallback to CPU if GPU initialization fails
         with contextlib.suppress(Exception):
@@ -166,6 +170,8 @@ class TaichiSolver:
         self.E_artificial_kinetic = ti.field(dtype=real_type, shape=())
         self.physics_violated = ti.field(dtype=ti.i32, shape=())
         self.contact_energy = ti.field(dtype=real_type, shape=())
+        self.mu_s = ti.field(dtype=real_type, shape=())
+        self.friction_dissipated = ti.field(dtype=real_type, shape=())
 
         # GPU-side telemetry scalars
         self.telem_ke = ti.field(dtype=real_type, shape=())
@@ -248,6 +254,8 @@ class TaichiSolver:
         self.damp_dissipated[None] = 0.0
         self.failure_dissipated[None] = 0.0
         self.clamp_dissipated[None] = 0.0
+        self.friction_dissipated[None] = 0.0
+        self.mu_s[None] = 0.0
         self.t_sim[None] = 0.0
         self.E_artificial_kinetic[None] = 0.0
         self.physics_violated[None] = 0
@@ -302,108 +310,18 @@ class TaichiSolver:
 
         @ti.kernel
         def k_update_cfl_g():
-            # Clear nodal stiffnesses
-            for i in range(self.n_nodes):
-                self.node_stiffness[i] = 0.0
-
-            # Sum spring stiffnesses
-            for j in range(self.n_springs):
-                if self.spring_failed[j] == 0:
-                    u, v = self.springs[j][0], self.springs[j][1]
-                    diff = self.positions[v] - self.positions[u]
-                    length = diff.norm()
-                    strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
-
-                    denom = self.failure_strain[None] - self.damage_onset_strain[None]
-                    denom_safe = denom if denom != 0.0 else 1.0
-                    val = (strain - self.damage_onset_strain[None]) / denom_safe
-                    d_val = 0.0
-                    if val > 0.0:
-                        d_val = val if val < 1.0 else 1.0
-
-                    damage_effective = ti.max(self.spring_damage[j], d_val)
-                    effective_k = self.stiffnesses[j] * (1.0 - damage_effective)
-
-                    ti.atomic_add(self.node_stiffness[u], effective_k)
-                    ti.atomic_add(self.node_stiffness[v], effective_k)
-
-            # Projectile contact stiffness (SDF or IDW)
-            k_penalty = self.k_penalty[None]
-            proximity_threshold = self.proximity_threshold[None]
-            if self.proj_shape_type[None] == 0:
-                self.w_sum[None] = 0.0
-                self.n_contacts[None] = 0
-                proj_pos = self.proj_position[None]
-                w_h = self.w_h[None]
-                t_h = self.t_h[None]
-
-                for i in range(self.n_nodes):
-                    self.node_w[i] = 0.0
-                    px, py, pz = self.positions[i].x, self.positions[i].y, self.positions[i].z
-                    if (
-                        px >= proj_pos.x - w_h - proximity_threshold
-                        and px <= proj_pos.x + w_h + proximity_threshold
-                        and py >= proj_pos.y - t_h - proximity_threshold
-                        and py <= proj_pos.y + t_h + proximity_threshold
-                        and ti.abs(pz - proj_pos.z) <= proximity_threshold
-                    ):
-                        x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
-                        y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                        dist = ti.sqrt(
-                            (px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2
-                        )
-
-                        if dist <= proximity_threshold:
-                            w = 1.0 / ti.max(dist, 1e-4)
-                            self.node_w[i] = w
-                            ti.atomic_add(self.w_sum[None], w)
-                            ti.atomic_add(self.n_contacts[None], 1)
-
-                w_mean = 0.0
-                if self.n_contacts[None] > 0:
-                    w_mean = self.w_sum[None] / float(self.n_contacts[None])
-                for i in range(self.n_nodes):
-                    if self.node_w[i] > 0.0 and w_mean > 0.0:
-                        w_normalized = self.node_w[i] / w_mean
-                        scale_factor = 0.0
-                        if self.node_initial_springs[i] > 0:
-                            scale_factor = float(self.node_active_counts[i]) / float(
-                                self.node_initial_springs[i]
-                            )
-                        ti.atomic_add(
-                            self.node_stiffness[i], k_penalty * w_normalized * scale_factor
-                        )
-            else:
-                # SDF bounding volume contact stiffness check
-                proj_pos = self.proj_position[None]
-                max_R = ti.max(
-                    self.radius_field[None], ti.max(self.length_field[None], self.span_field[None])
-                )
-                cutoff = max_R + proximity_threshold
-                for i in range(self.n_nodes):
-                    dist = (self.positions[i] - proj_pos).norm()
-                    if dist <= cutoff:
-                        ti.atomic_add(self.node_stiffness[i], k_penalty)
-
-            # Inter-ply contact stiffness using absolute gap formulation
-            if self.n_plies_val > 1:
-                for u in range((self.n_plies_val - 1) * self.n_nodes_per_layer_val):
-                    v = u + self.n_nodes_per_layer_val
-                    gap = ti.abs(self.positions[u].z - self.positions[v].z)
-                    penetration = self.t_ply[None] - gap
-                    if penetration > 0.0:
-                        if self.node_active_counts[u] > 0 and self.node_active_counts[v] > 0:
-                            ti.atomic_add(self.node_stiffness[u], k_penalty)
-                            ti.atomic_add(self.node_stiffness[v], k_penalty)
-
-            # Compute minimum dt
-            self.dt_crit[None] = 1e10
-            for i in range(self.n_nodes):
-                k_i = ti.max(self.node_stiffness[i], 1e-4)
-                dt_i = ti.sqrt(self.masses[i] / k_i)
-                ti.atomic_min(self.dt_crit[None], dt_i)
-
-            dt_crit = self.cfl_factor[None] * self.dt_crit[None]
+            dt_crit = self.compute_dynamic_dt_func(
+                self.failure_strain[None],
+                self.damage_onset_strain[None],
+                self.w_h[None],
+                self.t_h[None],
+                self.k_penalty[None],
+                self.proximity_threshold[None],
+                self.n_nodes_per_layer[None],
+                self.n_plies[None],
+                self.t_ply[None],
+                self.cfl_factor[None],
+            )
             self.dt[None] = dt_crit
             self.v_max[None] = self.dx[None] / dt_crit
 
@@ -419,7 +337,9 @@ class TaichiSolver:
                 self.node_active_counts[i] = 0
                 self.forces[i] = ti.Vector([0.0, 0.0, 0.0])
             self.proj_reaction_force[None] = ti.Vector([0.0, 0.0, 0.0])
+            self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
             self.contact_energy[None] = 0.0
+
 
             # Phase C: fused spring traversal
             for j in range(self.n_springs):
@@ -519,6 +439,8 @@ class TaichiSolver:
         def k_compute_interply_forces_g():
             t_ply = self.t_ply[None]
             k_penalty = self.k_penalty[None]
+            mu_s = self.mu_s[None]
+            dt = self.dt[None]
             if self.n_plies_val > 1:
                 for u in range((self.n_plies_val - 1) * self.n_nodes_per_layer_val):
                     v = u + self.n_nodes_per_layer_val
@@ -536,6 +458,26 @@ class TaichiSolver:
                                 self.contact_energy[None],
                                 0.5 * k_penalty * penetration * penetration,
                             )
+
+                            if mu_s > 0.0:
+                                v_rel_x = self.velocities[u].x - self.velocities[v].x
+                                v_rel_y = self.velocities[u].y - self.velocities[v].y
+                                v_rel_sq = v_rel_x**2 + v_rel_y**2
+                                v0 = 0.01
+                                denom = ti.sqrt(v_rel_sq + v0**2)
+                                f_fric_mag = mu_s * f_mag
+                                f_fric_x = -f_fric_mag * (v_rel_x / denom)
+                                f_fric_y = -f_fric_mag * (v_rel_y / denom)
+
+                                ti.atomic_add(self.forces[u].x, f_fric_x)
+                                ti.atomic_add(self.forces[u].y, f_fric_y)
+                                ti.atomic_add(self.forces[v].x, -f_fric_x)
+                                ti.atomic_add(self.forces[v].y, -f_fric_y)
+
+                                ti.atomic_add(
+                                    self.friction_dissipated[None],
+                                    f_fric_mag * (v_rel_sq / denom) * dt,
+                                )
 
         self.k_compute_interply_forces_graph = k_compute_interply_forces_g
 
@@ -879,6 +821,7 @@ class TaichiSolver:
         self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
         self.contact_energy[None] = 0.0
 
+
     @ti.func
     def compute_spring_forces(
         self, rayleigh_beta: ti.f32, damage_onset_strain: ti.f32, failure_strain: ti.f32, dt: ti.f32
@@ -934,6 +877,26 @@ class TaichiSolver:
                     ti.atomic_add(self.forces[u].z, f_mag * direction)
                     ti.atomic_add(self.forces[v].z, -f_mag * direction)
                     ti.atomic_add(self.contact_energy[None], 0.5 * k_penalty * penetration**2)
+
+                    # Velocity-regularized Coulomb friction
+                    mu = self.mu_s[None]
+                    if mu > 0.0:
+                        v_rel_x = self.velocities[u].x - self.velocities[v].x
+                        v_rel_y = self.velocities[u].y - self.velocities[v].y
+                        v_rel_sq = v_rel_x**2 + v_rel_y**2
+                        
+                        v0 = 0.01
+                        denom = ti.sqrt(v_rel_sq + v0**2)
+                        
+                        f_fric_x = -mu * f_mag * (v_rel_x / denom)
+                        f_fric_y = -mu * f_mag * (v_rel_y / denom)
+                        
+                        ti.atomic_add(self.forces[u].x, f_fric_x)
+                        ti.atomic_add(self.forces[u].y, f_fric_y)
+                        ti.atomic_add(self.forces[v].x, -f_fric_x)
+                        ti.atomic_add(self.forces[v].y, -f_fric_y)
+                        
+                        ti.atomic_add(self.friction_dissipated[None], mu * f_mag * (v_rel_sq / denom) * self.dt[None])
 
     @ti.func
     def compute_active_counts(self):
@@ -1020,6 +983,32 @@ class TaichiSolver:
 
                         self.forces[i].z += f_z
                         ti.atomic_add(self.proj_reaction_force[None].z, -f_z)
+                        ti.atomic_add(
+                            self.contact_energy[None],
+                            0.5 * k_penalty * w_normalized * penetration * penetration * scale_factor,
+                        )
+
+                        # Coulomb friction for legacy 3-DOF box projectile
+                        mu = self.mu_s[None]
+                        if mu > 0.0:
+                            v_rel_x = self.velocities[i].x - self.proj_velocity[None].x
+                            v_rel_y = self.velocities[i].y - self.proj_velocity[None].y
+                            v_rel_sq = v_rel_x**2 + v_rel_y**2
+                            
+                            v0 = 0.01
+                            denom = ti.sqrt(v_rel_sq + v0**2)
+                            
+                            f_fric_mag = mu * ti.abs(f_z)
+                            f_friction_x = -f_fric_mag * (v_rel_x / denom)
+                            f_friction_y = -f_fric_mag * (v_rel_y / denom)
+                            
+                            self.forces[i].x += f_friction_x
+                            self.forces[i].y += f_friction_y
+                            
+                            ti.atomic_add(self.proj_reaction_force[None].x, -f_friction_x)
+                            ti.atomic_add(self.proj_reaction_force[None].y, -f_friction_y)
+                            
+                            ti.atomic_add(self.friction_dissipated[None], f_fric_mag * (v_rel_sq / denom) * self.dt[None])
         else:
             # 6-DOF SDF Node-to-Surface penalty contact
             proj_pos = self.proj_position[None]
@@ -1054,6 +1043,29 @@ class TaichiSolver:
                     ti.atomic_add(self.proj_reaction_force[None], -F_contact)
                     P_contact = P_rel - delta * n_world
                     ti.atomic_add(self.proj_torque[None], P_contact.cross(-F_contact))
+                    ti.atomic_add(
+                        self.contact_energy[None],
+                        0.5 * k_penalty * delta * delta * scale_factor,
+                    )
+
+                    # Coulomb friction for 6-DOF projectile contact
+                    mu = self.mu_s[None]
+                    if mu > 0.0:
+                        v_rel_dot_n = v_rel.dot(n_world)
+                        v_tangential = v_rel - v_rel_dot_n * n_world
+                        v_rel_sq = v_tangential.norm_sqr()
+                        
+                        v0 = 0.01
+                        denom = ti.sqrt(v_rel_sq + v0**2)
+                        
+                        f_fric_mag = mu * f_mag * scale_factor
+                        F_friction = -f_fric_mag * (v_tangential / denom)
+                        
+                        self.forces[i] += F_friction
+                        ti.atomic_add(self.proj_reaction_force[None], -F_friction)
+                        ti.atomic_add(self.proj_torque[None], P_contact.cross(-F_friction))
+                        
+                        ti.atomic_add(self.friction_dissipated[None], f_fric_mag * (v_rel_sq / denom) * self.dt[None])
 
     @ti.func
     def apply_impedance_boundary(self, dt: ti.f32):
@@ -1194,13 +1206,18 @@ class TaichiSolver:
                 length = diff.norm()
                 strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
                 effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
-                # Strain energy: 0.5 * k_eff * (strain * L0)^2
-                se += 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
+                
+                # Strain energy: 0.5 * k_eff * (strain * L0)^2 (allow compressive for non-tension-only)
+                se_spring = 0.0
+                if not (self.tension_only[j] == 1 and strain < 0.0):
+                    se_spring = 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
+                se += se_spring
         return (
             se
             + self.failure_dissipated[None]
             + self.damp_dissipated[None]
             + self.clamp_dissipated[None]
+            + self.friction_dissipated[None]
         )
 
     @ti.func
@@ -1263,38 +1280,55 @@ class TaichiSolver:
         # Calculate contact weights
         self.w_sum[None] = 0.0
         self.n_contacts[None] = 0
-        for i in range(self.n_nodes):
-            self.node_w[i] = 0.0
-            px, py, pz = self.positions[i].x, self.positions[i].y, self.positions[i].z
-            if (
-                px >= proj_pos.x - w_h - proximity_threshold
-                and px <= proj_pos.x + w_h + proximity_threshold
-                and py >= proj_pos.y - t_h - proximity_threshold
-                and py <= proj_pos.y + t_h + proximity_threshold
-                and ti.abs(pz - proj_pos.z) <= proximity_threshold
-            ):
-                x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
-                y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
-                dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
-
-                if dist <= proximity_threshold:
-                    w = 1.0 / ti.max(dist, 1e-4)
-                    self.node_w[i] = w
-                    ti.atomic_add(self.w_sum[None], w)
-                    ti.atomic_add(self.n_contacts[None], 1)
-
-        if self.n_contacts[None] > 0:
-            w_mean = self.w_sum[None] / float(self.n_contacts[None])
+        if self.proj_shape_type[None] == 0:
             for i in range(self.n_nodes):
-                if self.node_w[i] > 0.0:
-                    w_normalized = self.node_w[i] / w_mean if w_mean > 0.0 else self.node_w[i]
+                self.node_w[i] = 0.0
+                px, py, pz = self.positions[i].x, self.positions[i].y, self.positions[i].z
+                if (
+                    px >= proj_pos.x - w_h - proximity_threshold
+                    and px <= proj_pos.x + w_h + proximity_threshold
+                    and py >= proj_pos.y - t_h - proximity_threshold
+                    and py <= proj_pos.y + t_h + proximity_threshold
+                    and ti.abs(pz - proj_pos.z) <= proximity_threshold
+                ):
+                    x_proj = ti.max(proj_pos.x - w_h, ti.min(px, proj_pos.x + w_h))
+                    y_proj = ti.max(proj_pos.y - t_h, ti.min(py, proj_pos.y + t_h))
+                    dist = ti.sqrt((px - x_proj) ** 2 + (py - y_proj) ** 2 + (pz - proj_pos.z) ** 2)
+
+                    if dist <= proximity_threshold:
+                        w = 1.0 / ti.max(dist, 1e-4)
+                        self.node_w[i] = w
+                        ti.atomic_add(self.w_sum[None], w)
+                        ti.atomic_add(self.n_contacts[None], 1)
+
+            if self.n_contacts[None] > 0:
+                w_mean = self.w_sum[None] / float(self.n_contacts[None])
+                for i in range(self.n_nodes):
+                    if self.node_w[i] > 0.0:
+                        w_normalized = self.node_w[i] / w_mean if w_mean > 0.0 else self.node_w[i]
+                        scale_factor = 0.0
+                        if self.node_initial_springs[i] > 0:
+                            scale_factor = float(self.node_active_counts[i]) / float(
+                                self.node_initial_springs[i]
+                            )
+
+                        ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
+        else:
+            q = self.proj_quat[None]
+            q_conj = ti.Vector([q[0], -q[1], -q[2], -q[3]])
+            for i in range(self.n_nodes):
+                P_rel = self.positions[i] - proj_pos
+                P_loc = self.ti_q_rotate(q_conj, P_rel)
+                dist = self.eval_sdf(P_loc)
+                if dist <= proximity_threshold:
                     scale_factor = 0.0
                     if self.node_initial_springs[i] > 0:
                         scale_factor = float(self.node_active_counts[i]) / float(
                             self.node_initial_springs[i]
                         )
-
-                    ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
+                    else:
+                        scale_factor = 1.0
+                    ti.atomic_add(self.node_stiffness[i], k_penalty * scale_factor)
 
         # Add inter-ply contact stiffness
         if n_plies > 1:
@@ -1618,7 +1652,10 @@ class TaichiSolver:
             length = diff.norm()
             strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
             effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
-            se += 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
+            se_spring = 0.0
+            if not (self.tension_only[j] == 1 and strain < 0.0):
+                se_spring = 0.5 * effective_k * (strain * self.rest_lengths[j]) ** 2
+            se += se_spring
             if strain > peak:
                 ti.atomic_max(peak, strain)  # parallel-safe max
         self.telem_se[None] = se + self.contact_energy[None]
@@ -1704,6 +1741,7 @@ class TaichiSolver:
         cfl_factor: float,
         dx: float,
         fracture_energy_multiplier: float,
+        mu_s: float = 0.0,
         cfl_recompute_interval: int = 20,
     ) -> float:
         """Host-side substep loop with parallel GPU kernels compiled into a static graph."""
@@ -1731,6 +1769,7 @@ class TaichiSolver:
         self.cfl_factor[None] = cfl_factor
         self.dx[None] = dx
         self.fracture_energy_multiplier[None] = fracture_energy_multiplier
+        self.mu_s[None] = mu_s
 
         # Compile or retrieve graph
         use_cfl = cfl_factor > 0.0
@@ -1746,11 +1785,12 @@ class TaichiSolver:
             self.k_compute_initial_accelerations_graph()
 
         graph = self.get_or_compile_graph(
-            num_substeps, use_cfl, use_interply, cfl_recompute_interval
+            1, use_cfl, use_interply, cfl_recompute_interval
         )
 
-        # Run graph in exactly 1 call
-        graph.run({})
+        # Run graph in a Python loop to prevent AGX Metal variant footprint overflow
+        for _ in range(num_substeps):
+            graph.run({})
 
         return float(self.dt[None])
 
@@ -1839,6 +1879,7 @@ class TaichiSolver:
             e_int = self.compute_internal_energy()
             if e_int > 0.0:
                 if e_art > 0.02 * e_int:
+                    print(f"PhysicsViolation! e_art={e_art}, e_int={e_int}, ratio={e_art/e_int:.6f}")
                     self.physics_violated[None] = 1
 
         return dt
@@ -1887,6 +1928,8 @@ def taichi_leapfrog_loop(
     node_spring_signs: np.ndarray | None = None,
     use_viscous: bool = False,
     cfl_factor: float = -1.0,
+    mu_s: float = 0.0,
+    friction_dissipated_init: float = 0.0,
     grid_damage: np.ndarray | None = None,
     grid_masses_physical: np.ndarray | None = None,
     proj_quat: np.ndarray | None = None,
@@ -2094,15 +2137,24 @@ def taichi_leapfrog_loop(
     use_visc_val = 1 if use_viscous else 0
 
     # Running explicit integration loop in chunks of save_interval
-    n_chunks = max(1, n_steps // save_interval)
+    n_chunks = n_steps // save_interval
     for chunk in range(n_chunks):
+        # Apply Bazant strain regularization just like Numba
+        from kevlargrid.solver.failure import scale_failure_strain
+        failure_strain_eff = scale_failure_strain(failure_strain, dx)
+        if failure_strain > 0.0:
+            ratio = damage_onset_strain / failure_strain
+            damage_onset_strain_eff = failure_strain_eff * ratio
+        else:
+            damage_onset_strain_eff = damage_onset_strain
+
         # Run save_interval steps on GPU
         dt = solver.run_substeps(
             save_interval,
             dt,
             rayleigh_beta,
-            damage_onset_strain,
-            failure_strain,
+            damage_onset_strain_eff,
+            failure_strain_eff,
             n_plies,
             n_nodes_per_layer,
             t_ply,
@@ -2115,6 +2167,7 @@ def taichi_leapfrog_loop(
             cfl_factor,
             dx,
             fracture_energy_multiplier,
+            mu_s,
         )
         if solver.physics_violated[None] == 1:
             raise PhysicsViolationError(
@@ -2143,15 +2196,23 @@ def taichi_leapfrog_loop(
         if hist_proj_quat is not None:
             hist_proj_quat[chunk] = solver.proj_quat.to_numpy()
 
-    # Run any remaining steps
     remainder = n_steps % save_interval
     if remainder > 0:
+        # Apply Bazant strain regularization just like Numba
+        from kevlargrid.solver.failure import scale_failure_strain
+        failure_strain_eff = scale_failure_strain(failure_strain, dx)
+        if failure_strain > 0.0:
+            ratio = damage_onset_strain / failure_strain
+            damage_onset_strain_eff = failure_strain_eff * ratio
+        else:
+            damage_onset_strain_eff = damage_onset_strain
+
         dt = solver.run_substeps(
             remainder,
             dt,
             rayleigh_beta,
-            damage_onset_strain,
-            failure_strain,
+            damage_onset_strain_eff,
+            failure_strain_eff,
             n_plies,
             n_nodes_per_layer,
             t_ply,
@@ -2164,12 +2225,32 @@ def taichi_leapfrog_loop(
             cfl_factor,
             dx,
             fracture_energy_multiplier,
+            mu_s,
         )
         if solver.physics_violated[None] == 1:
             raise PhysicsViolationError(
                 "Physics violation: Artificial kinetic energy from mass scaling "
                 "exceeded 2% of total internal energy."
             )
+
+        if n_chunks == 0:
+            t_sim = float(solver.t_sim[None])
+            telem = solver.get_telemetry()
+            hist_ke[0] = telem["ke"]
+            hist_se[0] = telem["se"]
+            hist_proj_ke[0] = telem["proj_ke"]
+            hist_peak_strain[0] = telem["peak_strain"]
+            hist_time[0] = t_sim
+
+            pos_cpu = solver.positions.to_numpy().astype(positions.dtype)
+            failed_cpu = solver.spring_failed.to_numpy() == 1
+            proj_pos_cpu = solver.proj_position.to_numpy().astype(positions.dtype)
+
+            hist_positions[0] = pos_cpu
+            hist_failed[0] = failed_cpu
+            hist_proj_pos[0] = proj_pos_cpu
+            if hist_proj_quat is not None:
+                hist_proj_quat[0] = solver.proj_quat.to_numpy()
 
     # Retrieve final simulation output vectors
     final_pos = solver.positions.to_numpy().astype(positions.dtype)
@@ -2188,6 +2269,9 @@ def taichi_leapfrog_loop(
         proj_quat[:] = solver.proj_quat.to_numpy().astype(proj_quat.dtype)
     if proj_omega is not None:
         proj_omega[:] = solver.proj_omega.to_numpy().astype(proj_omega.dtype)
+
+    solver.mu_s[None] = mu_s
+    solver.friction_dissipated[None] = friction_dissipated_init
 
     return (
         final_pos,
@@ -2208,4 +2292,5 @@ def taichi_leapfrog_loop(
         hist_proj_ke,
         hist_peak_strain,
         float(solver.contact_energy[None]),
+        float(solver.friction_dissipated[None]),
     )

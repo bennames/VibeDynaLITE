@@ -1172,6 +1172,7 @@ def test_ballistic_limit_v50() -> None:
             grid_a.node_spring_offsets,
             grid_a.node_spring_ids,
             grid_a.node_spring_signs,
+            mu_s=0.20,
         )
         t_sim += 100 * dt
         # Early termination check: velocity reversed/stopped
@@ -1237,6 +1238,7 @@ def test_ballistic_limit_v50() -> None:
             grid_b.node_spring_offsets,
             grid_b.node_spring_ids,
             grid_b.node_spring_signs,
+            mu_s=0.20,
         )
         t_sim += 100 * dt
         # Early termination check: penetration occurred

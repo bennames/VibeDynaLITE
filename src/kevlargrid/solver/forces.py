@@ -253,17 +253,22 @@ def compute_interply_contact_forces(
     t_ply: float,
     k_penalty: float,
     active_counts: np.ndarray | None = None,
-) -> tuple[np.ndarray, float]:
-    """Compute vectorised inter-ply penalty contact forces and potential energy.
+    velocities: np.ndarray | None = None,
+    mu_s: float = 0.0,
+    dt: float = 0.0,
+) -> tuple[np.ndarray, float, float]:
+    """Compute vectorised inter-ply penalty contact forces, potential energy, and friction dissipation.
 
     For each corresponding node index across adjacent layers, if layer n
     penetrates layer n+1 along the Z axis, we apply equal and opposite
-    forces resisting interpenetration.
+    forces resisting interpenetration and calculate Coulomb friction.
 
     Parameters
     ----------
     positions : np.ndarray
         Current node positions, shape ``(n_nodes, 3)``.
+    velocities : np.ndarray
+        Current node velocities, shape ``(n_nodes, 3)``.
     n_nodes_per_layer : int
         Number of nodes in a single ply.
     n_plies : int
@@ -272,20 +277,26 @@ def compute_interply_contact_forces(
         Inter-ply spacing (metres).
     k_penalty : float
         Penalty contact stiffness.
+    mu_s : float
+        Friction coefficient.
+    dt : float
+        Simulation timestep.
     active_counts : np.ndarray, optional
         Number of active springs per node, shape ``(n_nodes,)``.
 
     Returns
     -------
-    tuple[np.ndarray, float]
+    tuple[np.ndarray, float, float]
         - Nodal contact forces array, shape ``(n_nodes, 3)``.
         - Total contact potential energy (Joules).
+        - Cumulative friction energy dissipation in this step (Joules).
     """
     forces = zeros(positions.shape, dtype=positions.dtype)
     total_energy = 0.0
+    fric_diss = 0.0
 
     if n_plies <= 1:
-        return forces, total_energy
+        return forces, total_energy, fric_diss
 
     for ply in range(n_plies - 1):
         # Compute range of node indices for the current layer and next layer
@@ -315,8 +326,32 @@ def compute_interply_contact_forces(
         indices_n = np.arange(start_idx, end_idx)
         indices_n1 = np.arange(end_idx, end_idx + n_nodes_per_layer)
 
-        forces_n = stack_z(f_mag * direction)
-        forces_n1 = stack_z(-f_mag * direction)
+        forces_n = np.zeros((len(f_mag), 3), dtype=positions.dtype)
+        forces_n[:, 2] = f_mag * direction
+        forces_n1 = np.zeros((len(f_mag), 3), dtype=positions.dtype)
+        forces_n1[:, 2] = -f_mag * direction
+
+        # Implement velocity-regularized Coulomb friction
+        if mu_s > 0.0 and velocities is not None:
+            v_n = velocities[start_idx:end_idx]
+            v_n1 = velocities[end_idx : end_idx + n_nodes_per_layer]
+            v_rel_x = v_n[:, 0] - v_n1[:, 0]
+            v_rel_y = v_n[:, 1] - v_n1[:, 1]
+            v_rel_sq = v_rel_x**2 + v_rel_y**2
+            
+            v0 = 0.01
+            denom = sqrt(v_rel_sq + v0**2)
+            
+            f_fric_mag = mu_s * f_mag
+            f_fric_x = -f_fric_mag * (v_rel_x / denom)
+            f_fric_y = -f_fric_mag * (v_rel_y / denom)
+            
+            forces_n[:, 0] += f_fric_x
+            forces_n[:, 1] += f_fric_y
+            forces_n1[:, 0] -= f_fric_x
+            forces_n1[:, 1] -= f_fric_y
+            
+            fric_diss += sum(f_fric_mag * (v_rel_sq / denom) * dt)
 
         forces = scatter_add(forces, indices_n, forces_n)
         forces = scatter_add(forces, indices_n1, forces_n1)
@@ -324,4 +359,4 @@ def compute_interply_contact_forces(
         # Potential energy: 0.5 * k * x^2
         total_energy += sum(where(penetrating, 0.5 * k_penalty * penetration**2, 0.0))
 
-    return forces, total_energy
+    return forces, total_energy, fric_diss

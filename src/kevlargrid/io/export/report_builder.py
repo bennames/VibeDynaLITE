@@ -17,11 +17,8 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# WeasyPrint PDF compiler
-try:
-    import weasyprint
-except ImportError:
-    weasyprint = None  # type: ignore[assignment]
+# WeasyPrint PDF compiler bypassed
+weasyprint = None
 
 
 def generate_plots_base64(history: list[dict[str, Any]]) -> tuple[str, str]:

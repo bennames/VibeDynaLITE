@@ -41,6 +41,18 @@ try:
 except ImportError:
     HAS_NUMBA = False
 
+if HAS_NUMBA:
+    import os
+    try:
+        import psutil
+        physical_cores = psutil.cpu_count(logical=False) or os.cpu_count() or 4
+    except ImportError:
+        physical_cores = os.cpu_count() or 4
+    try:
+        numba.set_num_threads(physical_cores)
+    except Exception:
+        pass
+
 import importlib.util
 
 HAS_TAICHI = importlib.util.find_spec("taichi") is not None
@@ -67,6 +79,17 @@ def get_backend_name() -> str:
         str: 'jax', 'numba', 'numpy', or 'taichi'.
     """
     return BACKEND
+
+
+def set_numba_threads(n: int) -> None:
+    """Set the number of threads for Numba's parallel execution dynamically."""
+    if HAS_NUMBA:
+        import numba
+        try:
+            numba.set_num_threads(n)
+        except Exception as e:
+            import logging
+            logging.getLogger("kevlargrid").warning(f"Failed to set Numba threads to {n}: {e}")
 
 
 def get_active_device() -> str:
@@ -317,7 +340,7 @@ scatter_add: Any = py_scatter_add
 stack_z: Any = py_stack_z
 clamp_boundary: Any = py_clamp_boundary
 
-_ACTIVE_BACKEND: str = BACKEND
+_ACTIVE_BACKEND: str = ""
 
 
 def set_backend(backend_name: str) -> None:
@@ -443,4 +466,5 @@ class _BackendModule(sys.modules[__name__].__class__):  # type: ignore[misc]
             set_backend(value)
 
 
+set_backend(BACKEND)
 sys.modules[__name__].__class__ = _BackendModule
