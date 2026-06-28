@@ -704,6 +704,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             )
             logger.info(f"Max Layer Perforated: {report['max_layer_perforated']}")
             import typing
+
             logger.info(
                 f"Energy Dissipation Efficiency: {typing.cast(float, report['energy_dissipation_efficiency']) * 100:.2f}%"
             )

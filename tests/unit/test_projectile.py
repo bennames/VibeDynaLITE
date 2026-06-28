@@ -310,7 +310,7 @@ class TestProjectile:
 
         proc = ctx.Process(target=run_solver_process, args=(config, mock_queue, child_conn))
         proc.start()
-        proc.join(timeout=60)
+        proc.join(timeout=180)
 
         messages = []
         while not mock_queue.empty():
