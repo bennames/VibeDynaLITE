@@ -1984,6 +1984,7 @@ def taichi_leapfrog_loop(
     np.ndarray,
     np.ndarray,
     float,
+    float,
 ]:
     """Execute a block chunk of explicit time steps entirely in GPU compilation."""
     if ti is None:
