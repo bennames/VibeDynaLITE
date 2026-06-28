@@ -43,3 +43,9 @@ benchmarks/results.json
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Benchmark 8 generated files
+benchmarks/benchmark_8/results.json
+benchmarks/benchmark_8/validation_plot.png
+benchmarks/benchmark_8/validation_report.pdf
+
