@@ -15,7 +15,6 @@ from kevlargrid.solver.backend import (
     minimum,
     scatter_add,
     sqrt,
-    stack_z,
     sum,
     where,
     zeros,
@@ -338,19 +337,19 @@ def compute_interply_contact_forces(
             v_rel_x = v_n[:, 0] - v_n1[:, 0]
             v_rel_y = v_n[:, 1] - v_n1[:, 1]
             v_rel_sq = v_rel_x**2 + v_rel_y**2
-            
+
             v0 = 0.01
             denom = sqrt(v_rel_sq + v0**2)
-            
+
             f_fric_mag = mu_s * f_mag
             f_fric_x = -f_fric_mag * (v_rel_x / denom)
             f_fric_y = -f_fric_mag * (v_rel_y / denom)
-            
+
             forces_n[:, 0] += f_fric_x
             forces_n[:, 1] += f_fric_y
             forces_n1[:, 0] -= f_fric_x
             forces_n1[:, 1] -= f_fric_y
-            
+
             fric_diss += sum(f_fric_mag * (v_rel_sq / denom) * dt)
 
         forces = scatter_add(forces, indices_n, forces_n)

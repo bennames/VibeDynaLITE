@@ -171,8 +171,14 @@ class TestStrainComputation:
         # v_rel = 10.0, v0 = 0.01 -> denom = sqrt(100.0 + 0.0001) = 10.000005
         # f_fric = 0.2 * 1.5 * (10 / 10.000005) = 0.299999 N
         forces, energy, fric_diss = compute_interply_contact_forces(
-            positions, n_nodes_per_layer, n_plies, t_ply, k_penalty,
-            velocities=velocities, mu_s=0.2, dt=1e-6
+            positions,
+            n_nodes_per_layer,
+            n_plies,
+            t_ply,
+            k_penalty,
+            velocities=velocities,
+            mu_s=0.2,
+            dt=1e-6,
         )
 
         assert forces[0, 0] == pytest.approx(-0.3, abs=1e-3)

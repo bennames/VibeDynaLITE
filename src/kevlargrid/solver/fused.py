@@ -1062,7 +1062,7 @@ def _fused_leapfrog_loop_jit(
                 )
                 max_R = max(proj_radius, max(proj_length, proj_span))
                 cutoff = max_R + proximity_threshold
-                cutoff_sq = cutoff ** 2
+                cutoff_sq = cutoff**2
                 for i in range(n_nodes):
                     dx_p = positions[i, 0] - proj_position[0]
                     dy_p = positions[i, 1] - proj_position[1]
@@ -1188,7 +1188,7 @@ def _fused_leapfrog_loop_jit(
                 proj_reaction_force[0] = -sum(proj_forces[:, 0])
                 proj_reaction_force[1] = -sum(proj_forces[:, 1])
                 proj_reaction_force[2] = -sum(proj_forces[:, 2])
-                
+
                 # Projectile contact potential energy
                 proj_pe_elements = where(
                     contact_mask,
@@ -1202,7 +1202,7 @@ def _fused_leapfrog_loop_jit(
             )
             max_R = max(proj_radius, max(proj_length, proj_span))
             cutoff = max_R + proximity_threshold
-            cutoff_sq = cutoff ** 2
+            cutoff_sq = cutoff**2
             for i in range(n_nodes):
                 dx_p = positions[i, 0] - proj_position[0]
                 dy_p = positions[i, 1] - proj_position[1]
@@ -1282,7 +1282,7 @@ def _fused_leapfrog_loop_jit(
                     proj_forces[i, 0] = F_contact[0]
                     proj_forces[i, 1] = F_contact[1]
                     proj_forces[i, 2] = F_contact[2]
-                    
+
                     proj_contact_e_step += 0.5 * k_penalty * delta * delta * node_scale_factor
 
                     proj_reaction_force[0] -= F_contact[0]
@@ -1303,32 +1303,43 @@ def _fused_leapfrog_loop_jit(
 
                     # Projectile 6-DOF contact friction
                     if mu_s > 0.0:
-                        v_rel_dot_n = v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
-                        v_tang = np.array([
-                            v_rel[0] - v_rel_dot_n * n_world[0],
-                            v_rel[1] - v_rel_dot_n * n_world[1],
-                            v_rel[2] - v_rel_dot_n * n_world[2],
-                        ], dtype=np.float64)
-                        v_rel_sq = v_tang[0]**2 + v_tang[1]**2 + v_tang[2]**2
-                        
+                        v_rel_dot_n = (
+                            v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
+                        )
+                        v_tang = np.array(
+                            [
+                                v_rel[0] - v_rel_dot_n * n_world[0],
+                                v_rel[1] - v_rel_dot_n * n_world[1],
+                                v_rel[2] - v_rel_dot_n * n_world[2],
+                            ],
+                            dtype=np.float64,
+                        )
+                        v_rel_sq = v_tang[0] ** 2 + v_tang[1] ** 2 + v_tang[2] ** 2
+
                         v0 = 0.01
                         denom = np.sqrt(v_rel_sq + v0**2)
-                        
+
                         f_fric_mag = mu_s * f_mag * node_scale_factor
                         F_friction = -f_fric_mag * (v_tang / denom)
-                        
+
                         proj_forces[i, 0] += F_friction[0]
                         proj_forces[i, 1] += F_friction[1]
                         proj_forces[i, 2] += F_friction[2]
-                        
+
                         proj_reaction_force[0] -= F_friction[0]
                         proj_reaction_force[1] -= F_friction[1]
                         proj_reaction_force[2] -= F_friction[2]
-                        
-                        proj_torque[0] += P_contact[1] * (-F_friction[2]) - P_contact[2] * (-F_friction[1])
-                        proj_torque[1] += P_contact[2] * (-F_friction[0]) - P_contact[0] * (-F_friction[2])
-                        proj_torque[2] += P_contact[0] * (-F_friction[1]) - P_contact[1] * (-F_friction[0])
-                        
+
+                        proj_torque[0] += P_contact[1] * (-F_friction[2]) - P_contact[2] * (
+                            -F_friction[1]
+                        )
+                        proj_torque[1] += P_contact[2] * (-F_friction[0]) - P_contact[0] * (
+                            -F_friction[2]
+                        )
+                        proj_torque[2] += P_contact[0] * (-F_friction[1]) - P_contact[1] * (
+                            -F_friction[0]
+                        )
+
                         friction_dissipated += f_fric_mag * (v_rel_sq / denom) * dt
 
         # Apply Coulomb friction to legacy 3-DOF box projectile
@@ -1353,14 +1364,14 @@ def _fused_leapfrog_loop_jit(
                     f_fric_x = -f_fric_mag * (v_tang_x / denom)
                     f_fric_y = -f_fric_mag * (v_tang_y / denom)
                     f_fric_z = -f_fric_mag * (v_tang_z / denom)
-                    
+
                     proj_forces[i, 0] += f_fric_x
                     proj_forces[i, 1] += f_fric_y
                     proj_forces[i, 2] += f_fric_z
                     proj_reaction_force[0] -= f_fric_x
                     proj_reaction_force[1] -= f_fric_y
                     proj_reaction_force[2] -= f_fric_z
-                    
+
                     friction_dissipated += f_fric_mag * (v_rel_sq / denom) * dt
 
         interply_forces, contact_e_step, fric_diss_step = compute_interply_contact_forces(
@@ -1442,9 +1453,7 @@ def _fused_leapfrog_loop_jit(
             strains_d = (lengths_d - grid_rest_lengths) / grid_rest_lengths
             denom = failure_strain - damage_onset_strain
             denom_safe = where(denom == 0.0, 1.0, denom)
-            damage_d = minimum(
-                maximum((strains_d - damage_onset_strain) / denom_safe, 0.0), 1.0
-            )
+            damage_d = minimum(maximum((strains_d - damage_onset_strain) / denom_safe, 0.0), 1.0)
             grid_damage[:] = maximum(grid_damage, damage_d)
             grid_failed[:] = grid_damage >= 1.0
             effective_k = grid_stiffnesses * (1.0 - grid_damage)
@@ -1482,13 +1491,13 @@ def _fused_leapfrog_loop_jit(
             x_onset = damage_onset_strain
             x_fail = failure_strain
             D = grid_damage
-            
+
             w_failed = (k * L0**2 / 6.0) * (x_fail**2 + x_fail * x_onset + x_onset**2)
             denom_val = x_fail - x_onset
             denom_safe_val = 1.0 if denom_val == 0.0 else denom_val
             x_peak = x_onset + D * (x_fail - x_onset)
             w_diss = (k * L0**2 / (6.0 * denom_safe_val)) * (x_peak**3 - x_onset**3)
-            
+
             diss_arr = np.where(grid_failed, w_failed, np.where(D > 0.0, w_diss, 0.0))
             failure_dissipated = float(np.sum(fracture_energy_multiplier * diss_arr))
 

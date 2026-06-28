@@ -32,6 +32,7 @@ def run_benchmark(arch_name: str, size: int, mode: str, n_steps: int = 50) -> fl
         from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
     else:
         import taichi as ti
+
         if arch_name == "gpu":
             try:
                 ti.init(arch=ti.gpu, default_fp=ti.f32)
@@ -52,11 +53,15 @@ def run_benchmark(arch_name: str, size: int, mode: str, n_steps: int = 50) -> fl
 
     n_plies = 5
     if mode == "A":
-        grid = generate_rectangular_grid(size, size, 0.05, MOCK_MATERIAL, n_plies=n_plies, t_ply=None)
+        grid = generate_rectangular_grid(
+            size, size, 0.05, MOCK_MATERIAL, n_plies=n_plies, t_ply=None
+        )
         t_ply = 0.002
     else:  # mode == "B"
         t_ply = 0.001
-        grid = generate_rectangular_grid(size, size, 0.05, MOCK_MATERIAL, n_plies=n_plies, t_ply=t_ply)
+        grid = generate_rectangular_grid(
+            size, size, 0.05, MOCK_MATERIAL, n_plies=n_plies, t_ply=t_ply
+        )
 
     n_nodes = grid.n_nodes
 
@@ -220,13 +225,17 @@ def run_all() -> None:
                     proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True)
 
                     # Parse stdout for RESULT:
-                    result_line = [line for line in proc.stdout.splitlines() if line.startswith("RESULT:")]
+                    result_line = [
+                        line for line in proc.stdout.splitlines() if line.startswith("RESULT:")
+                    ]
                     if result_line:
                         t_ms = float(result_line[0].split(":")[1].strip())
                         results[size][mode][arch] = t_ms
                         print(f"  Arch: {arch.upper():<6} -> {t_ms:.4f} ms/step")
                     else:
-                        print(f"  Arch: {arch.upper():<6} -> FAILED: No RESULT found in stdout. Output: {proc.stdout}")
+                        print(
+                            f"  Arch: {arch.upper():<6} -> FAILED: No RESULT found in stdout. Output: {proc.stdout}"
+                        )
                 except subprocess.CalledProcessError as e:
                     print(f"  Arch: {arch.upper():<6} -> FAILED: {e}")
                     if e.stderr:
@@ -255,7 +264,11 @@ def run_all() -> None:
         import matplotlib.pyplot as plt
 
         _fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
-        plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
+        plt.style.use(
+            "seaborn-v0_8-whitegrid"
+            if "seaborn-v0_8-whitegrid" in plt.style.available
+            else "default"
+        )
 
         x_vals = [size * size for size in GRID_SIZES]
         colors = {"cpu": "#e74c3c", "gpu": "#9b59b6", "numba": "#2ecc71"}
@@ -280,7 +293,9 @@ def run_all() -> None:
                         linewidth=2.5,
                         markersize=8,
                     )
-            mode_name = "Mode A (Single Equivalent Sheet)" if mode == "A" else "Mode B (5 Discrete Plies)"
+            mode_name = (
+                "Mode A (Single Equivalent Sheet)" if mode == "A" else "Mode B (5 Discrete Plies)"
+            )
             ax.set_title(f"{mode_name}", fontsize=12, fontweight="bold")
             ax.set_xlabel("Nodes per Layer ($N_{nodes}$)", fontsize=11)
             if idx == 0:
@@ -289,7 +304,12 @@ def run_all() -> None:
             ax.set_yscale("log")
             ax.legend(frameon=True, facecolor="white", edgecolor="#e0e0e0", fontsize=10)
 
-        plt.suptitle("KevlarGrid Explicit Mass-Spring Solver Performance Scaling (5 Plies)", fontsize=14, fontweight="bold", y=0.98)
+        plt.suptitle(
+            "KevlarGrid Explicit Mass-Spring Solver Performance Scaling (5 Plies)",
+            fontsize=14,
+            fontweight="bold",
+            y=0.98,
+        )
         plt.tight_layout()
         plt.savefig(PLOT_FILE, dpi=300)
         plt.close()

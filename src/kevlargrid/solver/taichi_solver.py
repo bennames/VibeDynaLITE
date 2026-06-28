@@ -340,7 +340,6 @@ class TaichiSolver:
             self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
             self.contact_energy[None] = 0.0
 
-
             # Phase C: fused spring traversal
             for j in range(self.n_springs):
                 if self.spring_failed[j] == 1:
@@ -821,7 +820,6 @@ class TaichiSolver:
         self.proj_torque[None] = ti.Vector([0.0, 0.0, 0.0])
         self.contact_energy[None] = 0.0
 
-
     @ti.func
     def compute_spring_forces(
         self, rayleigh_beta: ti.f32, damage_onset_strain: ti.f32, failure_strain: ti.f32, dt: ti.f32
@@ -884,19 +882,22 @@ class TaichiSolver:
                         v_rel_x = self.velocities[u].x - self.velocities[v].x
                         v_rel_y = self.velocities[u].y - self.velocities[v].y
                         v_rel_sq = v_rel_x**2 + v_rel_y**2
-                        
+
                         v0 = 0.01
                         denom = ti.sqrt(v_rel_sq + v0**2)
-                        
+
                         f_fric_x = -mu * f_mag * (v_rel_x / denom)
                         f_fric_y = -mu * f_mag * (v_rel_y / denom)
-                        
+
                         ti.atomic_add(self.forces[u].x, f_fric_x)
                         ti.atomic_add(self.forces[u].y, f_fric_y)
                         ti.atomic_add(self.forces[v].x, -f_fric_x)
                         ti.atomic_add(self.forces[v].y, -f_fric_y)
-                        
-                        ti.atomic_add(self.friction_dissipated[None], mu * f_mag * (v_rel_sq / denom) * self.dt[None])
+
+                        ti.atomic_add(
+                            self.friction_dissipated[None],
+                            mu * f_mag * (v_rel_sq / denom) * self.dt[None],
+                        )
 
     @ti.func
     def compute_active_counts(self):
@@ -985,7 +986,12 @@ class TaichiSolver:
                         ti.atomic_add(self.proj_reaction_force[None].z, -f_z)
                         ti.atomic_add(
                             self.contact_energy[None],
-                            0.5 * k_penalty * w_normalized * penetration * penetration * scale_factor,
+                            0.5
+                            * k_penalty
+                            * w_normalized
+                            * penetration
+                            * penetration
+                            * scale_factor,
                         )
 
                         # Coulomb friction for legacy 3-DOF box projectile
@@ -994,21 +1000,24 @@ class TaichiSolver:
                             v_rel_x = self.velocities[i].x - self.proj_velocity[None].x
                             v_rel_y = self.velocities[i].y - self.proj_velocity[None].y
                             v_rel_sq = v_rel_x**2 + v_rel_y**2
-                            
+
                             v0 = 0.01
                             denom = ti.sqrt(v_rel_sq + v0**2)
-                            
+
                             f_fric_mag = mu * ti.abs(f_z)
                             f_friction_x = -f_fric_mag * (v_rel_x / denom)
                             f_friction_y = -f_fric_mag * (v_rel_y / denom)
-                            
+
                             self.forces[i].x += f_friction_x
                             self.forces[i].y += f_friction_y
-                            
+
                             ti.atomic_add(self.proj_reaction_force[None].x, -f_friction_x)
                             ti.atomic_add(self.proj_reaction_force[None].y, -f_friction_y)
-                            
-                            ti.atomic_add(self.friction_dissipated[None], f_fric_mag * (v_rel_sq / denom) * self.dt[None])
+
+                            ti.atomic_add(
+                                self.friction_dissipated[None],
+                                f_fric_mag * (v_rel_sq / denom) * self.dt[None],
+                            )
         else:
             # 6-DOF SDF Node-to-Surface penalty contact
             proj_pos = self.proj_position[None]
@@ -1054,18 +1063,21 @@ class TaichiSolver:
                         v_rel_dot_n = v_rel.dot(n_world)
                         v_tangential = v_rel - v_rel_dot_n * n_world
                         v_rel_sq = v_tangential.norm_sqr()
-                        
+
                         v0 = 0.01
                         denom = ti.sqrt(v_rel_sq + v0**2)
-                        
+
                         f_fric_mag = mu * f_mag * scale_factor
                         F_friction = -f_fric_mag * (v_tangential / denom)
-                        
+
                         self.forces[i] += F_friction
                         ti.atomic_add(self.proj_reaction_force[None], -F_friction)
                         ti.atomic_add(self.proj_torque[None], P_contact.cross(-F_friction))
-                        
-                        ti.atomic_add(self.friction_dissipated[None], f_fric_mag * (v_rel_sq / denom) * self.dt[None])
+
+                        ti.atomic_add(
+                            self.friction_dissipated[None],
+                            f_fric_mag * (v_rel_sq / denom) * self.dt[None],
+                        )
 
     @ti.func
     def apply_impedance_boundary(self, dt: ti.f32):
@@ -1206,7 +1218,7 @@ class TaichiSolver:
                 length = diff.norm()
                 strain = (length - self.rest_lengths[j]) / self.rest_lengths[j]
                 effective_k = self.stiffnesses[j] * (1.0 - self.spring_damage[j])
-                
+
                 # Strain energy: 0.5 * k_eff * (strain * L0)^2 (allow compressive for non-tension-only)
                 se_spring = 0.0
                 if not (self.tension_only[j] == 1 and strain < 0.0):
@@ -1312,7 +1324,9 @@ class TaichiSolver:
                                 self.node_initial_springs[i]
                             )
 
-                        ti.atomic_add(self.node_stiffness[i], k_penalty * w_normalized * scale_factor)
+                        ti.atomic_add(
+                            self.node_stiffness[i], k_penalty * w_normalized * scale_factor
+                        )
         else:
             q = self.proj_quat[None]
             q_conj = ti.Vector([q[0], -q[1], -q[2], -q[3]])
@@ -1784,9 +1798,7 @@ class TaichiSolver:
             self.k_apply_impedance_boundary_graph()
             self.k_compute_initial_accelerations_graph()
 
-        graph = self.get_or_compile_graph(
-            1, use_cfl, use_interply, cfl_recompute_interval
-        )
+        graph = self.get_or_compile_graph(1, use_cfl, use_interply, cfl_recompute_interval)
 
         # Run graph in a Python loop to prevent AGX Metal variant footprint overflow
         for _ in range(num_substeps):
@@ -1879,7 +1891,9 @@ class TaichiSolver:
             e_int = self.compute_internal_energy()
             if e_int > 0.0:
                 if e_art > 0.02 * e_int:
-                    print(f"PhysicsViolation! e_art={e_art}, e_int={e_int}, ratio={e_art/e_int:.6f}")
+                    print(
+                        f"PhysicsViolation! e_art={e_art}, e_int={e_int}, ratio={e_art / e_int:.6f}"
+                    )
                     self.physics_violated[None] = 1
 
         return dt
@@ -2141,6 +2155,7 @@ def taichi_leapfrog_loop(
     for chunk in range(n_chunks):
         # Apply Bazant strain regularization just like Numba
         from kevlargrid.solver.failure import scale_failure_strain
+
         failure_strain_eff = scale_failure_strain(failure_strain, dx)
         if failure_strain > 0.0:
             ratio = damage_onset_strain / failure_strain
@@ -2200,6 +2215,7 @@ def taichi_leapfrog_loop(
     if remainder > 0:
         # Apply Bazant strain regularization just like Numba
         from kevlargrid.solver.failure import scale_failure_strain
+
         failure_strain_eff = scale_failure_strain(failure_strain, dx)
         if failure_strain > 0.0:
             ratio = damage_onset_strain / failure_strain

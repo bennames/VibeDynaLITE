@@ -127,7 +127,7 @@ def fit_jonas_laval(v_strike: np.ndarray, v_residual: np.ndarray) -> tuple[float
         for alpha in np.linspace(0.7, 1.1, 81):
             pred = np.zeros_like(v_strike)
             mask = v_strike > v50
-            pred[mask] = alpha * np.sqrt(v_strike[mask] ** 2 - v50 ** 2)
+            pred[mask] = alpha * np.sqrt(v_strike[mask] ** 2 - v50**2)
 
             sse = np.sum((v_residual - pred) ** 2)
             if sse < min_sse:
@@ -140,7 +140,9 @@ def fit_jonas_laval(v_strike: np.ndarray, v_residual: np.ndarray) -> tuple[float
 
 def main() -> None:
     print("Executing ballistic limit (V50) velocity sweep...")
-    strike_vels = np.array([100, 150, 180, 200, 220, 240, 260, 280, 310, 340, 370, 400, 430, 460], dtype=np.float64)
+    strike_vels = np.array(
+        [100, 150, 180, 200, 220, 240, 260, 280, 310, 340, 370, 400, 430, 460], dtype=np.float64
+    )
     residual_vels = []
 
     start_time = time.perf_counter()
@@ -148,7 +150,9 @@ def main() -> None:
         t0 = time.perf_counter()
         v_r = run_single_impact(v_s)
         residual_vels.append(v_r)
-        print(f"  Strike: {v_s:3.0f} m/s | Residual: {v_r:5.1f} m/s | Duration: {time.perf_counter() - t0:.3f} s")
+        print(
+            f"  Strike: {v_s:3.0f} m/s | Residual: {v_r:5.1f} m/s | Duration: {time.perf_counter() - t0:.3f} s"
+        )
 
     residual_vels = np.array(residual_vels, dtype=np.float64)
     elapsed = time.perf_counter() - start_time
@@ -165,7 +169,11 @@ def main() -> None:
         import matplotlib.pyplot as plt
 
         plt.figure(figsize=(8, 6))
-        plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
+        plt.style.use(
+            "seaborn-v0_8-whitegrid"
+            if "seaborn-v0_8-whitegrid" in plt.style.available
+            else "default"
+        )
 
         # Plot simulated points
         plt.scatter(
@@ -181,7 +189,7 @@ def main() -> None:
         v_s_plot = np.linspace(100.0, 480.0, 500)
         v_r_plot = np.zeros_like(v_s_plot)
         mask = v_s_plot > v50_fit
-        v_r_plot[mask] = alpha_fit * np.sqrt(v_s_plot[mask] ** 2 - v50_fit ** 2)
+        v_r_plot[mask] = alpha_fit * np.sqrt(v_s_plot[mask] ** 2 - v50_fit**2)
         plt.plot(
             v_s_plot,
             v_r_plot,
@@ -200,14 +208,27 @@ def main() -> None:
             zorder=1,
             label="Experimental V50 Range (205-235 m/s)",
         )
-        plt.axvline(220.0, color="#2ecc71", linestyle="--", linewidth=1.5, zorder=2, label="Experimental Mean (220 m/s)")
+        plt.axvline(
+            220.0,
+            color="#2ecc71",
+            linestyle="--",
+            linewidth=1.5,
+            zorder=2,
+            label="Experimental Mean (220 m/s)",
+        )
 
-        plt.title("VibeDynaLITE Kevlar 29 Ballistic Limit Validation (1-Ply, 17-Grain FSP)", fontsize=12, fontweight="bold")
+        plt.title(
+            "VibeDynaLITE Kevlar 29 Ballistic Limit Validation (1-Ply, 17-Grain FSP)",
+            fontsize=12,
+            fontweight="bold",
+        )
         plt.xlabel("Strike Velocity $V_s$ (m/s)", fontsize=11)
         plt.ylabel("Residual Velocity $V_r$ (m/s)", fontsize=11)
         plt.xlim(80, 480)
         plt.ylim(-10, 480)
-        plt.legend(frameon=True, facecolor="white", edgecolor="#e0e0e0", fontsize=10, loc="upper left")
+        plt.legend(
+            frameon=True, facecolor="white", edgecolor="#e0e0e0", fontsize=10, loc="upper left"
+        )
 
         plt.tight_layout()
         plt.savefig(PLOT_FILE, dpi=300)

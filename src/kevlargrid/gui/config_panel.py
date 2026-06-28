@@ -7,6 +7,7 @@ simulation settings with dynamic widgets visibility and live calculations.
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -598,6 +599,7 @@ class ConfigPanel:
                         )
                     with dpg.table_row():
                         import os
+
                         dpg.add_text("CPU Threads")
                         dpg.add_input_int(
                             default_value=os.cpu_count() or 4,
@@ -1015,8 +1017,12 @@ class ConfigPanel:
                 "auto_cfl": dpg.get_value(self.sim_auto_cfl),
                 "dt": dpg.get_value(self.sim_dt),
                 "backend": dpg.get_value(self.compute_backend).lower(),
-                "num_threads": int(dpg.get_value(self.cpu_threads)) if dpg.does_item_exist(self.cpu_threads) else (os.cpu_count() or 4),
-                "log_to_file": bool(dpg.get_value(self.log_to_file)) if dpg.does_item_exist(self.log_to_file) else True,
+                "num_threads": int(dpg.get_value(self.cpu_threads))
+                if dpg.does_item_exist(self.cpu_threads)
+                else (os.cpu_count() or 4),
+                "log_to_file": bool(dpg.get_value(self.log_to_file))
+                if dpg.does_item_exist(self.log_to_file)
+                else True,
             },
         }
 
@@ -1173,6 +1179,7 @@ class ConfigPanel:
             self._on_backend_change(None, loaded_backend)
 
         import os
+
         loaded_threads = sim.get("num_threads", os.cpu_count() or 4)
         if dpg.does_item_exist(self.cpu_threads):
             dpg.set_value(self.cpu_threads, loaded_threads)

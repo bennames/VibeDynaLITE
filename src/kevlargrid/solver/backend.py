@@ -42,16 +42,17 @@ except ImportError:
     HAS_NUMBA = False
 
 if HAS_NUMBA:
+    import contextlib
     import os
+
     try:
         import psutil
+
         physical_cores = psutil.cpu_count(logical=False) or os.cpu_count() or 4
     except ImportError:
         physical_cores = os.cpu_count() or 4
-    try:
+    with contextlib.suppress(Exception):
         numba.set_num_threads(physical_cores)
-    except Exception:
-        pass
 
 import importlib.util
 
@@ -85,10 +86,12 @@ def set_numba_threads(n: int) -> None:
     """Set the number of threads for Numba's parallel execution dynamically."""
     if HAS_NUMBA:
         import numba
+
         try:
             numba.set_num_threads(n)
         except Exception as e:
             import logging
+
             logging.getLogger("kevlargrid").warning(f"Failed to set Numba threads to {n}: {e}")
 
 

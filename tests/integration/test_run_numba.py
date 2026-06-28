@@ -6,6 +6,7 @@ from pathlib import Path
 bench_dir = Path("/Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8")
 sys.path.insert(0, str(bench_dir))
 
+
 def test_run_numba():
     import run_benchmark_8
 
