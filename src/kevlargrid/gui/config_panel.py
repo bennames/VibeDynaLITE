@@ -131,11 +131,15 @@ class ConfigPanel:
         self.row_mat_strength = "row_mat_strength"
         self.row_mat_fiber_density = "row_mat_fiber_density"
         self.row_mat_areal_density = "row_mat_areal_density"
+        self.row_mat_thickness = "row_mat_thickness"
+        self.mat_thickness = "mat_thickness"
         self.row_mat_shear_ratio = "row_mat_shear_ratio"
         self.row_mat_crimp = "row_mat_crimp"
         self.row_mat_fracture_multiplier = "row_mat_fracture_multiplier"
         self.row_mat_yarn_count_x = "row_mat_yarn_count_x"
         self.row_mat_yarn_count_y = "row_mat_yarn_count_y"
+        self.row_grid_n_plies = "row_grid_n_plies"
+        self.row_grid_mode = "row_grid_mode"
 
         # Grid Corrugations
         self.grid_corrugation_amplitude = "grid_corrugation_amplitude"
@@ -226,6 +230,15 @@ class ConfigPanel:
                         dpg.add_input_float(
                             tag=self.mat_areal_density, default_value=0.47, enabled=False, width=-1
                         )
+                    with dpg.table_row(tag=self.row_mat_thickness, show=False):
+                        dpg.add_text("Thickness (m)")
+                        dpg.add_input_float(
+                            tag=self.mat_thickness,
+                            default_value=0.002,
+                            enabled=False,
+                            format="%.4f",
+                            width=-1,
+                        )
                     with dpg.table_row(tag=self.row_mat_shear_ratio):
                         dpg.add_text("Shear Stiffness Ratio")
                         dpg.add_input_float(
@@ -287,7 +300,7 @@ class ConfigPanel:
                             callback=self._update_file_size_estimate_cb,
                             width=-1,
                         )
-                    with dpg.table_row():
+                    with dpg.table_row(tag=self.row_grid_mode):
                         dpg.add_text("Analysis Mode")
                         dpg.add_combo(
                             items=["Mode A (Sizing Multiplier)", "Mode B (Checkout Stacking)"],
@@ -296,7 +309,7 @@ class ConfigPanel:
                             callback=self._on_mode_change,
                             width=-1,
                         )
-                    with dpg.table_row():
+                    with dpg.table_row(tag=self.row_grid_n_plies):
                         dpg.add_text("Number of Plies")
                         dpg.add_input_int(
                             tag=self.grid_n_plies,
@@ -741,6 +754,7 @@ class ConfigPanel:
         dpg.configure_item(self.mat_strength, enabled=is_custom)
         dpg.configure_item(self.mat_fiber_density, enabled=is_custom)
         dpg.configure_item(self.mat_areal_density, enabled=is_custom)
+        dpg.configure_item(self.mat_thickness, enabled=is_custom)
         dpg.configure_item(self.mat_shear_ratio, enabled=is_custom)
         dpg.configure_item(self.mat_crimp, enabled=is_custom)
         dpg.configure_item(self.mat_fracture_multiplier, enabled=is_custom)
@@ -769,6 +783,14 @@ class ConfigPanel:
                 dpg.set_value(self.mat_yarn_count_x, yc[0])
                 dpg.set_value(self.mat_yarn_count_y, yc[1])
 
+            # Calculate and set thickness
+            density_val = mat.get("fiber_density_gcc", 1.44)
+            areal_density_val = mat.get("areal_density_kgm2", 0.47)
+            thickness_val = (
+                areal_density_val / (density_val * 1000.0) if density_val > 0.0 else 0.002
+            )
+            dpg.set_value(self.mat_thickness, thickness_val)
+
             # Metal fields values
             dpg.set_value(self.mat_model, mat.get("material_model", "linear"))
             dpg.set_value(self.mat_yield_strength, mat.get("yield_strength_gpa", 0.0))
@@ -788,6 +810,7 @@ class ConfigPanel:
         # Toggle fabric specific row visibilities
         dpg.configure_item(self.row_mat_strain, show=is_fabric)
         dpg.configure_item(self.row_mat_strength, show=is_fabric)
+        dpg.configure_item(self.row_mat_areal_density, show=is_fabric)
         dpg.configure_item(self.row_mat_shear_ratio, show=is_fabric)
         dpg.configure_item(self.row_mat_crimp, show=is_fabric)
         dpg.configure_item(self.row_mat_fracture_multiplier, show=is_fabric)
@@ -795,11 +818,16 @@ class ConfigPanel:
         dpg.configure_item(self.row_mat_yarn_count_y, show=is_fabric)
 
         # Toggle metallic specific row visibilities
+        dpg.configure_item(self.row_mat_thickness, show=not is_fabric)
         dpg.configure_item(self.row_mat_model, show=not is_fabric)
         dpg.configure_item(self.row_mat_yield_strength, show=not is_fabric)
         dpg.configure_item(self.row_mat_hardening_modulus, show=not is_fabric)
         dpg.configure_item(self.row_mat_ultimate_strain, show=not is_fabric)
         dpg.configure_item(self.row_mat_poisson_ratio, show=not is_fabric)
+
+        # Toggle Grid Geometry rows based on structure type
+        dpg.configure_item(self.row_grid_n_plies, show=is_fabric)
+        dpg.configure_item(self.row_grid_mode, show=is_fabric)
 
         # Update combo box items based on structure type
         if is_fabric:
@@ -808,6 +836,9 @@ class ConfigPanel:
             dpg.set_value(self.mat_combo, "Kevlar 29")
             self._on_material_change(None, "Kevlar 29")
         else:
+            dpg.set_value(self.grid_n_plies, 1)
+            dpg.set_value(self.grid_mode, "Mode A (Sizing Multiplier)")
+            self._on_mode_change(None, "Mode A")
             metal_presets = [k for k in MATERIALS if "Steel" in k]
             dpg.configure_item(self.mat_combo, items=[*metal_presets, "Custom"])
             dpg.set_value(self.mat_combo, "Corten Steel (14 Gauge)")
@@ -1073,14 +1104,30 @@ class ConfigPanel:
         else:
             b_type = "fixed"
 
+        struct_type = (
+            "fabric" if dpg.get_value(self.sim_structure_type) == "Fabric" else "metallic_sheet"
+        )
+
+        fiber_density = dpg.get_value(self.mat_fiber_density)
+        thickness = dpg.get_value(self.mat_thickness)
+
+        if struct_type == "metallic_sheet":
+            areal_density = thickness * fiber_density * 1000.0
+            n_plies = 1
+            t_ply = None
+        else:
+            areal_density = dpg.get_value(self.mat_areal_density)
+            n_plies = dpg.get_value(self.grid_n_plies)
+            t_ply = dpg.get_value(self.grid_t_ply) if is_mode_b else None
+
         return {
             "material": {
                 "name": dpg.get_value(self.mat_combo),
                 "tensile_modulus_gpa": dpg.get_value(self.mat_modulus),
                 "failure_strain": dpg.get_value(self.mat_strain),
                 "tensile_strength_gpa": dpg.get_value(self.mat_strength),
-                "fiber_density_gcc": dpg.get_value(self.mat_fiber_density),
-                "areal_density_kgm2": dpg.get_value(self.mat_areal_density),
+                "fiber_density_gcc": fiber_density,
+                "areal_density_kgm2": areal_density,
                 "shear_ratio": dpg.get_value(self.mat_shear_ratio),
                 "crimp_factor": dpg.get_value(self.mat_crimp),
                 "fracture_energy_multiplier": dpg.get_value(self.mat_fracture_multiplier),
@@ -1098,8 +1145,8 @@ class ConfigPanel:
                 "nx": dpg.get_value(self.grid_nx),
                 "ny": dpg.get_value(self.grid_ny),
                 "dx": dpg.get_value(self.grid_dx),
-                "n_plies": dpg.get_value(self.grid_n_plies),
-                "t_ply": dpg.get_value(self.grid_t_ply) if is_mode_b else None,
+                "n_plies": n_plies,
+                "t_ply": t_ply,
                 "boundary_type": b_type,
                 "corrugation_amplitude": dpg.get_value(self.grid_corrugation_amplitude),
                 "corrugation_period": dpg.get_value(self.grid_corrugation_period),
