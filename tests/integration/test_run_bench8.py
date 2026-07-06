@@ -1,7 +1,9 @@
 import sys
 from pathlib import Path
+import pytest
 
 
+@pytest.mark.slow
 def test_run_benchmark_8(monkeypatch):
     bench_dir = Path("/Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8")
     sys.path.insert(0, str(bench_dir))

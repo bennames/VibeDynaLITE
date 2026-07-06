@@ -43,8 +43,13 @@ def compute_strain_energy(
     failed: np.ndarray | None = None,
     damage: np.ndarray | None = None,
     tension_only: np.ndarray | None = None,
+    elements: np.ndarray | None = None,
+    element_stress: np.ndarray | None = None,
+    thickness: float = 0.002,
+    dx: float = 0.01,
+    E: float = 71e9,
 ) -> float:
-    """Compute the total elastic strain energy stored in all springs.
+    """Compute the total elastic strain energy stored in all springs or shell elements.
 
     Parameters
     ----------
@@ -55,17 +60,35 @@ def compute_strain_energy(
     rest_lengths : np.ndarray
         Natural (rest) length per spring, shape ``(n_springs,)``.
     failed : np.ndarray, optional
-        Boolean failure flags per spring, shape ``(n_springs,)``.
+        Boolean failure flags per spring or element, shape ``(n_springs,)`` or ``(n_elements,)``.
     damage : np.ndarray, optional
         Damage fraction per spring, shape ``(n_springs,)``.
     tension_only : np.ndarray, optional
         Boolean tension-only flags per spring, shape ``(n_springs,)``.
+    elements : np.ndarray, optional
+        Nodal connectivity for shell elements, shape ``(n_elements, 4)``.
+    element_stress : np.ndarray, optional
+        Element stresses, shape ``(n_elements, 3, 3)``.
+    thickness : float, optional
+        Thickness of shell elements.
+    dx : float, optional
+        Element size.
+    E : float, optional
+        Young's Modulus.
 
     Returns
     -------
     float
         Total strain energy (Joules).
     """
+    if elements is not None and element_stress is not None:
+        se = 0.0
+        n_elements = len(elements)
+        for e in range(n_elements):
+            if failed is None or not failed[e]:
+                se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e] ** 2) / E
+        return float(se)
+
     # SE = 0.5 * k * (1 - D) * dx^2 = 0.5 * k_eff * (strain * L0)^2
     eff_k = stiffnesses
     if damage is not None:

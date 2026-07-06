@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from kevlargrid.solver.grid import generate_rectangular_grid
 
@@ -228,6 +229,7 @@ def fit_jonas_laval(v_strike: np.ndarray, v_residual: np.ndarray) -> tuple[float
     return float(best_v50), float(best_alpha)
 
 
+@pytest.mark.slow
 def test_print_energy_debug():
     print("\n[DEBUG] Running a single simulation case to print detailed energy terms...")
     res = run_simulation(
@@ -243,6 +245,7 @@ def test_print_energy_debug():
     )
 
 
+@pytest.mark.slow
 def test_jonas_laval_curve_fit():
     print("\n[VERIFICATION] Running Jonas-Laval Curve Fit sweep...")
     dx = 0.008
@@ -269,6 +272,7 @@ def test_jonas_laval_curve_fit():
     print(f"  --> Fitted Jonas-Laval V50: {v50_fit:.1f} m/s, alpha: {alpha_fit:.3f}")
 
 
+@pytest.mark.slow
 def test_energy_drift_verification():
     print("\n[VERIFICATION] Running Energy Drift tests with different parameters...")
     dx = 0.008
@@ -294,6 +298,7 @@ def test_energy_drift_verification():
             )
 
 
+@pytest.mark.slow
 def test_physical_plausibility_failure_modes():
     print("\n[VERIFICATION] Running ply failure mode analysis...")
     dx = 0.008

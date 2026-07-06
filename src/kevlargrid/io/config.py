@@ -168,6 +168,10 @@ def normalize_config_units(config: dict) -> None:
             mat["fiber_density_gcc"] = parse_unit_value(mat["fiber_density_gcc"], "gcc")
         if "areal_density_kgm2" in mat:
             mat["areal_density_kgm2"] = parse_unit_value(mat["areal_density_kgm2"], "kgm2")
+        if "yield_strength_gpa" in mat:
+            mat["yield_strength_gpa"] = parse_unit_value(mat["yield_strength_gpa"], "gpa")
+        if "hardening_modulus_gpa" in mat:
+            mat["hardening_modulus_gpa"] = parse_unit_value(mat["hardening_modulus_gpa"], "gpa")
 
     if "grid" in config and isinstance(config["grid"], dict):
         grid = config["grid"]
@@ -175,6 +179,10 @@ def normalize_config_units(config: dict) -> None:
             grid["dx"] = parse_unit_value(grid["dx"], "m")
         if "t_ply" in grid and grid["t_ply"] is not None:
             grid["t_ply"] = parse_unit_value(grid["t_ply"], "m")
+        if "corrugation_amplitude" in grid:
+            grid["corrugation_amplitude"] = parse_unit_value(grid["corrugation_amplitude"], "m")
+        if "corrugation_period" in grid:
+            grid["corrugation_period"] = parse_unit_value(grid["corrugation_period"], "m")
 
     if "projectile" in config and isinstance(config["projectile"], dict):
         proj = config["projectile"]
@@ -397,6 +405,28 @@ def validate_config(config: dict) -> bool:
         ):
             raise ValidationError(f"yarn_count must be a list of two positive integers (got {yc}).")
 
+    if "material_model" not in mat:
+        mat["material_model"] = "linear"
+
+    if mat["material_model"] not in ["linear", "j2_plasticity"]:
+        raise ValidationError(f"Invalid material_model: '{mat['material_model']}'")
+
+    if mat["material_model"] == "j2_plasticity":
+        for key in ["yield_strength_gpa", "hardening_modulus_gpa", "ultimate_strain"]:
+            if key not in mat:
+                raise ValidationError(f"Material parameter '{key}' is required for j2_plasticity model")
+            val = mat[key]
+            if not isinstance(val, (int, float)) or val < 0.0:
+                raise ValidationError(f"Material parameter '{key}' must be a non-negative number (got {val}).")
+            if key != "hardening_modulus_gpa" and val == 0.0:
+                raise ValidationError(f"Material parameter '{key}' must be a positive number (got {val}).")
+        if "poisson_ratio" not in mat:
+            mat["poisson_ratio"] = 0.3
+        else:
+            pr = mat["poisson_ratio"]
+            if not isinstance(pr, (int, float)) or pr < 0.0 or pr >= 0.5:
+                raise ValidationError(f"poisson_ratio must be in range [0.0, 0.5) (got {pr}).")
+
     # 3. Grid validation
     grid = config["grid"]
     for key in ["nx", "ny", "dx", "n_plies", "boundary_type"]:
@@ -422,6 +452,19 @@ def validate_config(config: dict) -> bool:
             raise ValidationError(
                 f"Grid parameter 't_ply' must be a positive number or null (got {t_ply})."
             )
+
+    if "corrugation_amplitude" in grid:
+        val = grid["corrugation_amplitude"]
+        if not isinstance(val, (int, float)) or val < 0.0:
+            raise ValidationError(f"Grid parameter 'corrugation_amplitude' must be a non-negative number (got {val}).")
+    if "corrugation_period" in grid:
+        val = grid["corrugation_period"]
+        if not isinstance(val, (int, float)) or val <= 0.0:
+            raise ValidationError(f"Grid parameter 'corrugation_period' must be a positive number (got {val}).")
+    if "corrugation_axis" not in grid:
+        grid["corrugation_axis"] = "x"
+    elif grid["corrugation_axis"] not in ["x", "y"]:
+        raise ValidationError(f"Grid parameter 'corrugation_axis' must be 'x' or 'y' (got '{grid['corrugation_axis']}').")
 
     # 4. Projectile validation
     # 4. Projectile validation
@@ -531,6 +574,13 @@ def validate_config(config: dict) -> bool:
 
     # 5. Simulation validation
     sim = config["simulation"]
+    if "structure_type" not in sim:
+        sim["structure_type"] = "fabric"
+    if sim["structure_type"] not in ["fabric", "metallic_sheet"]:
+        raise ValidationError(
+            f"Simulation parameter 'structure_type' must be 'fabric' or 'metallic_sheet' (got '{sim['structure_type']}')."
+        )
+
     model = sim.get("damping_model")
     if model is None:
         if "rayleigh_beta" in sim and sim["rayleigh_beta"] > 0.0:
@@ -561,6 +611,7 @@ def validate_config(config: dict) -> bool:
         "rayleigh_beta",
         "auto_cfl",
         "dt",
+        "structure_type",
     ]:
         if key not in sim:
             raise ValidationError(f"Simulation section missing required key: '{key}'")

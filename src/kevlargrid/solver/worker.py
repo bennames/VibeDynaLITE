@@ -80,7 +80,15 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         # Build grid
         grid = generate_rectangular_grid(
-            nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
+            nx=nx,
+            ny=ny,
+            dx=dx,
+            material=mat,
+            n_plies=n_plies,
+            t_ply=t_ply,
+            corrugation_amplitude=grid_cfg.get("corrugation_amplitude", 0.0),
+            corrugation_period=grid_cfg.get("corrugation_period", 1.0),
+            corrugation_axis=grid_cfg.get("corrugation_axis", "x"),
         )
 
         # Build boundary mask
@@ -285,6 +293,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             hist_proj_quat = np.zeros((m_frames, 4), dtype=np.float64)
 
             # Extra solver arguments for 6-DOF and shape
+            areal_density = mat.get("areal_density_kgm2", 0.47)
+            fiber_density_gcc = mat.get("fiber_density_gcc", 1.44)
+            thickness = areal_density / (fiber_density_gcc * 1000.0)
+
             extra_kwargs = {
                 "grid_damage": grid.damage,
                 "proj_quat": proj.quat,
@@ -305,10 +317,27 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "proj_c_damping": proj_cfg.get("c_damping", 0.0),
                 "proj_inertia_inv": proj.inertia_inv,
                 "hist_proj_quat": hist_proj_quat,
+                "structure_type": sim_cfg.get("structure_type", "fabric"),
+                "material_model": mat.get("material_model", "linear"),
+                "yield_strength_gpa": mat.get("yield_strength_gpa", 0.0),
+                "hardening_modulus_gpa": mat.get("hardening_modulus_gpa", 0.0),
+                "ultimate_strain": mat.get("ultimate_strain", 0.0),
+                "poisson_ratio": mat.get("poisson_ratio", 0.3),
+                "elements": grid.elements,
+                "youngs_modulus_gpa": mat.get("tensile_modulus_gpa", 71.0),
+                "thickness": thickness,
             }
 
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")
+            structure_type = sim_cfg.get("structure_type", "fabric")
+            if structure_type == "metallic_sheet" and solver_backend == "taichi":
+                logger.warning(
+                    "Taichi solver does not support metallic_sheet mode. "
+                    "Falling back to numba backend."
+                )
+                solver_backend = "numba"
+
             mu_s = sim_cfg.get("mu_s", sim_cfg.get("friction_coefficient", 0.0))
             prev_clamp = clamp_dissipated
             if solver_backend == "numba":
@@ -602,9 +631,16 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         is_penetrated = reason == "penetration"
         is_arrested = reason == "arrest" or reason == "timeout" or reason is None
 
-        initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)
-        final_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
-        energy_eff = float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
+        init_omega = np.array(proj_cfg.get("omega", [0.0, 0.0, 0.0]), dtype=np.float64)
+        init_rot_ke = 0.5 * np.sum(np.diagonal(proj.inertia) * init_omega**2)
+        initial_ke = (
+            0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2) + init_rot_ke
+        )
+        final_rot_ke = 0.5 * np.sum(np.diagonal(proj.inertia) * proj.omega**2)
+        final_ke = 0.5 * proj.mass * np.sum(proj.velocity**2) + final_rot_ke
+        energy_eff = (
+            float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
+        )
 
         # Retrieve peak deceleration Gs
         if solver_backend == "numba":

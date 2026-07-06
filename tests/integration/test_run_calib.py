@@ -1,12 +1,14 @@
 import sys
 import time
 from pathlib import Path
+import pytest
 
 # Add the benchmark 8 directory to sys.path so we can import it
 bench_dir = Path("/Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8")
 sys.path.insert(0, str(bench_dir))
 
 
+@pytest.mark.slow
 def test_run_calib():
     import run_benchmark_8
 

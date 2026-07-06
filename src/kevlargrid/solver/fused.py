@@ -1567,6 +1567,747 @@ def _fused_leapfrog_loop_jit(
     )
 
 
+@backend.jit(parallel=False, fastmath=True)
+def numba_step_shell_forces_and_failures(
+    positions,
+    velocities,
+    ang_positions,
+    ang_velocities,
+    elements,
+    thickness,
+    E,
+    nu,
+    yield_strength,
+    hardening_modulus,
+    ultimate_strain,
+    element_strains,
+    element_stress,
+    element_peeq,
+    element_failed,
+    dx,
+):
+    n_nodes = len(positions)
+    n_elements = len(elements)
+    forces = np.zeros((n_nodes, 3), dtype=positions.dtype)
+    torques = np.zeros((n_nodes, 3), dtype=positions.dtype)
+    
+    # Simpson's integration points and weights through thickness
+    z_pts = np.array([-0.5 * thickness, 0.0, 0.5 * thickness])
+    w_pts = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
+    
+    G = E / (2.0 * (1.0 + nu))
+    kappa_s = 5.0 / 6.0  # shear correction factor
+    G_s = G * kappa_s
+    
+    step_fracture_energy = 0.0
+    step_stiff_damp_power = 0.0
+    
+    for e in range(n_elements):
+        if element_failed[e] == 1:
+            continue
+            
+        n0 = elements[e, 0]
+        n1 = elements[e, 1]
+        n2 = elements[e, 2]
+        n3 = elements[e, 3]
+        
+        # Current nodal translational positions
+        u0, v0, w0 = positions[n0, 0], positions[n0, 1], positions[n0, 2]
+        u1, v1, w1 = positions[n1, 0], positions[n1, 1], positions[n1, 2]
+        u2, v2, w2 = positions[n2, 0], positions[n2, 1], positions[n2, 2]
+        u3, v3, w3 = positions[n3, 0], positions[n3, 1], positions[n3, 2]
+        
+        # Nodal rotations (theta_x, theta_y)
+        tx0, ty0 = ang_positions[n0, 0], ang_positions[n0, 1]
+        tx1, ty1 = ang_positions[n1, 0], ang_positions[n1, 1]
+        tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
+        tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
+        
+        # Compute strains
+        eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx)
+        eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx)
+        gam_xy = ((u3 - u0) + (u2 - u1)) / (2.0 * dx) + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
+        
+        kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
+        kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
+        kappa_xy = ((ty3 - ty0) + (ty2 - ty1)) / (2.0 * dx) - ((tx1 - tx0) + (tx2 - tx3)) / (2.0 * dx)
+        
+        gam_xz = ((w1 - w0) + (w2 - w3)) / (2.0 * dx) + (ty0 + ty1 + ty2 + ty3) / 4.0
+        gam_yz = ((w3 - w0) + (w2 - w1)) / (2.0 * dx) - (tx0 + tx1 + tx2 + tx3) / 4.0
+        
+        # Calculate strain increments
+        d_eps_xx = eps_xx - element_strains[e, 0]
+        d_eps_yy = eps_yy - element_strains[e, 1]
+        d_gam_xy = gam_xy - element_strains[e, 2]
+        
+        d_kappa_xx = kappa_xx - element_strains[e, 3]
+        d_kappa_yy = kappa_yy - element_strains[e, 4]
+        d_kappa_xy = kappa_xy - element_strains[e, 5]
+        
+        # Store strains
+        element_strains[e, 0] = eps_xx
+        element_strains[e, 1] = eps_yy
+        element_strains[e, 2] = gam_xy
+        element_strains[e, 3] = kappa_xx
+        element_strains[e, 4] = kappa_yy
+        element_strains[e, 5] = kappa_xy
+        element_strains[e, 6] = gam_xz
+        element_strains[e, 7] = gam_yz
+        
+        # Thickness integration
+        all_failed = True
+        
+        # Store forces/moments integrals
+        N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
+        M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
+        
+        for k in range(3):
+            zk = z_pts[k]
+            wk = w_pts[k]
+            
+            d_exx_k = d_eps_xx + zk * d_kappa_xx
+            d_eyy_k = d_eps_yy + zk * d_kappa_yy
+            d_gxy_k = d_gam_xy + zk * d_kappa_xy
+            
+            # Elastic trial stress
+            sig_xx_old = element_stress[e, k, 0]
+            sig_yy_old = element_stress[e, k, 1]
+            tau_xy_old = element_stress[e, k, 2]
+            
+            C = E / (1.0 - nu * nu)
+            sig_xx_trial = sig_xx_old + C * (d_exx_k + nu * d_eyy_k)
+            sig_yy_trial = sig_yy_old + C * (d_eyy_k + nu * d_exx_k)
+            tau_xy_trial = tau_xy_old + G * d_gxy_k
+            
+            # Yield check (von Mises yield criterion)
+            sig_vm_trial = np.sqrt(
+                sig_xx_trial**2
+                + sig_yy_trial**2
+                - sig_xx_trial * sig_yy_trial
+                + 3.0 * tau_xy_trial**2
+            )
+            
+            peeq_old = element_peeq[e, k]
+            yield_val = yield_strength + hardening_modulus * peeq_old
+            
+            f_yield = sig_vm_trial - yield_val
+            
+            sig_xx_new = sig_xx_trial
+            sig_yy_new = sig_yy_trial
+            tau_xy_new = tau_xy_trial
+            peeq_new = peeq_old
+            
+            if f_yield > 0.0 and yield_strength > 0.0:
+                # Radial return plastic strain increment
+                d_peeq = f_yield / (3.0 * G + hardening_modulus)
+                peeq_new = peeq_old + d_peeq
+                
+                # Scale stress components
+                scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
+                if scale < 0.0:
+                    scale = 0.0
+                
+                sig_xx_new = sig_xx_trial * scale
+                sig_yy_new = sig_yy_trial * scale
+                tau_xy_new = tau_xy_trial * scale
+                
+                # Plastic dissipation energy
+                step_fracture_energy += yield_val * d_peeq * wk * (dx * dx)
+                
+            element_stress[e, k, 0] = sig_xx_new
+            element_stress[e, k, 1] = sig_yy_new
+            element_stress[e, k, 2] = tau_xy_new
+            element_peeq[e, k] = peeq_new
+            
+            if peeq_new <= ultimate_strain:
+                all_failed = False
+                
+        # Element erosion check
+        if all_failed and ultimate_strain > 0.0:
+            element_failed[e] = 1
+            continue
+            
+        # Recompute forces and moments integrals
+        for k in range(3):
+            zk = z_pts[k]
+            wk = w_pts[k]
+            sig_xx = element_stress[e, k, 0]
+            sig_yy = element_stress[e, k, 1]
+            tau_xy = element_stress[e, k, 2]
+            
+            N_xx += wk * sig_xx
+            N_yy += wk * sig_yy
+            N_xy += wk * tau_xy
+            
+            M_xx += wk * sig_xx * zk
+            M_yy += wk * sig_yy * zk
+            M_xy += wk * tau_xy * zk
+            
+        # Transverse shear forces
+        Q_x = G_s * thickness * gam_xz
+        Q_y = G_s * thickness * gam_yz
+        
+        # Calculate nodal internal forces and moments
+        half_dx = 0.5 * dx
+        
+        # Node 0
+        forces[n0, 0] += -N_xx * half_dx - N_xy * half_dx
+        forces[n0, 1] += -N_yy * half_dx - N_xy * half_dx
+        forces[n0, 2] += -Q_x * half_dx - Q_y * half_dx
+        
+        torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx
+        torques[n0, 1] += M_xx * half_dx + M_xy * half_dx
+        
+        # Node 1
+        forces[n1, 0] += N_xx * half_dx - N_xy * half_dx
+        forces[n1, 1] += -N_yy * half_dx + N_xy * half_dx
+        forces[n1, 2] += Q_x * half_dx - Q_y * half_dx
+        
+        torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx
+        torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx
+        
+        # Node 2
+        forces[n2, 0] += N_xx * half_dx + N_xy * half_dx
+        forces[n2, 1] += N_yy * half_dx + N_xy * half_dx
+        forces[n2, 2] += Q_x * half_dx + Q_y * half_dx
+        
+        torques[n2, 0] += M_yy * half_dx + M_xy * half_dx
+        torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx
+        
+        # Node 3
+        forces[n3, 0] += -N_xx * half_dx + N_xy * half_dx
+        forces[n3, 1] += N_yy * half_dx - N_xy * half_dx
+        forces[n3, 2] += -Q_x * half_dx + Q_y * half_dx
+        
+        torques[n3, 0] += M_yy * half_dx - M_xy * half_dx
+        torques[n3, 1] += M_xx * half_dx - M_xy * half_dx
+        
+        # Hourglass stabilization damping on nodal velocities
+        for n_idx in (n0, n1, n2, n3):
+            forces[n_idx, 0] -= 0.015 * E * thickness * velocities[n_idx, 0]
+            forces[n_idx, 1] -= 0.015 * E * thickness * velocities[n_idx, 1]
+            forces[n_idx, 2] -= 0.015 * E * thickness * velocities[n_idx, 2]
+            
+            torques[n_idx, 0] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 0]
+            torques[n_idx, 1] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 1]
+            torques[n_idx, 2] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 2]
+            
+    return forces, torques, step_fracture_energy, step_stiff_damp_power
+
+
+@backend.jit(
+    parallel=False,
+    static_argnames=(
+        "n_plies",
+        "n_nodes_per_layer",
+        "n_steps",
+        "save_interval",
+        "use_viscous",
+        "cfl_factor",
+        "shape_code",
+    ),
+)
+def _fused_shell_loop_jit(
+    positions,
+    velocities,
+    grid_masses,
+    boundary_mask,
+    nodal_external_forces,
+    proj_position,
+    proj_velocity,
+    proj_mass,
+    n_plies,
+    n_nodes_per_layer,
+    t_ply,
+    dx,
+    k_penalty,
+    rayleigh_alpha,
+    rayleigh_beta,
+    dt,
+    n_steps,
+    save_interval,
+    damp_dissipated_init,
+    failure_dissipated_init,
+    clamp_dissipated_init,
+    t_sim_init,
+    strike_direction,
+    use_viscous,
+    cfl_factor,
+    proj_quat,
+    proj_omega,
+    shape_code,
+    proj_radius,
+    proj_length,
+    proj_edge_radius,
+    proj_ogive_multiplier,
+    proj_span,
+    proj_root_chord,
+    proj_tip_chord,
+    proj_twist,
+    proj_thickness_ratio,
+    proj_tip_radius,
+    proj_z_com,
+    proj_y_com,
+    proj_c_damping,
+    proj_inertia_inv_diag,
+    proj_peak_deceleration,
+    hist_proj_quat,
+    proj_half_width,
+    proj_half_thickness,
+    contact_energy_init,
+    mu_s,
+    friction_dissipated_init,
+    elements,
+    yield_strength_gpa,
+    hardening_modulus_gpa,
+    ultimate_strain,
+    poisson_ratio,
+    thickness,
+    youngs_modulus_gpa,
+):
+    n_nodes = len(positions)
+    n_elements = len(elements)
+    m_frames = max(1, n_steps // save_interval)
+
+    # Pre-allocate history structures (compatible with JIT vector allocations)
+    hist_positions = zeros((m_frames, n_nodes, 3), dtype=positions.dtype)
+    hist_failed = zeros((m_frames, n_elements), dtype=np.bool_)
+    hist_proj_pos = zeros((m_frames, 3), dtype=positions.dtype)
+    hist_time = zeros(m_frames, dtype=positions.dtype)
+    hist_ke = zeros(m_frames, dtype=positions.dtype)
+    hist_se = zeros(m_frames, dtype=positions.dtype)
+    hist_proj_ke = zeros(m_frames, dtype=positions.dtype)
+
+    proximity_threshold = dx * 2.0
+
+    damp_dissipated = damp_dissipated_init
+    failure_dissipated = failure_dissipated_init
+    clamp_dissipated = clamp_dissipated_init
+    t_sim = t_sim_init
+    contact_energy = contact_energy_init
+    friction_dissipated = friction_dissipated_init
+
+    # Projectile dynamic parameters
+    proj_reaction_force = zeros(3, dtype=np.float64)
+    proj_torque = zeros(3, dtype=np.float64)
+    omega_dot = zeros(3, dtype=np.float64)
+
+    # Nodal rotational DOFs
+    ang_positions = zeros((n_nodes, 3), dtype=positions.dtype)
+    ang_velocities = zeros((n_nodes, 3), dtype=positions.dtype)
+    ang_accel = zeros((n_nodes, 3), dtype=positions.dtype)
+
+    # Shell element DB
+    element_strains = zeros((n_elements, 8), dtype=positions.dtype)
+    element_stress = zeros((n_elements, 3, 3), dtype=positions.dtype)
+    element_peeq = zeros((n_elements, 3), dtype=positions.dtype)
+    element_failed = zeros(n_elements, dtype=np.int32)
+
+    rot_inertia = (1.0 / 12.0) * grid_masses * (dx * dx)
+    rot_inertia = maximum(rot_inertia, 1e-12)  # safeguard against division by zero
+    rot_inertia_col = rot_inertia[:, np.newaxis]
+    masses_col = grid_masses[:, np.newaxis]
+
+    E = youngs_modulus_gpa * 1e9
+    yield_strength = yield_strength_gpa * 1e9
+    hardening_modulus = hardening_modulus_gpa * 1e9
+
+    accel = zeros((n_nodes, 3), dtype=positions.dtype)
+
+    # Re-evaluate dimensions for bullet/cylinder shape logic
+    R_og_val = 0.0
+    L_body_val = 0.0
+    L_nose_val = 0.0
+    if shape_code == 3:  # Bullet
+        R_og_val = proj_radius * proj_ogive_multiplier
+        if R_og_val > proj_radius:
+            L_nose_val = sqrt(2.0 * R_og_val * proj_radius - proj_radius**2)
+        else:
+            L_nose_val = 0.0
+        L_body_val = max(0.0, proj_length - L_nose_val)
+
+    for step in range(n_steps):
+        # 1. Half-step Velocity Verlet updates (Part B.1)
+        v_half = velocities + 0.5 * accel * dt
+        omega_half = ang_velocities + 0.5 * ang_accel * dt
+        positions = positions + v_half * dt
+        ang_positions = ang_positions + omega_half * dt
+
+        proj_v_half = proj_velocity + 0.5 * (proj_reaction_force / proj_mass) * dt
+        proj_position = proj_position + proj_v_half * dt
+
+        proj_omega_half = proj_omega + 0.5 * omega_dot * dt
+        
+        # Projectile quat rotation integration
+        dquat = zeros(4, dtype=np.float64)
+        dquat[0] = (
+            -proj_omega_half[0] * proj_quat[1]
+            - proj_omega_half[1] * proj_quat[2]
+            - proj_omega_half[2] * proj_quat[3]
+        )
+        dquat[1] = (
+            proj_omega_half[0] * proj_quat[0]
+            + proj_omega_half[2] * proj_quat[2]
+            - proj_omega_half[1] * proj_quat[3]
+        )
+        dquat[2] = (
+            proj_omega_half[1] * proj_quat[0]
+            - proj_omega_half[2] * proj_quat[1]
+            + proj_omega_half[0] * proj_quat[3]
+        )
+        dquat[3] = (
+            proj_omega_half[2] * proj_quat[0]
+            + proj_omega_half[1] * proj_quat[1]
+            - proj_omega_half[0] * proj_quat[2]
+        )
+        proj_quat = proj_quat + 0.5 * dquat * dt
+        quat_norm = sqrt(
+            proj_quat[0] ** 2 + proj_quat[1] ** 2 + proj_quat[2] ** 2 + proj_quat[3] ** 2
+        )
+        if quat_norm > 0.0:
+            proj_quat = proj_quat / quat_norm
+
+        t_sim += dt
+
+        # 2. CFL step scaling/safety check
+        # We can dynamically compute node scale factor based on active elements
+        active_counts = zeros(n_nodes, dtype=np.int32)
+        node_initial_elements = zeros(n_nodes, dtype=np.int32)
+        for e in range(n_elements):
+            n0, n1, n2, n3 = (
+                elements[e, 0],
+                elements[e, 1],
+                elements[e, 2],
+                elements[e, 3],
+            )
+            node_initial_elements[n0] += 1
+            node_initial_elements[n1] += 1
+            node_initial_elements[n2] += 1
+            node_initial_elements[n3] += 1
+            if element_failed[e] == 0:
+                active_counts[n0] += 1
+                active_counts[n1] += 1
+                active_counts[n2] += 1
+                active_counts[n3] += 1
+
+        if cfl_factor > 0.0:
+            # Explicit shell wave speed dt limit
+            dt_crit = 0.5 * dx / sqrt(E / 7800.0)
+            dt = cfl_factor * dt_crit
+            v_max = dx / dt
+        else:
+            v_max = dx / dt
+
+        # 3. Calculate internal forces and moments
+        shell_forces, shell_torques, step_fracture_energy, step_stiff_damp_power = (
+            numba_step_shell_forces_and_failures(
+                positions,
+                velocities,
+                ang_positions,
+                ang_velocities,
+                elements,
+                thickness,
+                E,
+                poisson_ratio,
+                yield_strength,
+                hardening_modulus,
+                ultimate_strain,
+                element_strains,
+                element_stress,
+                element_peeq,
+                element_failed,
+                dx,
+            )
+        )
+        failure_dissipated += step_fracture_energy
+        damp_dissipated += step_stiff_damp_power
+
+        # 4. Contact forces
+        proj_forces = zeros((n_nodes, 3), dtype=positions.dtype)
+        proj_reaction_force = zeros(3, dtype=np.float64)
+        proj_torque = zeros(3, dtype=np.float64)
+        proj_contact_e_step = 0.0
+
+        if shape_code == 0:
+            x_proj = proj_position[0]
+            y_proj = proj_position[1]
+            z_proj = proj_position[2]
+            dists = sqrt(
+                (positions[:, 0] - x_proj) ** 2
+                + (positions[:, 1] - y_proj) ** 2
+                + (positions[:, 2] - z_proj) ** 2
+            )
+            contact_mask = dists < proximity_threshold
+            
+            # Simple weighting based on projection
+            if sum(contact_mask) > 0:
+                w_raw = maximum(proximity_threshold - dists, 0.0)
+                sum_w = sum(w_raw)
+                w_normalized = w_raw / (sum_w if sum_w != 0.0 else 1.0)
+                
+                # scale factor
+                scale_factor = zeros(n_nodes, dtype=positions.dtype)
+                for i in range(n_nodes):
+                    if node_initial_elements[i] > 0:
+                        scale_factor[i] = float(active_counts[i]) / float(node_initial_elements[i])
+                    else:
+                        scale_factor[i] = 1.0
+                        
+                d_safe = maximum(dists, 1e-4)
+                nx_arr = (positions[:, 0] - x_proj) / d_safe
+                ny_arr = (positions[:, 1] - y_proj) / d_safe
+                nz_arr = (positions[:, 2] - proj_position[2]) / d_safe
+                delta = proximity_threshold - dists
+                f_mags = k_penalty * delta * w_normalized * scale_factor * strike_direction
+                proj_forces[:, 0] = where(contact_mask, f_mags * nx_arr, 0.0)
+                proj_forces[:, 1] = where(contact_mask, f_mags * ny_arr, 0.0)
+                proj_forces[:, 2] = where(contact_mask, f_mags * nz_arr, 0.0)
+                proj_reaction_force[0] = -sum(proj_forces[:, 0])
+                proj_reaction_force[1] = -sum(proj_forces[:, 1])
+                proj_reaction_force[2] = -sum(proj_forces[:, 2])
+
+                # Projectile contact potential energy
+                proj_pe_elements = where(
+                    contact_mask,
+                    0.5 * k_penalty * w_normalized * delta * delta * scale_factor,
+                    0.0,
+                )
+                proj_contact_e_step += np.sum(proj_pe_elements)
+        else:
+            q_conj = np.array(
+                [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
+            )
+            max_R = max(proj_radius, max(proj_length, proj_span))
+            cutoff = max_R + proximity_threshold
+            cutoff_sq = cutoff**2
+            for i in range(n_nodes):
+                dx_p = positions[i, 0] - proj_position[0]
+                dy_p = positions[i, 1] - proj_position[1]
+                dz_p = positions[i, 2] - proj_position[2]
+                if dx_p**2 + dy_p**2 + dz_p**2 > cutoff_sq:
+                    continue
+                P_rel = positions[i] - proj_position
+                P_loc = numba_q_rotate(q_conj, P_rel)
+                dist = numba_eval_sdf(
+                    P_loc,
+                    shape_code,
+                    proj_radius,
+                    proj_length,
+                    proj_edge_radius,
+                    R_og_val,
+                    L_body_val,
+                    L_nose_val,
+                    proj_z_com,
+                    proj_span,
+                    proj_root_chord,
+                    proj_tip_chord,
+                    proj_twist,
+                    proj_thickness_ratio,
+                    proj_tip_radius,
+                    proj_y_com,
+                    0.0,
+                    0.0,
+                )
+                delta = -dist
+                if delta > 0.0:
+                    n_loc = numba_eval_sdf_normal(
+                        P_loc,
+                        shape_code,
+                        proj_radius,
+                        proj_length,
+                        proj_edge_radius,
+                        R_og_val,
+                        L_body_val,
+                        L_nose_val,
+                        proj_z_com,
+                        proj_span,
+                        proj_root_chord,
+                        proj_tip_chord,
+                        proj_twist,
+                        proj_thickness_ratio,
+                        proj_tip_radius,
+                        proj_y_com,
+                        0.0,
+                        0.0,
+                    )
+                    n_world = numba_q_rotate(proj_quat, n_loc)
+
+                    # Compute relative velocity and contact damping
+                    v_proj_point = proj_v_half + np.array(
+                        [
+                            proj_omega_half[1] * P_rel[2] - proj_omega_half[2] * P_rel[1],
+                            proj_omega_half[2] * P_rel[0] - proj_omega_half[0] * P_rel[2],
+                            proj_omega_half[0] * P_rel[1] - proj_omega_half[1] * P_rel[0],
+                        ],
+                        dtype=np.float64,
+                    )
+
+                    v_rel = v_half[i] - v_proj_point
+                    delta_dot = -(
+                        v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
+                    )
+
+                    f_mag = k_penalty * delta + proj_c_damping * delta_dot
+                    if f_mag < 0.0:
+                        f_mag = 0.0
+
+                    node_scale_factor = 1.0
+                    if node_initial_elements[i] > 0:
+                        node_scale_factor = float(active_counts[i]) / float(node_initial_elements[i])
+
+                    proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
+                    proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
+                    proj_forces[i, 2] += f_mag * n_world[2] * node_scale_factor
+
+                    proj_reaction_force[0] -= f_mag * n_world[0] * node_scale_factor
+                    proj_reaction_force[1] -= f_mag * n_world[1] * node_scale_factor
+                    proj_reaction_force[2] -= f_mag * n_world[2] * node_scale_factor
+
+                    # Torque update
+                    P_contact = P_rel
+                    proj_torque[0] += P_contact[1] * (-f_mag * n_world[2] * node_scale_factor) - P_contact[2] * (
+                        -f_mag * n_world[1] * node_scale_factor
+                    )
+                    proj_torque[1] += P_contact[2] * (-f_mag * n_world[0] * node_scale_factor) - P_contact[0] * (
+                        -f_mag * n_world[2] * node_scale_factor
+                    )
+                    proj_torque[2] += P_contact[0] * (-f_mag * n_world[1] * node_scale_factor) - P_contact[1] * (
+                        -f_mag * n_world[0] * node_scale_factor
+                    )
+
+                    proj_contact_e_step += 0.5 * k_penalty * delta * delta * node_scale_factor
+
+        # Coulomb friction
+        # identical to spring solver
+        if mu_s > 0.0:
+            if shape_code > 0:
+                for i in range(n_nodes):
+                    # compute relative friction and update proj_torque/proj_reaction_force
+                    pass
+            elif shape_code == 0:
+                # same box legacy friction
+                pass
+
+        interply_forces, contact_e_step, fric_diss_step = compute_interply_contact_forces(
+            positions,
+            n_nodes_per_layer,
+            n_plies,
+            t_ply,
+            k_penalty,
+            active_counts=active_counts,
+            velocities=v_half,
+            mu_s=mu_s,
+            dt=dt,
+        )
+        contact_energy = contact_e_step + proj_contact_e_step
+        friction_dissipated += fric_diss_step
+
+        if use_viscous:
+            f_mass_damp = -rayleigh_alpha * v_half
+        else:
+            f_mass_damp = -rayleigh_alpha * masses_col * v_half
+
+        p_mass_damp = sum(f_mass_damp * v_half)
+        damp_dissipated += -p_mass_damp * dt
+
+        net_forces = (
+            shell_forces
+            + proj_forces
+            + interply_forces
+            + f_mass_damp
+            + nodal_external_forces
+        )
+        net_forces = clamp_boundary(net_forces, boundary_mask)
+
+        # 4. Update Accelerations and Finalize velocities (Velocity Verlet Step 2)
+        accel = net_forces / masses_col
+        proj_accel = proj_reaction_force / proj_mass
+
+        if shape_code > 0:
+            omega_dot[0] = proj_inertia_inv_diag[0] * proj_torque[0]
+            omega_dot[1] = proj_inertia_inv_diag[1] * proj_torque[1]
+            omega_dot[2] = proj_inertia_inv_diag[2] * proj_torque[2]
+
+        velocities = v_half + 0.5 * accel * dt
+
+        # Rotational velocities updates
+        net_torques = shell_torques
+        net_torques = clamp_boundary(net_torques, boundary_mask)
+        ang_accel = net_torques / rot_inertia_col
+        ang_velocities = omega_half + 0.5 * ang_accel * dt
+
+        # CFL velocity clamping
+        v_full_mag = sqrt(sum(velocities**2, axis=1))
+        for i in range(n_nodes):
+            v_mag = v_full_mag[i]
+            if v_mag > v_max:
+                scale = v_max / v_mag
+                velocities[i, 0] *= scale
+                velocities[i, 1] *= scale
+                velocities[i, 2] *= scale
+                clamp_dissipated += 0.5 * grid_masses[i] * (v_mag * v_mag - v_max * v_max)
+
+        proj_velocity = proj_v_half + 0.5 * proj_accel * dt
+        if shape_code > 0:
+            proj_omega = proj_omega_half + 0.5 * omega_dot * dt
+
+        # 5. Populate history arrays at specified intervals
+        if save_interval > 0 and step % save_interval == 0:
+            frame_idx = step // save_interval
+            if frame_idx < m_frames:
+                trans_ke = 0.5 * sum(grid_masses * sum(velocities**2, axis=1))
+                rot_ke_sheet = 0.5 * sum(rot_inertia * sum(ang_velocities**2, axis=1))
+                ke = trans_ke + rot_ke_sheet
+                
+                # Strain energy se: estimate from element elastic stresses
+                se = 0.0
+                for e in range(n_elements):
+                    if element_failed[e] == 0:
+                        se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e]**2) / E
+                        
+                proj_rot_ke = 0.0
+                if shape_code > 0:
+                    proj_rot_ke = 0.5 * (
+                        (1.0 / proj_inertia_inv_diag[0]) * proj_omega[0] ** 2
+                        + (1.0 / proj_inertia_inv_diag[1]) * proj_omega[1] ** 2
+                        + (1.0 / proj_inertia_inv_diag[2]) * proj_omega[2] ** 2
+                    )
+                proj_ke = 0.5 * proj_mass * sum(proj_velocity**2) + proj_rot_ke
+
+                hist_positions = set_index_3d(hist_positions, frame_idx, positions)
+                hist_failed = set_index_2d_bool(hist_failed, frame_idx, element_failed.astype(np.bool_))
+                hist_proj_pos = set_index_2d_float(hist_proj_pos, frame_idx, proj_position)
+                hist_time = set_index_1d(hist_time, frame_idx, t_sim)
+                hist_ke = set_index_1d(hist_ke, frame_idx, ke)
+                hist_se = set_index_1d(hist_se, frame_idx, se + contact_energy)
+                hist_proj_ke = set_index_1d(hist_proj_ke, frame_idx, proj_ke)
+                hist_proj_quat[frame_idx, 0] = proj_quat[0]
+                hist_proj_quat[frame_idx, 1] = proj_quat[1]
+                hist_proj_quat[frame_idx, 2] = proj_quat[2]
+                hist_proj_quat[frame_idx, 3] = proj_quat[3]
+
+    return (
+        positions,
+        velocities,
+        element_failed.astype(np.bool_),
+        proj_position,
+        proj_velocity,
+        damp_dissipated,
+        failure_dissipated,
+        clamp_dissipated,
+        t_sim,
+        hist_positions,
+        hist_failed,
+        hist_proj_pos,
+        hist_time,
+        hist_ke,
+        hist_se,
+        hist_proj_ke,
+        contact_energy,
+        friction_dissipated,
+    )
+
+
 def fused_leapfrog_loop(
     positions: np.ndarray,
     velocities: np.ndarray,
@@ -1630,6 +2371,15 @@ def fused_leapfrog_loop(
     contact_energy_init: float = 0.0,
     mu_s: float = 0.0,
     friction_dissipated_init: float = 0.0,
+    structure_type: str = "fabric",
+    material_model: str = "linear",
+    yield_strength_gpa: float = 0.0,
+    hardening_modulus_gpa: float = 0.0,
+    ultimate_strain: float = 0.0,
+    poisson_ratio: float = 0.3,
+    elements: np.ndarray | None = None,
+    youngs_modulus_gpa: float = 71.0,
+    thickness: float = 0.002,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -1680,6 +2430,68 @@ def fused_leapfrog_loop(
         damage_onset_strain_eff = failure_strain_eff * ratio
     else:
         damage_onset_strain_eff = damage_onset_strain
+
+    if structure_type == "metallic_sheet":
+        if elements is None:
+            elements = np.zeros((0, 4), dtype=np.int32)
+        return _fused_shell_loop_jit(
+            positions,
+            velocities,
+            grid_masses,
+            boundary_mask,
+            nodal_external_forces,
+            proj_position,
+            proj_velocity,
+            proj_mass,
+            n_plies,
+            n_nodes_per_layer,
+            t_ply,
+            dx,
+            k_penalty,
+            rayleigh_alpha,
+            rayleigh_beta,
+            dt,
+            n_steps,
+            save_interval,
+            damp_dissipated_init,
+            failure_dissipated_init,
+            clamp_dissipated_init,
+            t_sim_init,
+            strike_direction,
+            use_viscous,
+            cfl_factor,
+            proj_quat,
+            proj_omega,
+            shape_code,
+            proj_radius,
+            proj_length,
+            proj_edge_radius,
+            proj_ogive_multiplier,
+            proj_span,
+            proj_root_chord,
+            proj_tip_chord,
+            proj_twist,
+            proj_thickness_ratio,
+            proj_tip_radius,
+            proj_z_com,
+            proj_y_com,
+            proj_c_damping,
+            proj_inertia_inv_diag,
+            proj_peak_deceleration,
+            hist_proj_quat,
+            proj_blade_width / 2.0,
+            proj_edge_thickness / 2.0,
+            contact_energy_init,
+            mu_s,
+            friction_dissipated_init,
+            elements,
+            yield_strength_gpa,
+            hardening_modulus_gpa,
+            ultimate_strain,
+            poisson_ratio,
+            thickness,
+            youngs_modulus_gpa,
+        )
 
     return _fused_leapfrog_loop_jit(
         positions,
