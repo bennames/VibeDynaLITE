@@ -186,7 +186,15 @@ class SimRunner:
             t_ply = grid_cfg["t_ply"]
             # Build parent-side grid placeholder
             grid = generate_rectangular_grid(
-                nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
+                nx=nx,
+                ny=ny,
+                dx=dx,
+                material=mat,
+                n_plies=n_plies,
+                t_ply=t_ply,
+                corrugation_amplitude=grid_cfg.get("corrugation_amplitude", 0.0),
+                corrugation_period=grid_cfg.get("corrugation_period", 1.0),
+                corrugation_axis=grid_cfg.get("corrugation_axis", "x"),
             )
             with self.lock:
                 self.grid_nodes = grid.nodes.copy()
@@ -588,6 +596,9 @@ def launch() -> None:
                 material=cfg["material"],
                 n_plies=cfg["grid"]["n_plies"],
                 t_ply=cfg["grid"]["t_ply"],
+                corrugation_amplitude=cfg["grid"].get("corrugation_amplitude", 0.0),
+                corrugation_period=cfg["grid"].get("corrugation_period", 1.0),
+                corrugation_axis=cfg["grid"].get("corrugation_axis", "x"),
             )
             viewport3d.reset(
                 grid=dummy_grid,
@@ -675,6 +686,9 @@ def launch() -> None:
             material=reset_cfg["material"],
             n_plies=reset_cfg["grid"]["n_plies"],
             t_ply=reset_cfg["grid"]["t_ply"],
+            corrugation_amplitude=reset_cfg["grid"].get("corrugation_amplitude", 0.0),
+            corrugation_period=reset_cfg["grid"].get("corrugation_period", 1.0),
+            corrugation_axis=reset_cfg["grid"].get("corrugation_axis", "x"),
         )
         viewport3d.reset(
             blank_grid,
@@ -822,6 +836,9 @@ def launch() -> None:
         material=initial_cfg["material"],
         n_plies=initial_cfg["grid"]["n_plies"],
         t_ply=initial_cfg["grid"]["t_ply"],
+        corrugation_amplitude=initial_cfg["grid"].get("corrugation_amplitude", 0.0),
+        corrugation_period=initial_cfg["grid"].get("corrugation_period", 1.0),
+        corrugation_axis=initial_cfg["grid"].get("corrugation_axis", "x"),
     )
     viewport3d.reset(
         init_grid,
@@ -919,6 +936,9 @@ def launch() -> None:
                         material=cfg["material"],
                         n_plies=cfg["grid"]["n_plies"],
                         t_ply=cfg["grid"]["t_ply"],
+                        corrugation_amplitude=cfg["grid"].get("corrugation_amplitude", 0.0),
+                        corrugation_period=cfg["grid"].get("corrugation_period", 1.0),
+                        corrugation_axis=cfg["grid"].get("corrugation_axis", "x"),
                     )
                     viewport3d.reset(
                         preview_grid,
