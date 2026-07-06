@@ -112,6 +112,19 @@ class ConfigPanel:
         self.row_rayleigh_alpha = "row_rayleigh_alpha"
         self.row_rayleigh_beta = "row_rayleigh_beta"
 
+        # Structure Selection & J2 Plasticity
+        self.sim_structure_type = "sim_structure_type"
+        self.mat_model = "mat_model"
+        self.mat_yield_strength = "mat_yield_strength"
+        self.mat_hardening_modulus = "mat_hardening_modulus"
+        self.mat_ultimate_strain = "mat_ultimate_strain"
+        self.mat_poisson_ratio = "mat_poisson_ratio"
+
+        # Grid Corrugations
+        self.grid_corrugation_amplitude = "grid_corrugation_amplitude"
+        self.grid_corrugation_period = "grid_corrugation_period"
+        self.grid_corrugation_axis = "grid_corrugation_axis"
+
     def build(self) -> None:
         """Construct the panel's DearPyGui widgets."""
         if dpg is None:  # pragma: no cover
@@ -127,6 +140,40 @@ class ConfigPanel:
                     dpg.add_table_column(width_fixed=True, init_width_or_weight=180)
                     dpg.add_table_column()
 
+                    with dpg.table_row():
+                        dpg.add_text("Structure Type")
+                        dpg.add_combo(
+                            items=["Fabric", "Metallic Sheet"],
+                            default_value="Fabric",
+                            tag=self.sim_structure_type,
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Material Model")
+                        dpg.add_combo(
+                            items=["linear", "j2_plasticity"],
+                            default_value="linear",
+                            tag=self.mat_model,
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Yield Strength (GPa)")
+                        dpg.add_input_float(
+                            tag=self.mat_yield_strength, default_value=0.0, width=-1
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Hardening Modulus (GPa)")
+                        dpg.add_input_float(
+                            tag=self.mat_hardening_modulus, default_value=0.0, width=-1
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Ultimate Strain")
+                        dpg.add_input_float(
+                            tag=self.mat_ultimate_strain, default_value=0.0, width=-1
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Poisson's Ratio")
+                        dpg.add_input_float(tag=self.mat_poisson_ratio, default_value=0.3, width=-1)
                     with dpg.table_row():
                         dpg.add_text("Material Preset")
                         dpg.add_combo(
@@ -237,6 +284,30 @@ class ConfigPanel:
                             tag=self.grid_n_plies,
                             default_value=1,
                             callback=self._update_file_size_estimate_cb,
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Corrugation Amplitude (m)")
+                        dpg.add_input_float(
+                            tag=self.grid_corrugation_amplitude,
+                            default_value=0.0,
+                            format="%.4f",
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Corrugation Period (m)")
+                        dpg.add_input_float(
+                            tag=self.grid_corrugation_period,
+                            default_value=0.2,
+                            format="%.4f",
+                            width=-1,
+                        )
+                    with dpg.table_row():
+                        dpg.add_text("Corrugation Axis")
+                        dpg.add_combo(
+                            items=["x", "y"],
+                            default_value="x",
+                            tag=self.grid_corrugation_axis,
                             width=-1,
                         )
 
@@ -949,6 +1020,11 @@ class ConfigPanel:
                     dpg.get_value(self.mat_yarn_count_x),
                     dpg.get_value(self.mat_yarn_count_y),
                 ],
+                "material_model": dpg.get_value(self.mat_model),
+                "yield_strength_gpa": dpg.get_value(self.mat_yield_strength),
+                "hardening_modulus_gpa": dpg.get_value(self.mat_hardening_modulus),
+                "ultimate_strain": dpg.get_value(self.mat_ultimate_strain),
+                "poisson_ratio": dpg.get_value(self.mat_poisson_ratio),
             },
             "grid": {
                 "nx": dpg.get_value(self.grid_nx),
@@ -957,6 +1033,9 @@ class ConfigPanel:
                 "n_plies": dpg.get_value(self.grid_n_plies),
                 "t_ply": dpg.get_value(self.grid_t_ply) if is_mode_b else None,
                 "boundary_type": b_type,
+                "corrugation_amplitude": dpg.get_value(self.grid_corrugation_amplitude),
+                "corrugation_period": dpg.get_value(self.grid_corrugation_period),
+                "corrugation_axis": dpg.get_value(self.grid_corrugation_axis),
             },
             "projectile": {
                 "mass": dpg.get_value(self.proj_mass),
@@ -1023,6 +1102,9 @@ class ConfigPanel:
                 "log_to_file": bool(dpg.get_value(self.log_to_file))
                 if dpg.does_item_exist(self.log_to_file)
                 else True,
+                "structure_type": "fabric"
+                if dpg.get_value(self.sim_structure_type) == "Fabric"
+                else "metallic_sheet",
             },
         }
 
@@ -1058,12 +1140,26 @@ class ConfigPanel:
         dpg.set_value(self.mat_yarn_count_x, yc[0])
         dpg.set_value(self.mat_yarn_count_y, yc[1])
 
+        sim = config.get("simulation", {})
+        struct_type_val = (
+            "Fabric" if sim.get("structure_type", "fabric") == "fabric" else "Metallic Sheet"
+        )
+        dpg.set_value(self.sim_structure_type, struct_type_val)
+        dpg.set_value(self.mat_model, mat.get("material_model", "linear"))
+        dpg.set_value(self.mat_yield_strength, mat.get("yield_strength_gpa", 0.0))
+        dpg.set_value(self.mat_hardening_modulus, mat.get("hardening_modulus_gpa", 0.0))
+        dpg.set_value(self.mat_ultimate_strain, mat.get("ultimate_strain", 0.0))
+        dpg.set_value(self.mat_poisson_ratio, mat.get("poisson_ratio", 0.3))
+
         # 2. Update Grid settings
         grid = config["grid"]
         dpg.set_value(self.grid_nx, grid.get("nx", 11))
         dpg.set_value(self.grid_ny, grid.get("ny", 11))
         dpg.set_value(self.grid_dx, grid.get("dx", 0.01))
         dpg.set_value(self.grid_n_plies, grid.get("n_plies", 1))
+        dpg.set_value(self.grid_corrugation_amplitude, grid.get("corrugation_amplitude", 0.0))
+        dpg.set_value(self.grid_corrugation_period, grid.get("corrugation_period", 0.2))
+        dpg.set_value(self.grid_corrugation_axis, grid.get("corrugation_axis", "x"))
 
         t_ply = grid.get("t_ply")
         is_mode_b = t_ply is not None
