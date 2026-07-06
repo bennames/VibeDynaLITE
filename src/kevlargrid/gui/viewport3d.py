@@ -694,6 +694,7 @@ class Viewport3D:
                             )
                         elif shape == "propeller":
                             S = self.proj_span
+                            S_safe = S if S > 0.0 else 1e-15
                             c_r = self.proj_root_chord
                             c_t = self.proj_tip_chord
                             tau = self.proj_thickness_ratio / 100.0
@@ -703,7 +704,7 @@ class Viewport3D:
                             dV_sum = 0.0
                             y_dV_sum = 0.0
                             for y in ys:
-                                c = c_r + (y / S) * (c_t - c_r)
+                                c = c_r + (y / S_safe) * (c_t - c_r)
                                 area = 0.60 * (c**2) * tau
                                 dV = area * dy
                                 dV_sum += dV
@@ -1322,6 +1323,7 @@ def _make_propeller_mesh(
     ny = 25
     nx = 15
     S = span
+    S_safe = S if S > 0.0 else 1e-15
     c_r = root_chord
     c_t = tip_chord
     twist_deg = twist
@@ -1333,8 +1335,8 @@ def _make_propeller_mesh(
 
     ys_geom = np.linspace(0.0, S - R_tip, ny)
     for y_geom in ys_geom:
-        c = c_r + (y_geom / S) * (c_t - c_r)
-        theta = math.radians(twist_deg) * (y_geom / S)
+        c = c_r + (y_geom / S_safe) * (c_t - c_r)
+        theta = math.radians(twist_deg) * (y_geom / S_safe)
 
         slice_pts = []
         us = np.linspace(0.0, 1.0, nx)
