@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 8: 2D Explicit Finite Element Metallic Sheet Solver & Container Impacts
+
+### Added
+- **2D Explicit FE Shell Element Solver**: Implemented a Q4 Reissner-Mindlin shell element formulation with Flanagan-Belytschko hourglass control and 3-point Simpson's rule through-thickness integration.
+- **J2 Radial Return Plasticity**: Integrated von Mises yield criterion and radial return stress mapping with isotropic hardening for metallic sheets.
+- **Element Erosion / Deletion**: Added strain-based element erosion/deletion (rupture dynamics) when equivalent plastic strain exceeds the ultimate strain limit at all 3 thickness integration points.
+- **Vertical Corrugated Mesh Generation**: Extended grid generator to support sinusoidal corrugations along the "x" or "y" axis to represent shipping container walls.
+- **Built-in Corten Steel Preset**: Added researched weathering steel `"Corten Steel (14 Gauge)"` parameters.
+- **Dynamic GUI Material & Grid Controls**: Swapping the structure type dynamically adjusts shown input fields, hides plies/stacking modes for steel, filters presets, and displays sheet thickness.
+- **Rotational Kinetic Energy**: Updated projectile kinetic energy tracking to include $KE_{\text{rot}} = 0.5 \sum (I_{\text{diag}} \omega^2)$.
+
+---
+
 ## [Unreleased] — Sprint 5: 3D Analytical SDF Contact & 6-DOF Kinematics
 
 ### Added
