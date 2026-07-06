@@ -40,6 +40,14 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 ### 5. Strain Energy (`src/kevlargrid/solver/energy.py`)
 - Updated `compute_strain_energy` to calculate strain energy from element elastic stresses when `elements` and `element_stress` are provided.
 
+### 6. Built-in Corten Steel Preset & GUI Configuration Panel (`src/kevlargrid/gui/config_panel.py`)
+- Added a researched `"Corten Steel (14 Gauge)"` preset for weathering steel shipping container sheets:
+  - Elastic Modulus: $200.0\text{ GPa}$, Yield Strength: $0.345\text{ GPa}$, Tensile Strength: $0.485\text{ GPa}$, Density: $7.85\text{ g/cc}$, Areal Density: $15.7\text{ kg/m}^2$, Poisson's Ratio: $0.30$, Hardening Modulus: $1.0\text{ GPa}$, Ultimate Strain: $0.20$.
+- Created a dynamic GUI Material Properties section:
+  - Toggling **Structure Type** to `"Metallic Sheet"` hides fabric-only fields (e.g. Failure Strain, crimp, shear ratio, yarns) and shows metal-only fields (Material Model, Yield/Hardening Modulus, Ultimate Strain, Poisson's Ratio, and Thickness).
+  - Toggling **Structure Type** to `"Metallic Sheet"` also hides the **Number of Plies** and **Analysis Mode** rows (since steel is a single-thickness sheet and not stacked fabric plies).
+  - Automatically filters presets list to only show fabrics when `"Fabric"` is selected, and metallic presets when `"Metallic Sheet"` is selected.
+
 ---
 
 ## Verification Results
@@ -53,10 +61,10 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
   ```bash
   .venv/bin/pytest -m "not slow"
   ```
-  **Result**: `99 passed, 1 skipped, 10 deselected in 52.40s`
+  **Result**: `99 passed, 1 skipped, 10 deselected in 51.38s`
 
 ### 2. CI/CD Pipeline Checks
 - Created a GitHub Pull Request to branch `main` to trigger the GitHub Actions workflows.
 - Verifed that all CI checks passed successfully:
-  - `lint` (ruff formatting & code quality): **PASSED**
+  - `lint` (ruff formatting, code quality, and mypy static analysis): **PASSED**
   - `test` (pytest unit tests): **PASSED**
