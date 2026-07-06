@@ -784,8 +784,8 @@ class ConfigPanel:
                 dpg.set_value(self.mat_yarn_count_y, yc[1])
 
             # Calculate and set thickness
-            density_val = mat.get("fiber_density_gcc", 1.44)
-            areal_density_val = mat.get("areal_density_kgm2", 0.47)
+            density_val = float(mat.get("fiber_density_gcc", 1.44))  # type: ignore[arg-type]
+            areal_density_val = float(mat.get("areal_density_kgm2", 0.47))  # type: ignore[arg-type]
             thickness_val = (
                 areal_density_val / (density_val * 1000.0) if density_val > 0.0 else 0.002
             )
