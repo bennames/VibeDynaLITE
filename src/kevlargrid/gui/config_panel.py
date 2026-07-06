@@ -74,6 +74,10 @@ class ConfigPanel:
         self.proj_wx = "proj_wx"
         self.proj_wy = "proj_wy"
         self.proj_wz = "proj_wz"
+        self.proj_qw = "proj_qw"
+        self.proj_qx = "proj_qx"
+        self.proj_qy = "proj_qy"
+        self.proj_qz = "proj_qz"
         self.proj_width = "proj_width"
         self.proj_thickness = "proj_thickness"
         self.proj_shape = "proj_shape"
@@ -482,6 +486,37 @@ class ConfigPanel:
                         label="Wz",
                         width=70,
                         tag=self.proj_wz,
+                        default_value=0.0,
+                        callback=self._on_projectile_change,
+                    )
+
+                dpg.add_text("Initial Orientation (Quaternion: w,x,y,z):")
+                with dpg.group(horizontal=True):
+                    dpg.add_input_float(
+                        label="Qw",
+                        width=60,
+                        tag=self.proj_qw,
+                        default_value=1.0,
+                        callback=self._on_projectile_change,
+                    )
+                    dpg.add_input_float(
+                        label="Qx",
+                        width=60,
+                        tag=self.proj_qx,
+                        default_value=0.0,
+                        callback=self._on_projectile_change,
+                    )
+                    dpg.add_input_float(
+                        label="Qy",
+                        width=60,
+                        tag=self.proj_qy,
+                        default_value=0.0,
+                        callback=self._on_projectile_change,
+                    )
+                    dpg.add_input_float(
+                        label="Qz",
+                        width=60,
+                        tag=self.proj_qz,
                         default_value=0.0,
                         callback=self._on_projectile_change,
                     )
@@ -1169,6 +1204,12 @@ class ConfigPanel:
                     dpg.get_value(self.proj_py),
                     dpg.get_value(self.proj_pz),
                 ],
+                "quat": [
+                    dpg.get_value(self.proj_qw),
+                    dpg.get_value(self.proj_qx),
+                    dpg.get_value(self.proj_qy),
+                    dpg.get_value(self.proj_qz),
+                ],
                 "shape": dpg.get_value(self.proj_shape).lower(),
                 "shape_type": dpg.get_value(self.proj_shape).lower(),
                 "blade_width": dpg.get_value(self.proj_width),
@@ -1318,6 +1359,12 @@ class ConfigPanel:
         dpg.set_value(self.proj_px, pos[0])
         dpg.set_value(self.proj_py, pos[1])
         dpg.set_value(self.proj_pz, pos[2])
+
+        quat = proj.get("quat", [1.0, 0.0, 0.0, 0.0])
+        dpg.set_value(self.proj_qw, quat[0])
+        dpg.set_value(self.proj_qx, quat[1])
+        dpg.set_value(self.proj_qy, quat[2])
+        dpg.set_value(self.proj_qz, quat[3])
 
         shape = proj.get("shape", proj.get("shape_type", "box")).lower()
         shape_cased = "Box"

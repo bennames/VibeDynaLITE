@@ -914,6 +914,7 @@ def launch() -> None:
                 cfg["projectile"]["blade_width"],
                 cfg["projectile"]["edge_thickness"],
                 tuple(cfg["projectile"]["position"]),
+                tuple(cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0])),
                 cfg["projectile"].get("shape_type", "box"),
                 cfg["projectile"].get("radius", 0.005),
                 cfg["projectile"].get("length", 0.01),
