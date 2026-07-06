@@ -633,14 +633,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         init_omega = np.array(proj_cfg.get("omega", [0.0, 0.0, 0.0]), dtype=np.float64)
         init_rot_ke = 0.5 * np.sum(np.diagonal(proj.inertia) * init_omega**2)
-        initial_ke = (
-            0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2) + init_rot_ke
-        )
+        initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2) + init_rot_ke
         final_rot_ke = 0.5 * np.sum(np.diagonal(proj.inertia) * proj.omega**2)
         final_ke = 0.5 * proj.mass * np.sum(proj.velocity**2) + final_rot_ke
-        energy_eff = (
-            float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
-        )
+        energy_eff = float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
 
         # Retrieve peak deceleration Gs
         if solver_backend == "numba":

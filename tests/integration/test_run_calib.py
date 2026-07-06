@@ -1,6 +1,7 @@
 import sys
 import time
 from pathlib import Path
+
 import pytest
 
 # Add the benchmark 8 directory to sys.path so we can import it

@@ -169,13 +169,17 @@ def generate_rectangular_grid(
 
     x_grid, y_grid = np.meshgrid(x, y, indexing="ij")
     base_nodes = np.stack([x_grid, y_grid, np.zeros_like(x_grid)], axis=-1).reshape(-1, 3)
-    
+
     # Apply vertical corrugation if amplitude > 0
     if corrugation_amplitude > 0.0 and corrugation_period > 0.0:
         if corrugation_axis == "y":
-            base_nodes[:, 2] += corrugation_amplitude * np.sin(2.0 * np.pi * base_nodes[:, 1] / corrugation_period)
+            base_nodes[:, 2] += corrugation_amplitude * np.sin(
+                2.0 * np.pi * base_nodes[:, 1] / corrugation_period
+            )
         else:
-            base_nodes[:, 2] += corrugation_amplitude * np.sin(2.0 * np.pi * base_nodes[:, 0] / corrugation_period)
+            base_nodes[:, 2] += corrugation_amplitude * np.sin(
+                2.0 * np.pi * base_nodes[:, 0] / corrugation_period
+            )
 
     n_nodes_per_layer = nx * ny
 
@@ -256,7 +260,7 @@ def generate_rectangular_grid(
     k_shear = k_ortho * shear_ratio
 
     base_stiffnesses = np.where(base_tension_only, k_ortho, k_shear)
-    
+
     # Calculate base rest lengths from coordinates (supports corrugated grids)
     p0 = base_nodes[base_springs[:, 0]]
     p1 = base_nodes[base_springs[:, 1]]

@@ -414,12 +414,18 @@ def validate_config(config: dict) -> bool:
     if mat["material_model"] == "j2_plasticity":
         for key in ["yield_strength_gpa", "hardening_modulus_gpa", "ultimate_strain"]:
             if key not in mat:
-                raise ValidationError(f"Material parameter '{key}' is required for j2_plasticity model")
+                raise ValidationError(
+                    f"Material parameter '{key}' is required for j2_plasticity model"
+                )
             val = mat[key]
             if not isinstance(val, (int, float)) or val < 0.0:
-                raise ValidationError(f"Material parameter '{key}' must be a non-negative number (got {val}).")
+                raise ValidationError(
+                    f"Material parameter '{key}' must be a non-negative number (got {val})."
+                )
             if key != "hardening_modulus_gpa" and val == 0.0:
-                raise ValidationError(f"Material parameter '{key}' must be a positive number (got {val}).")
+                raise ValidationError(
+                    f"Material parameter '{key}' must be a positive number (got {val})."
+                )
         if "poisson_ratio" not in mat:
             mat["poisson_ratio"] = 0.3
         else:
@@ -456,15 +462,21 @@ def validate_config(config: dict) -> bool:
     if "corrugation_amplitude" in grid:
         val = grid["corrugation_amplitude"]
         if not isinstance(val, (int, float)) or val < 0.0:
-            raise ValidationError(f"Grid parameter 'corrugation_amplitude' must be a non-negative number (got {val}).")
+            raise ValidationError(
+                f"Grid parameter 'corrugation_amplitude' must be a non-negative number (got {val})."
+            )
     if "corrugation_period" in grid:
         val = grid["corrugation_period"]
         if not isinstance(val, (int, float)) or val <= 0.0:
-            raise ValidationError(f"Grid parameter 'corrugation_period' must be a positive number (got {val}).")
+            raise ValidationError(
+                f"Grid parameter 'corrugation_period' must be a positive number (got {val})."
+            )
     if "corrugation_axis" not in grid:
         grid["corrugation_axis"] = "x"
     elif grid["corrugation_axis"] not in ["x", "y"]:
-        raise ValidationError(f"Grid parameter 'corrugation_axis' must be 'x' or 'y' (got '{grid['corrugation_axis']}').")
+        raise ValidationError(
+            f"Grid parameter 'corrugation_axis' must be 'x' or 'y' (got '{grid['corrugation_axis']}')."
+        )
 
     # 4. Projectile validation
     # 4. Projectile validation

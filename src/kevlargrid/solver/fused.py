@@ -1590,60 +1590,62 @@ def numba_step_shell_forces_and_failures(
     n_elements = len(elements)
     forces = np.zeros((n_nodes, 3), dtype=positions.dtype)
     torques = np.zeros((n_nodes, 3), dtype=positions.dtype)
-    
+
     # Simpson's integration points and weights through thickness
     z_pts = np.array([-0.5 * thickness, 0.0, 0.5 * thickness])
     w_pts = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
-    
+
     G = E / (2.0 * (1.0 + nu))
     kappa_s = 5.0 / 6.0  # shear correction factor
     G_s = G * kappa_s
-    
+
     step_fracture_energy = 0.0
     step_stiff_damp_power = 0.0
-    
+
     for e in range(n_elements):
         if element_failed[e] == 1:
             continue
-            
+
         n0 = elements[e, 0]
         n1 = elements[e, 1]
         n2 = elements[e, 2]
         n3 = elements[e, 3]
-        
+
         # Current nodal translational positions
         u0, v0, w0 = positions[n0, 0], positions[n0, 1], positions[n0, 2]
         u1, v1, w1 = positions[n1, 0], positions[n1, 1], positions[n1, 2]
         u2, v2, w2 = positions[n2, 0], positions[n2, 1], positions[n2, 2]
         u3, v3, w3 = positions[n3, 0], positions[n3, 1], positions[n3, 2]
-        
+
         # Nodal rotations (theta_x, theta_y)
         tx0, ty0 = ang_positions[n0, 0], ang_positions[n0, 1]
         tx1, ty1 = ang_positions[n1, 0], ang_positions[n1, 1]
         tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
         tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
-        
+
         # Compute strains
         eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx)
         eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx)
         gam_xy = ((u3 - u0) + (u2 - u1)) / (2.0 * dx) + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
-        
+
         kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
         kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
-        kappa_xy = ((ty3 - ty0) + (ty2 - ty1)) / (2.0 * dx) - ((tx1 - tx0) + (tx2 - tx3)) / (2.0 * dx)
-        
+        kappa_xy = ((ty3 - ty0) + (ty2 - ty1)) / (2.0 * dx) - ((tx1 - tx0) + (tx2 - tx3)) / (
+            2.0 * dx
+        )
+
         gam_xz = ((w1 - w0) + (w2 - w3)) / (2.0 * dx) + (ty0 + ty1 + ty2 + ty3) / 4.0
         gam_yz = ((w3 - w0) + (w2 - w1)) / (2.0 * dx) - (tx0 + tx1 + tx2 + tx3) / 4.0
-        
+
         # Calculate strain increments
         d_eps_xx = eps_xx - element_strains[e, 0]
         d_eps_yy = eps_yy - element_strains[e, 1]
         d_gam_xy = gam_xy - element_strains[e, 2]
-        
+
         d_kappa_xx = kappa_xx - element_strains[e, 3]
         d_kappa_yy = kappa_yy - element_strains[e, 4]
         d_kappa_xy = kappa_xy - element_strains[e, 5]
-        
+
         # Store strains
         element_strains[e, 0] = eps_xx
         element_strains[e, 1] = eps_yy
@@ -1653,32 +1655,32 @@ def numba_step_shell_forces_and_failures(
         element_strains[e, 5] = kappa_xy
         element_strains[e, 6] = gam_xz
         element_strains[e, 7] = gam_yz
-        
+
         # Thickness integration
         all_failed = True
-        
+
         # Store forces/moments integrals
         N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
         M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
-        
+
         for k in range(3):
             zk = z_pts[k]
             wk = w_pts[k]
-            
+
             d_exx_k = d_eps_xx + zk * d_kappa_xx
             d_eyy_k = d_eps_yy + zk * d_kappa_yy
             d_gxy_k = d_gam_xy + zk * d_kappa_xy
-            
+
             # Elastic trial stress
             sig_xx_old = element_stress[e, k, 0]
             sig_yy_old = element_stress[e, k, 1]
             tau_xy_old = element_stress[e, k, 2]
-            
+
             C = E / (1.0 - nu * nu)
             sig_xx_trial = sig_xx_old + C * (d_exx_k + nu * d_eyy_k)
             sig_yy_trial = sig_yy_old + C * (d_eyy_k + nu * d_exx_k)
             tau_xy_trial = tau_xy_old + G * d_gxy_k
-            
+
             # Yield check (von Mises yield criterion)
             sig_vm_trial = np.sqrt(
                 sig_xx_trial**2
@@ -1686,47 +1688,47 @@ def numba_step_shell_forces_and_failures(
                 - sig_xx_trial * sig_yy_trial
                 + 3.0 * tau_xy_trial**2
             )
-            
+
             peeq_old = element_peeq[e, k]
             yield_val = yield_strength + hardening_modulus * peeq_old
-            
+
             f_yield = sig_vm_trial - yield_val
-            
+
             sig_xx_new = sig_xx_trial
             sig_yy_new = sig_yy_trial
             tau_xy_new = tau_xy_trial
             peeq_new = peeq_old
-            
+
             if f_yield > 0.0 and yield_strength > 0.0:
                 # Radial return plastic strain increment
                 d_peeq = f_yield / (3.0 * G + hardening_modulus)
                 peeq_new = peeq_old + d_peeq
-                
+
                 # Scale stress components
                 scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
                 if scale < 0.0:
                     scale = 0.0
-                
+
                 sig_xx_new = sig_xx_trial * scale
                 sig_yy_new = sig_yy_trial * scale
                 tau_xy_new = tau_xy_trial * scale
-                
+
                 # Plastic dissipation energy
                 step_fracture_energy += yield_val * d_peeq * wk * (dx * dx)
-                
+
             element_stress[e, k, 0] = sig_xx_new
             element_stress[e, k, 1] = sig_yy_new
             element_stress[e, k, 2] = tau_xy_new
             element_peeq[e, k] = peeq_new
-            
+
             if peeq_new <= ultimate_strain:
                 all_failed = False
-                
+
         # Element erosion check
         if all_failed and ultimate_strain > 0.0:
             element_failed[e] = 1
             continue
-            
+
         # Recompute forces and moments integrals
         for k in range(3):
             zk = z_pts[k]
@@ -1734,64 +1736,64 @@ def numba_step_shell_forces_and_failures(
             sig_xx = element_stress[e, k, 0]
             sig_yy = element_stress[e, k, 1]
             tau_xy = element_stress[e, k, 2]
-            
+
             N_xx += wk * sig_xx
             N_yy += wk * sig_yy
             N_xy += wk * tau_xy
-            
+
             M_xx += wk * sig_xx * zk
             M_yy += wk * sig_yy * zk
             M_xy += wk * tau_xy * zk
-            
+
         # Transverse shear forces
         Q_x = G_s * thickness * gam_xz
         Q_y = G_s * thickness * gam_yz
-        
+
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
-        
+
         # Node 0
         forces[n0, 0] += -N_xx * half_dx - N_xy * half_dx
         forces[n0, 1] += -N_yy * half_dx - N_xy * half_dx
         forces[n0, 2] += -Q_x * half_dx - Q_y * half_dx
-        
+
         torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx
         torques[n0, 1] += M_xx * half_dx + M_xy * half_dx
-        
+
         # Node 1
         forces[n1, 0] += N_xx * half_dx - N_xy * half_dx
         forces[n1, 1] += -N_yy * half_dx + N_xy * half_dx
         forces[n1, 2] += Q_x * half_dx - Q_y * half_dx
-        
+
         torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx
         torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx
-        
+
         # Node 2
         forces[n2, 0] += N_xx * half_dx + N_xy * half_dx
         forces[n2, 1] += N_yy * half_dx + N_xy * half_dx
         forces[n2, 2] += Q_x * half_dx + Q_y * half_dx
-        
+
         torques[n2, 0] += M_yy * half_dx + M_xy * half_dx
         torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx
-        
+
         # Node 3
         forces[n3, 0] += -N_xx * half_dx + N_xy * half_dx
         forces[n3, 1] += N_yy * half_dx - N_xy * half_dx
         forces[n3, 2] += -Q_x * half_dx + Q_y * half_dx
-        
+
         torques[n3, 0] += M_yy * half_dx - M_xy * half_dx
         torques[n3, 1] += M_xx * half_dx - M_xy * half_dx
-        
+
         # Hourglass stabilization damping on nodal velocities
         for n_idx in (n0, n1, n2, n3):
             forces[n_idx, 0] -= 0.015 * E * thickness * velocities[n_idx, 0]
             forces[n_idx, 1] -= 0.015 * E * thickness * velocities[n_idx, 1]
             forces[n_idx, 2] -= 0.015 * E * thickness * velocities[n_idx, 2]
-            
+
             torques[n_idx, 0] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 0]
             torques[n_idx, 1] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 1]
             torques[n_idx, 2] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 2]
-            
+
     return forces, torques, step_fracture_energy, step_stiff_damp_power
 
 
@@ -1937,7 +1939,7 @@ def _fused_shell_loop_jit(
         proj_position = proj_position + proj_v_half * dt
 
         proj_omega_half = proj_omega + 0.5 * omega_dot * dt
-        
+
         # Projectile quat rotation integration
         dquat = zeros(4, dtype=np.float64)
         dquat[0] = (
@@ -2038,13 +2040,13 @@ def _fused_shell_loop_jit(
                 + (positions[:, 2] - z_proj) ** 2
             )
             contact_mask = dists < proximity_threshold
-            
+
             # Simple weighting based on projection
             if sum(contact_mask) > 0:
                 w_raw = maximum(proximity_threshold - dists, 0.0)
                 sum_w = sum(w_raw)
                 w_normalized = w_raw / (sum_w if sum_w != 0.0 else 1.0)
-                
+
                 # scale factor
                 scale_factor = zeros(n_nodes, dtype=positions.dtype)
                 for i in range(n_nodes):
@@ -2052,7 +2054,7 @@ def _fused_shell_loop_jit(
                         scale_factor[i] = float(active_counts[i]) / float(node_initial_elements[i])
                     else:
                         scale_factor[i] = 1.0
-                        
+
                 d_safe = maximum(dists, 1e-4)
                 nx_arr = (positions[:, 0] - x_proj) / d_safe
                 ny_arr = (positions[:, 1] - y_proj) / d_safe
@@ -2153,7 +2155,9 @@ def _fused_shell_loop_jit(
 
                     node_scale_factor = 1.0
                     if node_initial_elements[i] > 0:
-                        node_scale_factor = float(active_counts[i]) / float(node_initial_elements[i])
+                        node_scale_factor = float(active_counts[i]) / float(
+                            node_initial_elements[i]
+                        )
 
                     proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
                     proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
@@ -2165,15 +2169,15 @@ def _fused_shell_loop_jit(
 
                     # Torque update
                     P_contact = P_rel
-                    proj_torque[0] += P_contact[1] * (-f_mag * n_world[2] * node_scale_factor) - P_contact[2] * (
-                        -f_mag * n_world[1] * node_scale_factor
-                    )
-                    proj_torque[1] += P_contact[2] * (-f_mag * n_world[0] * node_scale_factor) - P_contact[0] * (
+                    proj_torque[0] += P_contact[1] * (
                         -f_mag * n_world[2] * node_scale_factor
-                    )
-                    proj_torque[2] += P_contact[0] * (-f_mag * n_world[1] * node_scale_factor) - P_contact[1] * (
+                    ) - P_contact[2] * (-f_mag * n_world[1] * node_scale_factor)
+                    proj_torque[1] += P_contact[2] * (
                         -f_mag * n_world[0] * node_scale_factor
-                    )
+                    ) - P_contact[0] * (-f_mag * n_world[2] * node_scale_factor)
+                    proj_torque[2] += P_contact[0] * (
+                        -f_mag * n_world[1] * node_scale_factor
+                    ) - P_contact[1] * (-f_mag * n_world[0] * node_scale_factor)
 
                     proj_contact_e_step += 0.5 * k_penalty * delta * delta * node_scale_factor
 
@@ -2181,7 +2185,7 @@ def _fused_shell_loop_jit(
         # identical to spring solver
         if mu_s > 0.0:
             if shape_code > 0:
-                for i in range(n_nodes):
+                for _i in range(n_nodes):
                     # compute relative friction and update proj_torque/proj_reaction_force
                     pass
             elif shape_code == 0:
@@ -2211,11 +2215,7 @@ def _fused_shell_loop_jit(
         damp_dissipated += -p_mass_damp * dt
 
         net_forces = (
-            shell_forces
-            + proj_forces
-            + interply_forces
-            + f_mass_damp
-            + nodal_external_forces
+            shell_forces + proj_forces + interply_forces + f_mass_damp + nodal_external_forces
         )
         net_forces = clamp_boundary(net_forces, boundary_mask)
 
@@ -2258,13 +2258,13 @@ def _fused_shell_loop_jit(
                 trans_ke = 0.5 * sum(grid_masses * sum(velocities**2, axis=1))
                 rot_ke_sheet = 0.5 * sum(rot_inertia * sum(ang_velocities**2, axis=1))
                 ke = trans_ke + rot_ke_sheet
-                
+
                 # Strain energy se: estimate from element elastic stresses
                 se = 0.0
                 for e in range(n_elements):
                     if element_failed[e] == 0:
-                        se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e]**2) / E
-                        
+                        se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e] ** 2) / E
+
                 proj_rot_ke = 0.0
                 if shape_code > 0:
                     proj_rot_ke = 0.5 * (
@@ -2275,7 +2275,9 @@ def _fused_shell_loop_jit(
                 proj_ke = 0.5 * proj_mass * sum(proj_velocity**2) + proj_rot_ke
 
                 hist_positions = set_index_3d(hist_positions, frame_idx, positions)
-                hist_failed = set_index_2d_bool(hist_failed, frame_idx, element_failed.astype(np.bool_))
+                hist_failed = set_index_2d_bool(
+                    hist_failed, frame_idx, element_failed.astype(np.bool_)
+                )
                 hist_proj_pos = set_index_2d_float(hist_proj_pos, frame_idx, proj_position)
                 hist_time = set_index_1d(hist_time, frame_idx, t_sim)
                 hist_ke = set_index_1d(hist_ke, frame_idx, ke)
