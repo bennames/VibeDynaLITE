@@ -39,6 +39,21 @@ MATERIALS: dict[str, dict[str, str | float | tuple[int, int]]] = {
         "yarn_count": (34, 34),
         "crimp_factor": 0.10,
     },
+    "Corten Steel (14 Gauge)": {
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.485,
+        "fiber_density_gcc": 7.85,
+        "areal_density_kgm2": 15.7,
+        "shear_ratio": 0.38,
+        "crimp_factor": 0.0,
+        "yarn_count": (1, 1),
+        "material_model": "j2_plasticity",
+        "yield_strength_gpa": 0.345,
+        "hardening_modulus_gpa": 1.0,
+        "ultimate_strain": 0.20,
+        "poisson_ratio": 0.30,
+    },
 }
 
 
