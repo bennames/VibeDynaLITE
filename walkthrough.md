@@ -47,6 +47,7 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
   - Toggling **Structure Type** to `"Metallic Sheet"` hides fabric-only fields (e.g. Failure Strain, crimp, shear ratio, yarns) and shows metal-only fields (Material Model, Yield/Hardening Modulus, Ultimate Strain, Poisson's Ratio, and Thickness).
   - Toggling **Structure Type** to `"Metallic Sheet"` also hides the **Number of Plies** and **Analysis Mode** rows (since steel is a single-thickness sheet and not stacked fabric plies).
   - Automatically filters presets list to only show fabrics when `"Fabric"` is selected, and metallic presets when `"Metallic Sheet"` is selected.
+- Updated `current_grid_key` tracking in `src/kevlargrid/gui/app.py` to watch corrugations, structure type, and thickness changes, allowing the interactive 3D viewport preview to update instantly and dynamically as sliders/inputs are adjusted.
 
 ---
 
