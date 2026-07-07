@@ -52,6 +52,10 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 - Guarded all propeller shape calculations in both the solver (`projectile.py`) and GUI (`viewport3d.py`) against division by zero when span is $0.0$.
 - Fixed post-processing `ValueError` broadcasting crash by mapping element failures to spring failures in `worker.py` during strain evaluation.
 - Fixed quaternion orientation integration bug in the shell solver JIT loop `_fused_shell_loop_jit` in `fused.py` by utilizing `numba_q_mul`.
+- Added a labeled global Coordinate System (CSYS) tripod widget in both PyVista (using `add_axes()`) and fallback DearPyGui paths to easily identify spatial orientations.
+- Shaded the projectile/propeller blade as a solid 3D surface with visible mesh edges (`style="surface"` with `show_edges=True`) rather than a hollow wireframe for a premium and detailed CAD-like appearance.
+- Vectorized the mapping from element failures to spring failures in `Viewport3D.redraw` using pure NumPy array index slicing, restoring the GUI frame rate back to full speed (~1ms update).
+- Fixed the post-simulation perforation and strain reporting `IndexError` in `worker.py` for metallic sheets.
 
 ---
 
