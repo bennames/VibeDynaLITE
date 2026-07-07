@@ -1410,7 +1410,9 @@ def _fused_leapfrog_loop_jit(
         proj_accel = proj_reaction_force / proj_mass
 
         if shape_code >= 0:
-            q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
+            q_conj = np.array(
+                [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
+            )
             torque_body = numba_q_rotate(q_conj, proj_torque)
             omega_body = numba_q_rotate(q_conj, proj_omega)
 
@@ -1426,11 +1428,14 @@ def _fused_leapfrog_loop_jit(
             coriolis_y = omega_body[2] * h_x - omega_body[0] * h_z
             coriolis_z = omega_body[0] * h_y - omega_body[1] * h_x
 
-            omega_dot_body = np.array([
-                proj_inertia_inv_diag[0] * (torque_body[0] - coriolis_x),
-                proj_inertia_inv_diag[1] * (torque_body[1] - coriolis_y),
-                proj_inertia_inv_diag[2] * (torque_body[2] - coriolis_z)
-            ], dtype=np.float64)
+            omega_dot_body = np.array(
+                [
+                    proj_inertia_inv_diag[0] * (torque_body[0] - coriolis_x),
+                    proj_inertia_inv_diag[1] * (torque_body[1] - coriolis_y),
+                    proj_inertia_inv_diag[2] * (torque_body[2] - coriolis_z),
+                ],
+                dtype=np.float64,
+            )
 
             omega_dot[:] = numba_q_rotate(proj_quat, omega_dot_body)
 
@@ -2229,7 +2234,9 @@ def _fused_shell_loop_jit(
         proj_accel = proj_reaction_force / proj_mass
 
         if shape_code >= 0:
-            q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
+            q_conj = np.array(
+                [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
+            )
             torque_body = numba_q_rotate(q_conj, proj_torque)
             omega_body = numba_q_rotate(q_conj, proj_omega)
 
@@ -2245,11 +2252,14 @@ def _fused_shell_loop_jit(
             coriolis_y = omega_body[2] * h_x - omega_body[0] * h_z
             coriolis_z = omega_body[0] * h_y - omega_body[1] * h_x
 
-            omega_dot_body = np.array([
-                proj_inertia_inv_diag[0] * (torque_body[0] - coriolis_x),
-                proj_inertia_inv_diag[1] * (torque_body[1] - coriolis_y),
-                proj_inertia_inv_diag[2] * (torque_body[2] - coriolis_z)
-            ], dtype=np.float64)
+            omega_dot_body = np.array(
+                [
+                    proj_inertia_inv_diag[0] * (torque_body[0] - coriolis_x),
+                    proj_inertia_inv_diag[1] * (torque_body[1] - coriolis_y),
+                    proj_inertia_inv_diag[2] * (torque_body[2] - coriolis_z),
+                ],
+                dtype=np.float64,
+            )
 
             omega_dot[:] = numba_q_rotate(proj_quat, omega_dot_body)
 

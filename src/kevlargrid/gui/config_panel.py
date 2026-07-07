@@ -11,6 +11,8 @@ import os
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
+
 try:
     import dearpygui.dearpygui as dpg
 except ImportError:  # pragma: no cover
@@ -984,15 +986,19 @@ class ConfigPanel:
         # Compute exact rotational KE using principal moments of inertia S6.2.2
         try:
             from kevlargrid.solver.projectile import Projectile
+
+            shape_val = dpg.get_value(self.proj_shape).lower()
+            length_val = dpg.get_value(self.proj_length_cyl) if shape_val == "cylinder" else dpg.get_value(self.proj_length_bullet)
+
             temp_proj = Projectile(
                 mass=mass,
                 velocity=[vx, vy, vz],
                 position=[0.0, 0.0, 0.0],
-                shape_type=dpg.get_value(self.proj_shape).lower(),
+                shape_type=shape_val,
                 blade_width=dpg.get_value(self.proj_width),
                 edge_thickness=dpg.get_value(self.proj_thickness),
                 radius=dpg.get_value(self.proj_radius),
-                length=dpg.get_value(self.proj_length),
+                length=length_val,
                 edge_radius=dpg.get_value(self.proj_edge_radius),
                 ogive_multiplier=dpg.get_value(self.proj_ogive_multiplier),
                 span=dpg.get_value(self.proj_span),

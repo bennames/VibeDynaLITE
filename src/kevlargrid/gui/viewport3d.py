@@ -382,7 +382,11 @@ class Viewport3D:
             self.proj_actor = None
 
             # Pre-compute element indices for each spring to map element failure to spring failure
-            if structure_type == "metallic_sheet" and grid.elements is not None and len(grid.elements) > 0:
+            if (
+                structure_type == "metallic_sheet"
+                and grid.elements is not None
+                and len(grid.elements) > 0
+            ):
                 n_nodes = len(grid.nodes)
                 node_elements: list[list[int]] = [[] for _ in range(n_nodes)]
                 for e_idx, elem in enumerate(grid.elements):
@@ -602,7 +606,10 @@ class Viewport3D:
             springs = self.grid.springs
             n_springs = len(springs)
 
-            if getattr(self, "structure_type", "fabric") == "metallic_sheet" and getattr(self, "spring_to_elements_map", None) is not None:
+            if (
+                getattr(self, "structure_type", "fabric") == "metallic_sheet"
+                and getattr(self, "spring_to_elements_map", None) is not None
+            ):
                 failed_elements = self.grid.failed
                 failed_elements_padded = np.append(failed_elements, True)
                 el0 = self.spring_to_elements_map[:, 0]
