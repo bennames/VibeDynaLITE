@@ -504,7 +504,7 @@ def test_tangential_contact_friction():
     velocities = np.zeros_like(positions)
     boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
     for i in range(25):
-        boundary_mask[i] = 1 # fix all sheet nodes to act as a rigid base for friction
+        boundary_mask[i] = 1  # fix all sheet nodes to act as a rigid base for friction
 
     nodal_external_forces = np.zeros_like(positions)
     thickness = 0.001
@@ -553,7 +553,7 @@ def test_tangential_contact_friction():
         proj_omega=proj.omega,
         proj_shape_type="box",
         contact_energy_init=0.0,
-        mu_s=0.8, # high friction
+        mu_s=0.8,  # high friction
         friction_dissipated_init=0.0,
         structure_type="metallic_sheet",
         material_model="j2_plasticity",
@@ -603,7 +603,7 @@ def test_von_karman_wave_propagation():
     )
 
     positions = grid.nodes.copy()
-    center_idx = 12 # node (2, 2) in a 5x5 grid
+    center_idx = 12  # node (2, 2) in a 5x5 grid
 
     # Give the center node an initial out-of-plane velocity
     velocities = np.zeros_like(positions)
@@ -631,7 +631,7 @@ def test_von_karman_wave_propagation():
         grid_tension_only=grid.tension_only,
         boundary_mask=boundary_mask,
         nodal_external_forces=nodal_external_forces,
-        proj_position=np.array([10.0, 10.0, 10.0]), # projectile far away
+        proj_position=np.array([10.0, 10.0, 10.0]),  # projectile far away
         proj_velocity=np.zeros(3),
         proj_mass=1.0,
         proj_blade_width=0.01,

@@ -1682,7 +1682,11 @@ def numba_step_shell_forces_and_failures(
         # Compute strains (with Von Karman non-linear membrane strain terms)
         eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx) + 0.5 * dw_dx**2
         eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx) + 0.5 * dw_dy**2
-        gam_xy = ((u3 - u0) + (u2 - u1)) / (2.0 * dx) + ((v1 - v0) + (v2 - v3)) / (2.0 * dx) + dw_dx * dw_dy
+        gam_xy = (
+            ((u3 - u0) + (u2 - u1)) / (2.0 * dx)
+            + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
+            + dw_dx * dw_dy
+        )
 
         kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
         kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
@@ -2190,9 +2194,7 @@ def _fused_shell_loop_jit(
                 )
 
                 v_rel = v_half[i] - v_proj_point
-                delta_dot = -(
-                    v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
-                )
+                delta_dot = -(v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2])
 
                 f_mag = k_penalty * delta + proj_c_damping * delta_dot
                 if f_mag < 0.0:
@@ -2200,9 +2202,7 @@ def _fused_shell_loop_jit(
 
                 node_scale_factor = 1.0
                 if node_initial_elements[i] > 0:
-                    node_scale_factor = float(active_counts[i]) / float(
-                        node_initial_elements[i]
-                    )
+                    node_scale_factor = float(active_counts[i]) / float(node_initial_elements[i])
 
                 proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
                 proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
