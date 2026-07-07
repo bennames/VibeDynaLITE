@@ -1821,10 +1821,6 @@ def numba_step_shell_forces_and_failures(
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
 
-        if e == 5:
-            print("    EL 5: N_xx =", N_xx, "N_yy =", N_yy, "Q_x =", Q_x, "Q_y =", Q_y)
-            print("    EL 5: M_xx =", M_xx, "M_yy =", M_yy, "M_xy =", M_xy)
-
         # Node 0
         forces[n0, 0] += N_xx * half_dx + N_xy * half_dx
         forces[n0, 1] += N_yy * half_dx + N_xy * half_dx
@@ -2329,13 +2325,6 @@ def _fused_shell_loop_jit(
             omega_dot[:] = numba_q_rotate(proj_quat, omega_dot_body)
 
         velocities = v_half + 0.5 * accel * dt
-
-        if step < 5:
-            max_ang_idx = np.argmax(np.sum(ang_velocities**2, axis=1))
-            print("  --- JIT Step ---", step)
-            print("    vel12 =", velocities[12], "ang_vel12 =", ang_velocities[12])
-            print("    pos12 =", positions[12], "ang_pos12 =", ang_positions[12])
-            print("    Max ang_vel node:", max_ang_idx, "ang_vel =", ang_velocities[max_ang_idx])
 
         # Rotational velocities updates
         net_torques = shell_torques
