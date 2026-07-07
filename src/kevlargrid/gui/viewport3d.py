@@ -379,6 +379,21 @@ class Viewport3D:
             self.proj_mesh = None
             self.proj_actor = None
 
+            # Pre-compute element indices for each spring to map element failure to spring failure
+            if grid.elements is not None and len(grid.elements) > 0:
+                n_nodes = len(grid.nodes)
+                node_elements: list[list[int]] = [[] for _ in range(n_nodes)]
+                for e_idx, elem in enumerate(grid.elements):
+                    for node in elem:
+                        node_elements[node].append(e_idx)
+
+                self.spring_elements = []
+                for n0, n1 in grid.springs:
+                    shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
+                    self.spring_elements.append(shared)
+            else:
+                self.spring_elements = None
+
             # Find bounds of single grid center
             if len(grid.nodes) > 0:
                 # Find center of nodes
@@ -572,8 +587,20 @@ class Viewport3D:
             R = np.array([[cy, 0.0, -sy], [-sy * sp, cp, -cy * sp], [sy * cp, sp, cy * cp]])  # noqa: N806
 
             springs = self.grid.springs
-            failed = self.grid.failed
             n_springs = len(springs)
+
+            if getattr(self, "spring_elements", None) is not None:
+                failed_elements = self.grid.failed
+                failed = np.zeros(n_springs, dtype=bool)
+                for s_idx, el_indices in enumerate(self.spring_elements):
+                    if len(el_indices) > 0:
+                        failed[s_idx] = True
+                        for e_idx in el_indices:
+                            if not failed_elements[e_idx]:
+                                failed[s_idx] = False
+                                break
+            else:
+                failed = self.grid.failed
 
             # Calculate live engineering strain for color-scale mapping
             p1 = self.grid.nodes[springs[:, 0]]
