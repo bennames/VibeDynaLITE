@@ -486,7 +486,7 @@ class Viewport3D:
                     )
 
                     # Add global CSYS axes tripod S8.4
-                    self.plotter.add_axes(line_width=3, label_color="white")
+                    self.plotter.add_axes(line_width=3, color="white")
 
                     # Projectile mesh will be created by redraw() since _last_mesh_params was deleted
                     # Show to initialize offscreen rendering context window
@@ -575,7 +575,7 @@ class Viewport3D:
                             line_width=1.5,
                             lighting=True,
                         )
-                    self.plotter.add_axes(line_width=3, label_color="white")
+                    self.plotter.add_axes(line_width=3, color="white")
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
 
                     texture_reg_tag = "viewport_texture_registry"
