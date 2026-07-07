@@ -988,7 +988,11 @@ class ConfigPanel:
             from kevlargrid.solver.projectile import Projectile
 
             shape_val = dpg.get_value(self.proj_shape).lower()
-            length_val = dpg.get_value(self.proj_length_cyl) if shape_val == "cylinder" else dpg.get_value(self.proj_length_bullet)
+            length_val = (
+                dpg.get_value(self.proj_length_cyl)
+                if shape_val == "cylinder"
+                else dpg.get_value(self.proj_length_bullet)
+            )
 
             temp_proj = Projectile(
                 mass=mass,
