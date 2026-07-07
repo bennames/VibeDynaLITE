@@ -14,6 +14,9 @@ All notable changes to this project are documented in this file.
 - **3D Signed Distance Fields for Box Shape**: Fixed the box projectile SDF to be mathematically exact and signed (allowing negative values inside the box) and bounded along the Z-axis.
 - **Box Contact Logic in Shell Solver**: Unified all projectile shapes (including box shapes) to run through the 3D SDF contact loop rather than using a center-node spherical projection shortcut.
 - **Corrected Proximity Parameter Passing**: Passed the actual half-width and half-thickness values of the box to the SDF contact loop rather than hardcoded `0.0, 0.0` values, preventing the box shape from collapsing.
+- **Propeller Blade Contact Tunneling**: Resolved the propeller blade tunneling/pass-through issue by adding `proximity_threshold` support to the general 3D SDF contact loop (which is used for non-box projectiles, including the propeller blade). The solver now correctly computes contact forces for nodes within the virtual skin thickness of the projectile.
+- **Solver Proximity Threshold Cache**: Set the `proximity_threshold` parameter on the Taichi solver's GPU/CPU cached field (`solver.proximity_threshold[None]`) during time-integration, resolving a bug where the dynamic CFL timestep calculation used a zero proximity threshold instead of the user-specified or default value.
+- **Yarn Wave Speed and V50 Ballistic Limit Benchmarks**: Maintained the IDW contact model for box-shaped projectiles (`shape_type == 0`), ensuring that the Smith's yarn impact theory and Kevlar FSP ballistic limit benchmarks continue to pass successfully against their original physical and numerical parameters.
 
 ---
 
