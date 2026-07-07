@@ -328,6 +328,7 @@ class Viewport3D:
         tip_radius: float = 0.002,
         t_ply: float | None = None,
         structure_type: str = "fabric",
+        fail_thresh: float = 0.036,
     ) -> None:
         """Store grid model coordinates and regenerate layer visibility checkboxes.
 
@@ -360,6 +361,7 @@ class Viewport3D:
             self.n_nodes_per_layer = n_nodes_per_layer
             self.layer_visibility = [True] * n_plies
             self.structure_type = structure_type
+            self.fail_thresh = fail_thresh
 
             # Cache projectile params
             self.proj_shape_type = shape_type
@@ -623,7 +625,7 @@ class Viewport3D:
             p2 = self.grid.nodes[springs[:, 1]]
             lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
             strains = (lengths - self.grid.rest_lengths) / self.grid.rest_lengths
-            fail_thresh = 0.036
+            fail_thresh = getattr(self, "fail_thresh", 0.036)
 
             # --- PyVista offscreen hardware rendering path ---
             if (

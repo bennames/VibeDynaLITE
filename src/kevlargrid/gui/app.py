@@ -619,6 +619,11 @@ def launch() -> None:
                 tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                 t_ply=cfg["grid"].get("t_ply", None),
                 structure_type=cfg.get("simulation", {}).get("structure_type", "fabric"),
+                fail_thresh=float(
+                    cfg.get("material", {}).get(
+                        "ultimate_strain", cfg.get("material", {}).get("failure_strain", 0.036)
+                    )
+                ),
             )
             viewport3d.draw_projectile(
                 np.array(cfg["projectile"]["position"], dtype=np.float64),
@@ -710,6 +715,11 @@ def launch() -> None:
             tip_radius=reset_cfg["projectile"].get("tip_radius", 0.002),
             t_ply=reset_cfg["grid"].get("t_ply", None),
             structure_type=reset_cfg.get("simulation", {}).get("structure_type", "fabric"),
+            fail_thresh=float(
+                reset_cfg.get("material", {}).get(
+                    "ultimate_strain", reset_cfg.get("material", {}).get("failure_strain", 0.036)
+                )
+            ),
         )
         viewport3d.draw_projectile(
             np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
@@ -861,6 +871,11 @@ def launch() -> None:
         tip_radius=initial_cfg["projectile"].get("tip_radius", 0.002),
         t_ply=initial_cfg["grid"].get("t_ply", None),
         structure_type=initial_cfg.get("simulation", {}).get("structure_type", "fabric"),
+        fail_thresh=float(
+            initial_cfg.get("material", {}).get(
+                "ultimate_strain", initial_cfg.get("material", {}).get("failure_strain", 0.036)
+            )
+        ),
     )
     viewport3d.draw_projectile(
         np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
@@ -968,6 +983,12 @@ def launch() -> None:
                         tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                         t_ply=cfg["grid"].get("t_ply", None),
                         structure_type=cfg.get("simulation", {}).get("structure_type", "fabric"),
+                        fail_thresh=float(
+                            cfg.get("material", {}).get(
+                                "ultimate_strain",
+                                cfg.get("material", {}).get("failure_strain", 0.036),
+                            )
+                        ),
                     )
                     viewport3d.draw_projectile(
                         np.array(cfg["projectile"]["position"], dtype=np.float64),
