@@ -57,6 +57,11 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 - Vectorized the mapping from element failures to spring failures in `Viewport3D.redraw` using pure NumPy array index slicing, restoring the GUI frame rate back to full speed (~1ms update).
 - Fixed the post-simulation perforation and strain reporting `IndexError` in `worker.py` for metallic sheets.
 
+### 7. Explicit Shell Solver Stabilization
+- **Hourglass Damping Wave-Impedance Scaling**: Fixed the unphysical $1.6 \times 10^7 \times$ over-damping and subsequent numerical explosion in the 2D shell solver by scaling the Flanagan-Belytschko hourglass stabilization force and torque coefficients with the wave-impedance formulation $\sqrt{E \rho} \cdot h \cdot dx$ and $\sqrt{E \rho} \cdot h^3 \cdot dx$, respectively.
+- **Corrected Rotational Transverse Shear Nodal Torque Damping**: Resolved the rotational velocity explosion by scaling the transverse shear damping coefficient with the wave impedance $\sqrt{G \rho} \cdot h \cdot dx^3$, ensuring correct physical torque dimensions ($N \cdot m \cdot s/rad$).
+- **Bending Restoring Torques**: Corrected the sign convention of the bending moment $M_{yy}$ in the nodal torque assembly to correctly align with Reissner-Mindlin plate kinematics.
+
 ---
 
 ## Verification Results
@@ -67,11 +72,12 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
   - `test_config_validation_metallic_sheet`: Verifies config parsing and validation rules.
   - `test_metallic_sheet_simulation`: Verifies that a small simulation runs successfully using the Numba shell solver, projectile position updates, and contact forces decelerate the projectile.
   - `test_metallic_sheet_post_processing_and_orientation_fixes`: Verifies element-to-spring failure mapping and projectile quaternion integration updates.
+  - `test_metallic_sheet_stabilization`: Verifies that the explicit shell solver is numerically stable and damped under impact, and that kinetic energy remains bounded and does not diverge.
 - Ran the entire fast test suite locally:
   ```bash
   .venv/bin/pytest -m "not slow"
   ```
-  **Result**: `100 passed, 1 skipped, 10 deselected in 50.83s`
+  **Result**: `101 passed, 1 skipped, 10 deselected in 59.56s`
 
 ### 2. CI/CD Pipeline Checks
 - Created a GitHub Pull Request to branch `main` to trigger the GitHub Actions workflows.
