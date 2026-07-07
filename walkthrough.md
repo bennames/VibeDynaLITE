@@ -50,6 +50,8 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 - Updated `current_grid_key` tracking in `src/kevlargrid/gui/app.py` to watch corrugations, structure type, and thickness changes, allowing the interactive 3D viewport preview to update instantly and dynamically as sliders/inputs are adjusted.
 - Added **Initial Orientation** (Roll, Pitch, and Yaw in degrees) and **Initial Rotation** (RPM) input fields to the GUI Projectile section. The configuration panel dynamically converts these inputs to quaternions and rad/s angular velocity for the backend solver.
 - Guarded all propeller shape calculations in both the solver (`projectile.py`) and GUI (`viewport3d.py`) against division by zero when span is $0.0$.
+- Fixed post-processing `ValueError` broadcasting crash by mapping element failures to spring failures in `worker.py` during strain evaluation.
+- Fixed quaternion orientation integration bug in the shell solver JIT loop `_fused_shell_loop_jit` in `fused.py` by utilizing `numba_q_mul`.
 
 ---
 
@@ -60,14 +62,15 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
   - `test_grid_corrugation_and_elements`: Verifies Z-perturbation and element connectivity generation.
   - `test_config_validation_metallic_sheet`: Verifies config parsing and validation rules.
   - `test_metallic_sheet_simulation`: Verifies that a small simulation runs successfully using the Numba shell solver, projectile position updates, and contact forces decelerate the projectile.
+  - `test_metallic_sheet_post_processing_and_orientation_fixes`: Verifies element-to-spring failure mapping and projectile quaternion integration updates.
 - Ran the entire fast test suite locally:
   ```bash
   .venv/bin/pytest -m "not slow"
   ```
-  **Result**: `99 passed, 1 skipped, 10 deselected in 51.38s`
+  **Result**: `100 passed, 1 skipped, 10 deselected in 50.83s`
 
 ### 2. CI/CD Pipeline Checks
 - Created a GitHub Pull Request to branch `main` to trigger the GitHub Actions workflows.
-- Verifed that all CI checks passed successfully:
+- Verified that all CI checks passed successfully:
   - `lint` (ruff formatting, code quality, and mypy static analysis): **PASSED**
   - `test` (pytest unit tests): **PASSED**
