@@ -1595,6 +1595,7 @@ def _fused_leapfrog_loop_jit(
 @backend.jit(parallel=False, fastmath=True)
 def numba_step_shell_forces_and_failures(
     positions,
+    X_ref,
     velocities,
     ang_positions,
     ang_velocities,
@@ -1636,11 +1637,22 @@ def numba_step_shell_forces_and_failures(
         n2 = elements[e, 2]
         n3 = elements[e, 3]
 
-        # Current nodal translational positions
-        u0, v0, w0 = positions[n0, 0], positions[n0, 1], positions[n0, 2]
-        u1, v1, w1 = positions[n1, 0], positions[n1, 1], positions[n1, 2]
-        u2, v2, w2 = positions[n2, 0], positions[n2, 1], positions[n2, 2]
-        u3, v3, w3 = positions[n3, 0], positions[n3, 1], positions[n3, 2]
+        # Current nodal displacements
+        u0 = positions[n0, 0] - X_ref[n0, 0]
+        v0 = positions[n0, 1] - X_ref[n0, 1]
+        w0 = positions[n0, 2] - X_ref[n0, 2]
+
+        u1 = positions[n1, 0] - X_ref[n1, 0]
+        v1 = positions[n1, 1] - X_ref[n1, 1]
+        w1 = positions[n1, 2] - X_ref[n1, 2]
+
+        u2 = positions[n2, 0] - X_ref[n2, 0]
+        v2 = positions[n2, 1] - X_ref[n2, 1]
+        w2 = positions[n2, 2] - X_ref[n2, 2]
+
+        u3 = positions[n3, 0] - X_ref[n3, 0]
+        v3 = positions[n3, 1] - X_ref[n3, 1]
+        w3 = positions[n3, 2] - X_ref[n3, 2]
 
         # Nodal rotations (theta_x, theta_y)
         tx0, ty0 = ang_positions[n0, 0], ang_positions[n0, 1]
@@ -1894,6 +1906,7 @@ def _fused_shell_loop_jit(
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
+    X_ref = positions.copy()
     m_frames = max(1, n_steps // save_interval)
 
     # Pre-allocate history structures (compatible with JIT vector allocations)
@@ -2014,6 +2027,7 @@ def _fused_shell_loop_jit(
         shell_forces, shell_torques, step_fracture_energy, step_stiff_damp_power = (
             numba_step_shell_forces_and_failures(
                 positions,
+                X_ref,
                 velocities,
                 ang_positions,
                 ang_velocities,
