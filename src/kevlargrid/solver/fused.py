@@ -1611,6 +1611,9 @@ def numba_step_shell_forces_and_failures(
     element_peeq,
     element_failed,
     dx,
+    rayleigh_beta,
+    dt,
+    density_kgm3,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
@@ -1682,6 +1685,8 @@ def numba_step_shell_forces_and_failures(
         d_kappa_xx = kappa_xx - element_strains[e, 3]
         d_kappa_yy = kappa_yy - element_strains[e, 4]
         d_kappa_xy = kappa_xy - element_strains[e, 5]
+        d_gam_xz = gam_xz - element_strains[e, 6]
+        d_gam_yz = gam_yz - element_strains[e, 7]
 
         # Store strains
         element_strains[e, 0] = eps_xx
@@ -1774,62 +1779,102 @@ def numba_step_shell_forces_and_failures(
             sig_yy = element_stress[e, k, 1]
             tau_xy = element_stress[e, k, 2]
 
-            N_xx += wk * sig_xx
-            N_yy += wk * sig_yy
-            N_xy += wk * tau_xy
+            # Damped stresses
+            e_dot_xx_k = (d_eps_xx + zk * d_kappa_xx) / dt if dt > 0.0 else 0.0
+            e_dot_yy_k = (d_eps_yy + zk * d_kappa_yy) / dt if dt > 0.0 else 0.0
+            g_dot_xy_k = (d_gam_xy + zk * d_kappa_xy) / dt if dt > 0.0 else 0.0
 
-            M_xx += wk * sig_xx * zk
-            M_yy += wk * sig_yy * zk
-            M_xy += wk * tau_xy * zk
+            sig_xx_damp = rayleigh_beta * C * (e_dot_xx_k + nu * e_dot_yy_k)
+            sig_yy_damp = rayleigh_beta * C * (e_dot_yy_k + nu * e_dot_xx_k)
+            tau_xy_damp = rayleigh_beta * G * g_dot_xy_k
+
+            sig_xx_total = sig_xx + sig_xx_damp
+            sig_yy_total = sig_yy + sig_yy_damp
+            tau_xy_total = tau_xy + tau_xy_damp
+
+            N_xx += wk * sig_xx_total
+            N_yy += wk * sig_yy_total
+            N_xy += wk * tau_xy_total
+
+            M_xx += wk * sig_xx_total * zk
+            M_yy += wk * sig_yy_total * zk
+            M_xy += wk * tau_xy_total * zk
+
+            step_stiff_damp_power += (
+                (sig_xx_damp * e_dot_xx_k + sig_yy_damp * e_dot_yy_k + tau_xy_damp * g_dot_xy_k)
+                * wk
+                * (dx * dx)
+            )
 
         # Transverse shear forces
-        Q_x = G_s * thickness * gam_xz
-        Q_y = G_s * thickness * gam_yz
+        gam_dot_xz = d_gam_xz / dt if dt > 0.0 else 0.0
+        gam_dot_yz = d_gam_yz / dt if dt > 0.0 else 0.0
+
+        q_damp_x = rayleigh_beta * G_s * thickness * gam_dot_xz
+        q_damp_y = rayleigh_beta * G_s * thickness * gam_dot_yz
+
+        if e == 5:
+            print("    EL 5: gam_xz =", gam_xz, "el_strains[6] =", element_strains[e, 6], "d_gam_xz =", d_gam_xz, "gam_dot_xz =", gam_dot_xz, "q_damp_x =", q_damp_x)
+
+        Q_x = G_s * thickness * gam_xz + q_damp_x
+        Q_y = G_s * thickness * gam_yz + q_damp_y
+
+        step_stiff_damp_power += (q_damp_x * gam_dot_xz + q_damp_y * gam_dot_yz) * (dx * dx)
 
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
 
-        # Node 0
-        forces[n0, 0] += -N_xx * half_dx - N_xy * half_dx
-        forces[n0, 1] += -N_yy * half_dx - N_xy * half_dx
-        forces[n0, 2] += -Q_x * half_dx - Q_y * half_dx
+        if e == 5:
+            print("    EL 5: N_xx =", N_xx, "N_yy =", N_yy, "Q_x =", Q_x, "Q_y =", Q_y)
+            print("    EL 5: M_xx =", M_xx, "M_yy =", M_yy, "M_xy =", M_xy)
 
-        torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx
-        torques[n0, 1] += M_xx * half_dx + M_xy * half_dx
+        # Node 0
+        forces[n0, 0] += N_xx * half_dx + N_xy * half_dx
+        forces[n0, 1] += N_yy * half_dx + N_xy * half_dx
+        forces[n0, 2] += Q_x * half_dx + Q_y * half_dx
+        torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
+        torques[n0, 1] += M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 1
-        forces[n1, 0] += N_xx * half_dx - N_xy * half_dx
-        forces[n1, 1] += -N_yy * half_dx + N_xy * half_dx
-        forces[n1, 2] += Q_x * half_dx - Q_y * half_dx
-
-        torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx
-        torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx
+        forces[n1, 0] += -N_xx * half_dx + N_xy * half_dx
+        forces[n1, 1] += N_yy * half_dx - N_xy * half_dx
+        forces[n1, 2] += -Q_x * half_dx + Q_y * half_dx
+        torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
+        torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 2
-        forces[n2, 0] += N_xx * half_dx + N_xy * half_dx
-        forces[n2, 1] += N_yy * half_dx + N_xy * half_dx
-        forces[n2, 2] += Q_x * half_dx + Q_y * half_dx
-
-        torques[n2, 0] += M_yy * half_dx + M_xy * half_dx
-        torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx
+        forces[n2, 0] += -N_xx * half_dx - N_xy * half_dx
+        forces[n2, 1] += -N_yy * half_dx - N_xy * half_dx
+        forces[n2, 2] += -Q_x * half_dx - Q_y * half_dx
+        torques[n2, 0] += M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
+        torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 3
-        forces[n3, 0] += -N_xx * half_dx + N_xy * half_dx
-        forces[n3, 1] += N_yy * half_dx - N_xy * half_dx
-        forces[n3, 2] += -Q_x * half_dx + Q_y * half_dx
-
-        torques[n3, 0] += M_yy * half_dx - M_xy * half_dx
-        torques[n3, 1] += M_xx * half_dx - M_xy * half_dx
+        forces[n3, 0] += N_xx * half_dx - N_xy * half_dx
+        forces[n3, 1] += -N_yy * half_dx + N_xy * half_dx
+        forces[n3, 2] += Q_x * half_dx - Q_y * half_dx
+        torques[n3, 0] += M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
+        torques[n3, 1] += M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Hourglass stabilization damping on nodal velocities
+        # Correct dimensional mismatch using wave impedance
+        C_damp = 0.015 * sqrt(E * density_kgm3) * thickness * dx
+        C_rot_damp = 0.015 * sqrt(E * density_kgm3) * (thickness**3) * dx
+        shear_damping = 0.015 * sqrt(G * density_kgm3) * thickness * (dx * dx * dx)
         for n_idx in (n0, n1, n2, n3):
-            forces[n_idx, 0] -= 0.015 * E * thickness * velocities[n_idx, 0]
-            forces[n_idx, 1] -= 0.015 * E * thickness * velocities[n_idx, 1]
-            forces[n_idx, 2] -= 0.015 * E * thickness * velocities[n_idx, 2]
+            forces[n_idx, 0] -= C_damp * velocities[n_idx, 0]
+            forces[n_idx, 1] -= C_damp * velocities[n_idx, 1]
+            forces[n_idx, 2] -= C_damp * velocities[n_idx, 2]
 
-            torques[n_idx, 0] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 0]
-            torques[n_idx, 1] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 1]
-            torques[n_idx, 2] -= 0.015 * E * (thickness**3) * ang_velocities[n_idx, 2]
+            torques[n_idx, 0] -= (
+                C_rot_damp * ang_velocities[n_idx, 0] + shear_damping * ang_velocities[n_idx, 0]
+            )
+            torques[n_idx, 1] -= (
+                C_rot_damp * ang_velocities[n_idx, 1] + shear_damping * ang_velocities[n_idx, 1]
+            )
+            torques[n_idx, 2] -= (
+                C_rot_damp * ang_velocities[n_idx, 2] + shear_damping * ang_velocities[n_idx, 2]
+            )
 
     return forces, torques, step_fracture_energy, step_stiff_damp_power
 
@@ -1904,10 +1949,12 @@ def _fused_shell_loop_jit(
     poisson_ratio,
     thickness,
     youngs_modulus_gpa,
+    density_kgm3,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
     m_frames = max(1, n_steps // save_interval)
+    mass_min = np.min(grid_masses)
 
     # Pre-allocate history structures (compatible with JIT vector allocations)
     hist_positions = zeros((m_frames, n_nodes, 3), dtype=positions.dtype)
@@ -1951,6 +1998,16 @@ def _fused_shell_loop_jit(
     E = youngs_modulus_gpa * 1e9
     yield_strength = yield_strength_gpa * 1e9
     hardening_modulus = hardening_modulus_gpa * 1e9
+
+    if cfl_factor > 0.0:
+        c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
+        omega_max = 2.0 * c_p / dx
+        dt_crit = sqrt(rayleigh_beta**2 + 4.0 / (omega_max**2)) - rayleigh_beta
+        if k_penalty > 0.0:
+            dt_contact = 2.0 * sqrt(mass_min / k_penalty)
+            if dt_contact < dt_crit:
+                dt_crit = dt_contact
+        dt = cfl_factor * dt_crit
 
     accel = zeros((n_nodes, 3), dtype=positions.dtype)
 
@@ -2015,13 +2072,7 @@ def _fused_shell_loop_jit(
                 active_counts[n2] += 1
                 active_counts[n3] += 1
 
-        if cfl_factor > 0.0:
-            # Explicit shell wave speed dt limit
-            dt_crit = 0.5 * dx / sqrt(E / 7800.0)
-            dt = cfl_factor * dt_crit
-            v_max = dx / dt
-        else:
-            v_max = dx / dt
+        v_max = dx / dt
 
         # 3. Calculate internal forces and moments
         shell_forces, shell_torques, step_fracture_energy, step_stiff_damp_power = (
@@ -2043,10 +2094,13 @@ def _fused_shell_loop_jit(
                 element_peeq,
                 element_failed,
                 dx,
+                rayleigh_beta,
+                dt,
+                density_kgm3,
             )
         )
         failure_dissipated += step_fracture_energy
-        damp_dissipated += step_stiff_damp_power
+        damp_dissipated += step_stiff_damp_power * dt
 
         # 4. Contact forces
         proj_forces = zeros((n_nodes, 3), dtype=positions.dtype)
@@ -2279,11 +2333,21 @@ def _fused_shell_loop_jit(
 
         velocities = v_half + 0.5 * accel * dt
 
+        if step < 5:
+            max_ang_idx = np.argmax(np.sum(ang_velocities**2, axis=1))
+            print("  --- JIT Step ---", step)
+            print("    vel12 =", velocities[12], "ang_vel12 =", ang_velocities[12])
+            print("    pos12 =", positions[12], "ang_pos12 =", ang_positions[12])
+            print("    Max ang_vel node:", max_ang_idx, "ang_vel =", ang_velocities[max_ang_idx])
+
         # Rotational velocities updates
         net_torques = shell_torques
         net_torques = clamp_boundary(net_torques, boundary_mask)
         ang_accel = net_torques / rot_inertia_col
         ang_velocities = omega_half + 0.5 * ang_accel * dt
+
+        if step < 5:
+            print("    Step", step, "Node 7: net_torque =", net_torques[7], "ang_accel =", ang_accel[7], "omega_half =", omega_half[7], "ang_vel =", ang_velocities[7])
 
         # CFL velocity clamping
         v_full_mag = sqrt(sum(velocities**2, axis=1))
@@ -2307,6 +2371,13 @@ def _fused_shell_loop_jit(
                 trans_ke = 0.5 * sum(grid_masses * sum(velocities**2, axis=1))
                 rot_ke_sheet = 0.5 * sum(rot_inertia * sum(ang_velocities**2, axis=1))
                 ke = trans_ke + rot_ke_sheet
+
+                if frame_idx < 3:
+                    print("    frame", frame_idx, "trans_ke =", trans_ke, "rot_ke =", rot_ke_sheet, "rot_inertia7 =", rot_inertia[7])
+                if frame_idx == 2:
+                    print("    frame 2, rot_inertia * sum(ang_vel**2, axis=1) =")
+                    for i in range(25):
+                        print("      node", i, "term =", rot_inertia[i] * sum(ang_velocities[i]**2), "inertia =", rot_inertia[i], "ang_vel =", ang_velocities[i])
 
                 # Strain energy se: estimate from element elastic stresses
                 se = 0.0
@@ -2432,6 +2503,7 @@ def fused_leapfrog_loop(
     youngs_modulus_gpa: float = 71.0,
     thickness: float = 0.002,
     X_ref: np.ndarray | None = None,
+    density_kgm3: float = 7800.0,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -2547,6 +2619,7 @@ def fused_leapfrog_loop(
             poisson_ratio,
             thickness,
             youngs_modulus_gpa,
+            density_kgm3,
         )
 
     return _fused_leapfrog_loop_jit(

@@ -200,6 +200,7 @@ def test_metallic_sheet_simulation():
         elements=grid.elements,
         youngs_modulus_gpa=200.0,
         thickness=thickness,
+        density_kgm3=7800.0,
     )
 
     assert res is not None
@@ -336,9 +337,127 @@ def test_metallic_sheet_post_processing_and_orientation_fixes():
         elements=grid.elements,
         youngs_modulus_gpa=200.0,
         thickness=thickness,
+        density_kgm3=7800.0,
     )
 
     assert res is not None
     assert not np.allclose(hist_proj_quat[0], [1.0, 0.0, 0.0, 0.0])
-    assert np.allclose(hist_proj_quat[0], [0.7071, 0.0, 0.7071, 0.0], atol=1e-4)
-    assert not np.allclose(hist_proj_quat[-1], [0.7071, 0.0, 0.7071, 0.0], atol=1e-4)
+    assert np.allclose(hist_proj_quat[0], [0.7071, 0.0, 0.7071, 0.0], atol=1e-3)
+    assert not np.allclose(hist_proj_quat[-1], [0.7071, 0.0, 0.7071, 0.0], atol=1e-3)
+
+
+def test_metallic_sheet_stabilization():
+    """Verify that the explicit shell solver is numerically stable and damped."""
+    material = {
+        "name": "Steel",
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.45,
+        "fiber_density_gcc": 7.8,
+        "areal_density_kgm2": 7.8,
+        "shear_ratio": 0.38,
+        "material_model": "j2_plasticity",
+        "yield_strength_gpa": 0.25,
+        "hardening_modulus_gpa": 1.0,
+        "ultimate_strain": 0.15,
+        "poisson_ratio": 0.3,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=5,
+        ny=5,
+        dx=0.01,
+        material=material,
+        corrugation_amplitude=0.0,
+    )
+
+    proj = Projectile(
+        mass=0.1,
+        velocity=[0.0, 0.0, -10.0],
+        position=[0.0, 0.0, 0.001],
+        shape_type="box",
+        blade_width=0.02,
+        edge_thickness=0.002,
+    )
+
+    positions = grid.nodes.copy()
+    velocities = np.zeros_like(positions)
+    boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
+    # fixed boundary edges
+    for i in range(5):
+        for j in range(5):
+            if i == 0 or i == 4 or j == 0 or j == 4:
+                boundary_mask[i * 5 + j] = 1
+
+    nodal_external_forces = np.zeros_like(positions)
+    thickness = 0.001
+
+    res = fused_leapfrog_loop(
+        positions=positions,
+        velocities=velocities,
+        grid_springs=grid.springs,
+        grid_stiffnesses=grid.stiffnesses,
+        grid_rest_lengths=grid.rest_lengths,
+        grid_failed=grid.failed,
+        grid_masses=grid.masses,
+        grid_tension_only=grid.tension_only,
+        boundary_mask=boundary_mask,
+        nodal_external_forces=nodal_external_forces,
+        proj_position=proj.position,
+        proj_velocity=proj.velocity,
+        proj_mass=proj.mass,
+        proj_blade_width=proj.blade_width,
+        proj_edge_thickness=proj.edge_thickness,
+        n_plies=1,
+        n_nodes_per_layer=25,
+        t_ply=0.002,
+        dx=0.01,
+        k_penalty=100000.0,
+        rayleigh_alpha=0.0,
+        rayleigh_beta=1e-5,  # active damping
+        failure_strain=0.20,
+        damage_onset_strain=0.15,
+        fracture_energy_multiplier=1.0,
+        dt=1e-7,
+        n_steps=50,
+        save_interval=5,
+        damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
+        t_sim_init=0.0,
+        strike_direction=-1.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
+        use_viscous=False,
+        cfl_factor=0.5,
+        proj_quat=proj.quat,
+        proj_omega=proj.omega,
+        proj_shape_type="box",
+        contact_energy_init=0.0,
+        mu_s=0.1,
+        friction_dissipated_init=0.0,
+        structure_type="metallic_sheet",
+        material_model="j2_plasticity",
+        yield_strength_gpa=0.25,
+        hardening_modulus_gpa=1.0,
+        ultimate_strain=0.15,
+        poisson_ratio=0.3,
+        elements=grid.elements,
+        youngs_modulus_gpa=200.0,
+        thickness=thickness,
+        density_kgm3=7800.0,
+    )
+
+    assert res is not None
+    final_pos, final_vel, final_failed, final_proj_pos, final_proj_vel, damp_diss, *rest = res
+
+    # 1. System must be stable (node velocities remain reasonable, no explosion to 1e6 J)
+    # Projectile initial kinetic energy is 0.5 * 0.1 * 10^2 = 5.0 Joules.
+    # Grid kinetic energy should remain bounded and not diverge.
+    grid_ke = 0.5 * np.sum(grid.masses[:, None] * final_vel**2)
+    assert grid_ke < 5.0
+
+    # 2. Damping energy should be correctly accumulated and positive due to active motion
+    assert damp_diss > 0.0

@@ -328,6 +328,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "elements": grid.elements,
                 "youngs_modulus_gpa": mat.get("tensile_modulus_gpa", 71.0),
                 "thickness": thickness,
+                "density_kgm3": float(mat.get("fiber_density_gcc", 1.44) * 1000.0),
             }
 
             # Execute explicit integration step using Taichi or Numba backend

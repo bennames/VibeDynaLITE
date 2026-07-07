@@ -22,6 +22,8 @@ All notable changes to this project are documented in this file.
 - **Dynamic 3D Viewport Failure Threshold**: Replaced the hardcoded yield/failure strain threshold of `0.036` (suitable only for Kevlar 29) with a dynamic material-based threshold (querying `ultimate_strain` for metals or `failure_strain` for fabrics), avoiding premature red/yield color indications.
 - **Displacement-Based Shell Strain Formulation**: Corrected the finite element membrane and transverse shear strain calculations to evaluate nodal displacements ($x - X_{\text{ref}}$) rather than raw global coordinates, resolving the critical bug where steel elements instantly failed on the first step.
 - **Chunk-Persistent Reference Configuration**: Persisted the initial undeformed reference nodes `X_ref` across solver execution chunks, preventing reference state resets and unphysical strain jumps that previously caused the metallic sheet to explode upon contact.
+- **Corrected Hourglass Nodal Velocity/Torque Damping Dimensionality**: Solved the unphysical $1.6 \times 10^7 \times$ over-damping and subsequent numerical explosion in the 2D shell solver by scaling the hourglass stabilization force and torque coefficients with the wave-impedance formulation $\sqrt{E \rho} \cdot h \cdot dx$ and $\sqrt{E \rho} \cdot h^3 \cdot dx$, respectively.
+- **Corrected Rotational Transverse Shear Nodal Torque Damping Dimensionality**: Resolved the rotational velocity explosion by scaling the transverse shear damping coefficient with the wave impedance $\sqrt{G \rho} \cdot h \cdot dx^3$, ensuring correct physical torque dimensions ($N \cdot m \cdot s/rad$).
 
 ---
 

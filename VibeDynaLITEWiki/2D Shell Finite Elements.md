@@ -12,7 +12,7 @@ The solver utilizes a **Q4 Reissner-Mindlin Bilinear Quadrilateral Shell Element
    - 3 translational: $u_x, u_y, u_z$
    - 3 rotational: $\theta_x, \theta_y, \theta_z$
 2. **Kinematics**: Transverse shear deformation is included based on the Reissner-Mindlin theory, allowing the element to remain valid for both thin and moderately thick plates.
-3. **Integration**: Numerical integration is performed in-plane using a single Gauss point at the center of the element, combined with **Flanagan-Belytschko hourglass control** to suppress spurious zero-energy modes.
+3. **Integration**: Numerical integration is performed in-plane using a single Gauss point at the center of the element, combined with **Flanagan-Belytschko hourglass control** (dimensionally scaled using physical wave-impedance properties $\sqrt{E \rho} h dx$ and $\sqrt{G \rho} h dx^3$ to prevent numerical explosions) to suppress spurious zero-energy modes.
 4. **Through-Thickness Integration**: Integration through the thickness is performed using **Simpson's rule** with 3 integration points (top, middle, and bottom) to capture bending and nonlinear material response accurately.
 
 ---
