@@ -19,6 +19,9 @@ All notable changes to this project are documented in this file.
 - **UnboundLocalError in Subprocess Termination**: Resolved `UnboundLocalError: cannot access local variable 'reason'` by pre-initializing `reason = None` before the time integration loop starts.
 - **GUI Projectile Panning De-synchronization**: Added camera panning offsets (`self.pan_x` and `self.pan_y`) to the projectile projection screen coordinates in the fallback DPG renderer, ensuring the projectile is panned/zoomed in sync with the grid nodes.
 - **Fabric Mode Red Mesh Error**: Only activated the vectorized quadrilateral element-to-spring failure mapping when structure type is `"metallic_sheet"`, preventing index/size mismatches from coloring the entire fabric mesh red as failed.
+- **Dynamic 3D Viewport Failure Threshold**: Replaced the hardcoded yield/failure strain threshold of `0.036` (suitable only for Kevlar 29) with a dynamic material-based threshold (querying `ultimate_strain` for metals or `failure_strain` for fabrics), avoiding premature red/yield color indications.
+- **Displacement-Based Shell Strain Formulation**: Corrected the finite element membrane and transverse shear strain calculations to evaluate nodal displacements ($x - X_{\text{ref}}$) rather than raw global coordinates, resolving the critical bug where steel elements instantly failed on the first step.
+- **Chunk-Persistent Reference Configuration**: Persisted the initial undeformed reference nodes `X_ref` across solver execution chunks, preventing reference state resets and unphysical strain jumps that previously caused the metallic sheet to explode upon contact.
 
 ---
 
