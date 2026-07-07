@@ -415,15 +415,42 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     s0 = grid.springs[:, 0]
                     s1 = grid.springs[:, 1]
                     L0 = grid.rest_lengths
+                    structure_type = sim_cfg.get("structure_type", "fabric")
+                    if structure_type == "metallic_sheet":
+                        n_nodes = len(grid.nodes)
+                        node_elements: list[list[int]] = [[] for _ in range(n_nodes)]
+                        for e_idx, elem in enumerate(grid.elements):
+                            for node in elem:
+                                node_elements[node].append(e_idx)
+                        spring_elements: list[list[int]] = []
+                        for n0, n1 in grid.springs:
+                            shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
+                            spring_elements.append(shared)
+                    else:
+                        spring_elements = []
+
                     for f in range(len(hist_time)):
                         pos_f = hist_pos[f]
                         failed_f = hist_failed[f]
+                        if structure_type == "metallic_sheet":
+                            failed_springs_f = np.zeros(n_springs, dtype=bool)
+                            for s_idx, el_indices in enumerate(spring_elements):
+                                if len(el_indices) > 0:
+                                    failed_springs_f[s_idx] = True
+                                    for e_idx in el_indices:
+                                        if not failed_f[e_idx]:
+                                            failed_springs_f[s_idx] = False
+                                            break
+                            failed_mask = failed_springs_f
+                        else:
+                            failed_mask = failed_f
+
                         dx_f = pos_f[s1, 0] - pos_f[s0, 0]
                         dy_f = pos_f[s1, 1] - pos_f[s0, 1]
                         dz_f = pos_f[s1, 2] - pos_f[s0, 2]
                         lens_f = np.sqrt(dx_f**2 + dy_f**2 + dz_f**2)
                         strains_f = (lens_f - L0) / L0
-                        active_strains = np.where(failed_f, 0.0, strains_f)
+                        active_strains = np.where(failed_mask, 0.0, strains_f)
                         hist_peak_strain[f] = (
                             np.max(active_strains) if len(active_strains) > 0 else 0.0
                         )

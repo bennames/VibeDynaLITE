@@ -1941,33 +1941,18 @@ def _fused_shell_loop_jit(
         proj_omega_half = proj_omega + 0.5 * omega_dot * dt
 
         # Projectile quat rotation integration
-        dquat = zeros(4, dtype=np.float64)
-        dquat[0] = (
-            -proj_omega_half[0] * proj_quat[1]
-            - proj_omega_half[1] * proj_quat[2]
-            - proj_omega_half[2] * proj_quat[3]
-        )
-        dquat[1] = (
-            proj_omega_half[0] * proj_quat[0]
-            + proj_omega_half[2] * proj_quat[2]
-            - proj_omega_half[1] * proj_quat[3]
-        )
-        dquat[2] = (
-            proj_omega_half[1] * proj_quat[0]
-            - proj_omega_half[2] * proj_quat[1]
-            + proj_omega_half[0] * proj_quat[3]
-        )
-        dquat[3] = (
-            proj_omega_half[2] * proj_quat[0]
-            + proj_omega_half[1] * proj_quat[1]
-            - proj_omega_half[0] * proj_quat[2]
-        )
-        proj_quat = proj_quat + 0.5 * dquat * dt
-        quat_norm = sqrt(
-            proj_quat[0] ** 2 + proj_quat[1] ** 2 + proj_quat[2] ** 2 + proj_quat[3] ** 2
-        )
-        if quat_norm > 0.0:
-            proj_quat = proj_quat / quat_norm
+        if shape_code > 0:
+            omega_q = np.array(
+                [0.0, proj_omega_half[0], proj_omega_half[1], proj_omega_half[2]], dtype=np.float64
+            )
+            q_dot = numba_q_mul(omega_q, proj_quat)
+            q_new = proj_quat + 0.5 * dt * q_dot
+            q_new_norm = sqrt(q_new[0] ** 2 + q_new[1] ** 2 + q_new[2] ** 2 + q_new[3] ** 2)
+            if q_new_norm > 1e-8:
+                proj_quat[0] = q_new[0] / q_new_norm
+                proj_quat[1] = q_new[1] / q_new_norm
+                proj_quat[2] = q_new[2] / q_new_norm
+                proj_quat[3] = q_new[3] / q_new_norm
 
         t_sim += dt
 
