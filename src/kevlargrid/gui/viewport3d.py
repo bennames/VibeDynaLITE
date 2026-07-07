@@ -955,11 +955,19 @@ class Viewport3D:
                     cam1_z = max(pt1_cam[2] + self.distance, 1e-4)
                     cam2_z = max(pt2_cam[2] + self.distance, 1e-4)
 
-                    scr1_x = self.center_x + (self.focal_length * pt1_cam[0] / cam1_z) + self.pan_x
-                    scr1_y = self.center_y - (self.focal_length * pt1_cam[1] / cam1_z) + self.pan_y
+                    scr1_x = self.center_x + (
+                        self.focal_length * (pt1_cam[0] + self.pan_x) / cam1_z
+                    )
+                    scr1_y = self.center_y - (
+                        self.focal_length * (pt1_cam[1] + self.pan_y) / cam1_z
+                    )
 
-                    scr2_x = self.center_x + (self.focal_length * pt2_cam[0] / cam2_z) + self.pan_x
-                    scr2_y = self.center_y - (self.focal_length * pt2_cam[1] / cam2_z) + self.pan_y
+                    scr2_x = self.center_x + (
+                        self.focal_length * (pt2_cam[0] + self.pan_x) / cam2_z
+                    )
+                    scr2_y = self.center_y - (
+                        self.focal_length * (pt2_cam[1] + self.pan_y) / cam2_z
+                    )
 
                     dpg.draw_line(
                         [float(scr1_x), float(scr1_y)],
