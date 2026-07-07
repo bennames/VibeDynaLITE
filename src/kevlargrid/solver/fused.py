@@ -969,7 +969,7 @@ def _fused_leapfrog_loop_jit(
         positions = positions + v_half * dt
         proj_position = proj_position + proj_v_half * dt
 
-        if shape_code > 0:
+        if shape_code >= 0:
             omega_q = np.array(
                 [0.0, proj_omega_half[0], proj_omega_half[1], proj_omega_half[2]], dtype=np.float64
             )
@@ -1409,10 +1409,30 @@ def _fused_leapfrog_loop_jit(
         accel = net_forces / masses_col
         proj_accel = proj_reaction_force / proj_mass
 
-        if shape_code > 0:
-            omega_dot[0] = proj_inertia_inv_diag[0] * proj_torque[0]
-            omega_dot[1] = proj_inertia_inv_diag[1] * proj_torque[1]
-            omega_dot[2] = proj_inertia_inv_diag[2] * proj_torque[2]
+        if shape_code >= 0:
+            q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
+            torque_body = numba_q_rotate(q_conj, proj_torque)
+            omega_body = numba_q_rotate(q_conj, proj_omega)
+
+            I_xx = 1.0 / proj_inertia_inv_diag[0] if proj_inertia_inv_diag[0] > 0.0 else 0.0
+            I_yy = 1.0 / proj_inertia_inv_diag[1] if proj_inertia_inv_diag[1] > 0.0 else 0.0
+            I_zz = 1.0 / proj_inertia_inv_diag[2] if proj_inertia_inv_diag[2] > 0.0 else 0.0
+
+            h_x = I_xx * omega_body[0]
+            h_y = I_yy * omega_body[1]
+            h_z = I_zz * omega_body[2]
+
+            coriolis_x = omega_body[1] * h_z - omega_body[2] * h_y
+            coriolis_y = omega_body[2] * h_x - omega_body[0] * h_z
+            coriolis_z = omega_body[0] * h_y - omega_body[1] * h_x
+
+            omega_dot_body = np.array([
+                proj_inertia_inv_diag[0] * (torque_body[0] - coriolis_x),
+                proj_inertia_inv_diag[1] * (torque_body[1] - coriolis_y),
+                proj_inertia_inv_diag[2] * (torque_body[2] - coriolis_z)
+            ], dtype=np.float64)
+
+            omega_dot[:] = numba_q_rotate(proj_quat, omega_dot_body)
 
         velocities = v_half + 0.5 * accel * dt
 
@@ -1431,7 +1451,7 @@ def _fused_leapfrog_loop_jit(
             clamp_dissipated += sum(e_before - e_after)
 
         proj_velocity = proj_v_half + 0.5 * proj_accel * dt
-        if shape_code > 0:
+        if shape_code >= 0:
             proj_omega[:] = proj_omega_half + 0.5 * omega_dot * dt
 
         # 5. Irreversible Continuum Damage Mechanics (CDM)
@@ -1523,7 +1543,7 @@ def _fused_leapfrog_loop_jit(
             )
 
             proj_rot_ke = 0.0
-            if shape_code > 0:
+            if shape_code >= 0:
                 proj_rot_ke = 0.5 * (
                     (1.0 / proj_inertia_inv_diag[0]) * proj_omega[0] ** 2
                     + (1.0 / proj_inertia_inv_diag[1]) * proj_omega[1] ** 2
@@ -1941,7 +1961,7 @@ def _fused_shell_loop_jit(
         proj_omega_half = proj_omega + 0.5 * omega_dot * dt
 
         # Projectile quat rotation integration
-        if shape_code > 0:
+        if shape_code >= 0:
             omega_q = np.array(
                 [0.0, proj_omega_half[0], proj_omega_half[1], proj_omega_half[2]], dtype=np.float64
             )
@@ -2169,7 +2189,7 @@ def _fused_shell_loop_jit(
         # Coulomb friction
         # identical to spring solver
         if mu_s > 0.0:
-            if shape_code > 0:
+            if shape_code >= 0:
                 for _i in range(n_nodes):
                     # compute relative friction and update proj_torque/proj_reaction_force
                     pass
@@ -2208,10 +2228,30 @@ def _fused_shell_loop_jit(
         accel = net_forces / masses_col
         proj_accel = proj_reaction_force / proj_mass
 
-        if shape_code > 0:
-            omega_dot[0] = proj_inertia_inv_diag[0] * proj_torque[0]
-            omega_dot[1] = proj_inertia_inv_diag[1] * proj_torque[1]
-            omega_dot[2] = proj_inertia_inv_diag[2] * proj_torque[2]
+        if shape_code >= 0:
+            q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
+            torque_body = numba_q_rotate(q_conj, proj_torque)
+            omega_body = numba_q_rotate(q_conj, proj_omega)
+
+            I_xx = 1.0 / proj_inertia_inv_diag[0] if proj_inertia_inv_diag[0] > 0.0 else 0.0
+            I_yy = 1.0 / proj_inertia_inv_diag[1] if proj_inertia_inv_diag[1] > 0.0 else 0.0
+            I_zz = 1.0 / proj_inertia_inv_diag[2] if proj_inertia_inv_diag[2] > 0.0 else 0.0
+
+            h_x = I_xx * omega_body[0]
+            h_y = I_yy * omega_body[1]
+            h_z = I_zz * omega_body[2]
+
+            coriolis_x = omega_body[1] * h_z - omega_body[2] * h_y
+            coriolis_y = omega_body[2] * h_x - omega_body[0] * h_z
+            coriolis_z = omega_body[0] * h_y - omega_body[1] * h_x
+
+            omega_dot_body = np.array([
+                proj_inertia_inv_diag[0] * (torque_body[0] - coriolis_x),
+                proj_inertia_inv_diag[1] * (torque_body[1] - coriolis_y),
+                proj_inertia_inv_diag[2] * (torque_body[2] - coriolis_z)
+            ], dtype=np.float64)
+
+            omega_dot[:] = numba_q_rotate(proj_quat, omega_dot_body)
 
         velocities = v_half + 0.5 * accel * dt
 
@@ -2233,8 +2273,8 @@ def _fused_shell_loop_jit(
                 clamp_dissipated += 0.5 * grid_masses[i] * (v_mag * v_mag - v_max * v_max)
 
         proj_velocity = proj_v_half + 0.5 * proj_accel * dt
-        if shape_code > 0:
-            proj_omega = proj_omega_half + 0.5 * omega_dot * dt
+        if shape_code >= 0:
+            proj_omega[:] = proj_omega_half + 0.5 * omega_dot * dt
 
         # 5. Populate history arrays at specified intervals
         if save_interval > 0 and step % save_interval == 0:
@@ -2251,7 +2291,7 @@ def _fused_shell_loop_jit(
                         se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e] ** 2) / E
 
                 proj_rot_ke = 0.0
-                if shape_code > 0:
+                if shape_code >= 0:
                     proj_rot_ke = 0.5 * (
                         (1.0 / proj_inertia_inv_diag[0]) * proj_omega[0] ** 2
                         + (1.0 / proj_inertia_inv_diag[1]) * proj_omega[1] ** 2

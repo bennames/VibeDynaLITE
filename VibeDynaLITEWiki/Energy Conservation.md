@@ -32,11 +32,11 @@ Computed by `compute_strain_energy()` in `energy.py`. Only tensile strains are c
 
 ### $KE_{projectile}$ — Projectile Kinetic Energy
 
-The rigid-body kinetic energy of the projectile:
+The rigid-body kinetic energy of the projectile, including both translational and rotational components:
 
-$$KE_{projectile} = \frac{1}{2} m_{proj} \|v_{proj}\|^2$$
+$$KE_{projectile} = \frac{1}{2} m_{proj} \|v_{proj}\|^2 + \frac{1}{2} \boldsymbol{\omega}_{body}^T \boldsymbol{I}_{body} \boldsymbol{\omega}_{body}$$
 
-Computed inline in the fused loop. This starts at $KE_{initial}$ and decreases as the projectile decelerates. For a full perforation event, it levels off at a non-zero residual velocity. For a catch, it goes to zero.
+Computed inline in the fused loop. This starts at $KE_{initial}$ and decreases as the projectile decelerates and transfers energy via impact. For a full perforation event, it levels off at a non-zero residual velocity. For a catch, it goes to zero.
 
 ### $E_{damped}$ — Damping Dissipation
 

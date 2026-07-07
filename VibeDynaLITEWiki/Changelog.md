@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 9: 6-DOF Rotational Physics Correction, Labeled Global CSYS & Viewport redrawing stability
+
+### Added
+- **Labeled Global CSYS Tripod**: Added a labeled coordinate system tripod (X in Red, Y in Green, Z in Blue) to both PyVista and DearPyGui fallback viewfinders to visually align spatial directions.
+- **Initial Orientation in Degrees**: Implemented Roll, Pitch, and Yaw in degrees in the GUI config panel (instead of quaternions) for intuitive user input, with automatic conversion to quaternions for solver input.
+- **Initial Rotation in RPM**: Changed initial angular velocity units in the GUI to RPM, converting it to rad/s for integration.
+- **Exact Rotational KE Feedback**: Calculated the exact initial rotational kinetic energy in the GUI config panel feedback based on the selected projectile shape and its principal moments of inertia.
+- **Corten Steel in Fabric Mode**: Allowed the baseline "Corten Steel (14 Gauge)" preset to be selected and simulated in standard Fabric mode for immediate structural performance comparison.
+
+### Fixed
+- **Physically Rigorous 6-DOF Rotational Dynamics**: Fixed the global torque/inertia multiplication bug by rotating global torque and angular velocity into the body-fixed frame, integrating Euler's equations of motion with diagonal inertia components, and rotating the updated angular acceleration back to the global frame.
+- **In-place Rotational Velocity (proj_omega) Updates**: Fixed JIT shell solver loop reassigning `proj_omega` instead of slice mutating it in-place (`proj_omega[:] = ...`), which previously blocked telemetry updates from capturing correct angular velocities.
+- **UnboundLocalError in Subprocess Termination**: Resolved `UnboundLocalError: cannot access local variable 'reason'` by pre-initializing `reason = None` before the time integration loop starts.
+- **GUI Projectile Panning De-synchronization**: Added camera panning offsets (`self.pan_x` and `self.pan_y`) to the projectile projection screen coordinates in the fallback DPG renderer, ensuring the projectile is panned/zoomed in sync with the grid nodes.
+- **Fabric Mode Red Mesh Error**: Only activated the vectorized quadrilateral element-to-spring failure mapping when structure type is `"metallic_sheet"`, preventing index/size mismatches from coloring the entire fabric mesh red as failed.
+
+---
+
 ## [Unreleased] — Sprint 8: 2D Explicit Finite Element Metallic Sheet Solver & Container Impacts
 
 ### Added

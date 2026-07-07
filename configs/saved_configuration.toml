@@ -1,0 +1,33 @@
+[material]
+name = "Kevlar 29"
+tensile_modulus_gpa = 71.0  # Modulus sourced from DuPont Kevlar Tech Guide
+failure_strain = 0.036      # Ultimate strain at failure from literature
+tensile_strength_gpa = 2.92 # Tensile strength from literature
+fiber_density_gcc = 1.44    # Fiber density in g/cm3
+areal_density_kgm2 = 0.47   # Areal density in kg/m2
+shear_ratio = 0.0004
+crimp_factor = 0.10
+yarn_count = [17, 17]
+
+[grid]
+nx = 11
+ny = 11
+dx = 0.01
+n_plies = 1
+boundary_type = "fixed"
+
+[projectile]
+mass = 0.05
+velocity = [0.0, 0.0, 400.0]
+position = [0.0, 0.0, -0.005]
+blade_width = 0.02
+edge_thickness = 0.005
+
+[simulation]
+duration = 0.001
+cfl_factor = 0.8
+damping_model = "rayleigh"
+damping_coefficient = 0.05
+rayleigh_alpha = 0.0
+rayleigh_beta = 1e-9
+snapshot_interval = 100

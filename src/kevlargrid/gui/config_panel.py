@@ -896,8 +896,7 @@ class ConfigPanel:
 
         # Update combo box items based on structure type
         if is_fabric:
-            fabric_presets = [k for k in MATERIALS if "Steel" not in k]
-            dpg.configure_item(self.mat_combo, items=[*fabric_presets, "Custom"])
+            dpg.configure_item(self.mat_combo, items=[*list(MATERIALS.keys()), "Custom"])
             dpg.set_value(self.mat_combo, "Kevlar 29")
             self._on_material_change(None, "Kevlar 29")
         else:
@@ -982,11 +981,37 @@ class ConfigPanel:
         v_mag = math.sqrt(vx**2 + vy**2 + vz**2)
         trans_ke = 0.5 * mass * v_mag**2
 
-        # Estimate rotational KE (assuming spherical inertia for simple feedback)
-        # I = 2/5 M R^2 (we use 0.01 as a dummy characteristic length for the UI display)
-        inertia_approx = 0.4 * mass * (0.01) ** 2
-        w_mag = math.sqrt(wx**2 + wy**2 + wz**2)
-        rot_ke = 0.5 * inertia_approx * w_mag**2
+        # Compute exact rotational KE using principal moments of inertia S6.2.2
+        try:
+            from kevlargrid.solver.projectile import Projectile
+            temp_proj = Projectile(
+                mass=mass,
+                velocity=[vx, vy, vz],
+                position=[0.0, 0.0, 0.0],
+                shape_type=dpg.get_value(self.proj_shape).lower(),
+                blade_width=dpg.get_value(self.proj_width),
+                edge_thickness=dpg.get_value(self.proj_thickness),
+                radius=dpg.get_value(self.proj_radius),
+                length=dpg.get_value(self.proj_length),
+                edge_radius=dpg.get_value(self.proj_edge_radius),
+                ogive_multiplier=dpg.get_value(self.proj_ogive_multiplier),
+                span=dpg.get_value(self.proj_span),
+                root_chord=dpg.get_value(self.proj_root_chord),
+                tip_chord=dpg.get_value(self.proj_tip_chord),
+                twist=dpg.get_value(self.proj_twist),
+                thickness_ratio=dpg.get_value(self.proj_thickness_ratio),
+                tip_radius=dpg.get_value(self.proj_tip_radius),
+            )
+            I_diag = np.diagonal(temp_proj.inertia)
+            wx_rad = wx * math.pi / 30.0
+            wy_rad = wy * math.pi / 30.0
+            wz_rad = wz * math.pi / 30.0
+            rot_ke = 0.5 * (I_diag[0] * wx_rad**2 + I_diag[1] * wy_rad**2 + I_diag[2] * wz_rad**2)
+        except Exception:
+            inertia_approx = 0.4 * mass * (0.01) ** 2
+            w_mag_rad = math.sqrt(wx**2 + wy**2 + wz**2) * math.pi / 30.0
+            rot_ke = 0.5 * inertia_approx * w_mag_rad**2
+
         ke = trans_ke + rot_ke
         dpg.set_value(self.proj_ke_display, ke)
 

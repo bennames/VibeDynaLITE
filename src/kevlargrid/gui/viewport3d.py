@@ -327,6 +327,7 @@ class Viewport3D:
         thickness_ratio: float = 12.0,
         tip_radius: float = 0.002,
         t_ply: float | None = None,
+        structure_type: str = "fabric",
     ) -> None:
         """Store grid model coordinates and regenerate layer visibility checkboxes.
 
@@ -358,6 +359,7 @@ class Viewport3D:
             self.n_plies = n_plies
             self.n_nodes_per_layer = n_nodes_per_layer
             self.layer_visibility = [True] * n_plies
+            self.structure_type = structure_type
 
             # Cache projectile params
             self.proj_shape_type = shape_type
@@ -380,7 +382,7 @@ class Viewport3D:
             self.proj_actor = None
 
             # Pre-compute element indices for each spring to map element failure to spring failure
-            if grid.elements is not None and len(grid.elements) > 0:
+            if structure_type == "metallic_sheet" and grid.elements is not None and len(grid.elements) > 0:
                 n_nodes = len(grid.nodes)
                 node_elements: list[list[int]] = [[] for _ in range(n_nodes)]
                 for e_idx, elem in enumerate(grid.elements):
@@ -600,7 +602,7 @@ class Viewport3D:
             springs = self.grid.springs
             n_springs = len(springs)
 
-            if getattr(self, "spring_to_elements_map", None) is not None:
+            if getattr(self, "structure_type", "fabric") == "metallic_sheet" and getattr(self, "spring_to_elements_map", None) is not None:
                 failed_elements = self.grid.failed
                 failed_elements_padded = np.append(failed_elements, True)
                 el0 = self.spring_to_elements_map[:, 0]
@@ -944,11 +946,11 @@ class Viewport3D:
                     cam1_z = max(pt1_cam[2] + self.distance, 1e-4)
                     cam2_z = max(pt2_cam[2] + self.distance, 1e-4)
 
-                    scr1_x = self.center_x + (self.focal_length * pt1_cam[0] / cam1_z)
-                    scr1_y = self.center_y - (self.focal_length * pt1_cam[1] / cam1_z)
+                    scr1_x = self.center_x + (self.focal_length * pt1_cam[0] / cam1_z) + self.pan_x
+                    scr1_y = self.center_y - (self.focal_length * pt1_cam[1] / cam1_z) + self.pan_y
 
-                    scr2_x = self.center_x + (self.focal_length * pt2_cam[0] / cam2_z)
-                    scr2_y = self.center_y - (self.focal_length * pt2_cam[1] / cam2_z)
+                    scr2_x = self.center_x + (self.focal_length * pt2_cam[0] / cam2_z) + self.pan_x
+                    scr2_y = self.center_y - (self.focal_length * pt2_cam[1] / cam2_z) + self.pan_y
 
                     dpg.draw_line(
                         [float(scr1_x), float(scr1_y)],

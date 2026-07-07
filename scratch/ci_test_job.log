@@ -1,0 +1,268 @@
+test	Set up job	﻿2026-06-21T04:29:35.6424645Z Current runner version: '2.335.1'
+test	Set up job	2026-06-21T04:29:35.6451079Z ##[group]Runner Image Provisioner
+test	Set up job	2026-06-21T04:29:35.6452150Z Hosted Compute Agent
+test	Set up job	2026-06-21T04:29:35.6452757Z Version: 20260611.554
+test	Set up job	2026-06-21T04:29:35.6453426Z Commit: 5e0782fdc9014723d3be820dd114dd31555c2bd1
+test	Set up job	2026-06-21T04:29:35.6454421Z Build Date: 2026-06-11T21:40:46Z
+test	Set up job	2026-06-21T04:29:35.6455152Z Worker ID: {47ed4615-1e5f-43ea-9049-70362fbb4028}
+test	Set up job	2026-06-21T04:29:35.6455905Z Azure Region: eastus
+test	Set up job	2026-06-21T04:29:35.6456509Z ##[endgroup]
+test	Set up job	2026-06-21T04:29:35.6457940Z ##[group]Operating System
+test	Set up job	2026-06-21T04:29:35.6458651Z Ubuntu
+test	Set up job	2026-06-21T04:29:35.6459191Z 24.04.4
+test	Set up job	2026-06-21T04:29:35.6459698Z LTS
+test	Set up job	2026-06-21T04:29:35.6460345Z ##[endgroup]
+test	Set up job	2026-06-21T04:29:35.6461099Z ##[group]Runner Image
+test	Set up job	2026-06-21T04:29:35.6461840Z Image: ubuntu-24.04
+test	Set up job	2026-06-21T04:29:35.6462435Z Version: 20260615.205.1
+test	Set up job	2026-06-21T04:29:35.6463500Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260615.205/images/ubuntu/Ubuntu2404-Readme.md
+test	Set up job	2026-06-21T04:29:35.6465276Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260615.205
+test	Set up job	2026-06-21T04:29:35.6466262Z ##[endgroup]
+test	Set up job	2026-06-21T04:29:35.6467506Z ##[group]GITHUB_TOKEN Permissions
+test	Set up job	2026-06-21T04:29:35.6469453Z Contents: read
+test	Set up job	2026-06-21T04:29:35.6470141Z Metadata: read
+test	Set up job	2026-06-21T04:29:35.6471052Z Packages: read
+test	Set up job	2026-06-21T04:29:35.6472087Z ##[endgroup]
+test	Set up job	2026-06-21T04:29:35.6474433Z Secret source: Actions
+test	Set up job	2026-06-21T04:29:35.6475445Z Prepare workflow directory
+test	Set up job	2026-06-21T04:29:35.6809503Z Prepare all required actions
+test	Set up job	2026-06-21T04:29:35.6847097Z Getting action download info
+test	Set up job	2026-06-21T04:29:35.9162339Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+test	Set up job	2026-06-21T04:29:35.9878215Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+test	Set up job	2026-06-21T04:29:36.2876646Z Complete job name: test
+test	Run actions/checkout@v4	﻿2026-06-21T04:29:36.3583273Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3592313Z ##[group]Run actions/checkout@v4
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3593032Z with:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3593481Z   repository: bennames/VibeDynaLITE
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3598161Z   token: ***
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3598595Z   ssh-strict: true
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3599043Z   ssh-user: git
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3599492Z   persist-credentials: true
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3599993Z   clean: true
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3600443Z   sparse-checkout-cone-mode: true
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3601119Z   fetch-depth: 1
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3601557Z   fetch-tags: false
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3602003Z   show-progress: true
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3602455Z   lfs: false
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3602871Z   submodules: false
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3603365Z   set-safe-directory: true
+test	Run actions/checkout@v4	2026-06-21T04:29:36.3604052Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4622024Z Syncing repository: bennames/VibeDynaLITE
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4624060Z ##[group]Getting Git version info
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4624831Z Working directory is '/home/runner/work/VibeDynaLITE/VibeDynaLITE'
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4626064Z [command]/usr/bin/git version
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4652470Z git version 2.54.0
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4703391Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4718287Z Temporarily overriding HOME='/home/runner/work/_temp/3f88daf8-328f-4d1e-864b-2e8dfc075ca6' before making global git config changes
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4720574Z Adding repository directory to the temporary git global config as a safe directory
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4724543Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/VibeDynaLITE/VibeDynaLITE
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4769972Z Deleting the contents of '/home/runner/work/VibeDynaLITE/VibeDynaLITE'
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4774316Z ##[group]Initializing the repository
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4778321Z [command]/usr/bin/git init /home/runner/work/VibeDynaLITE/VibeDynaLITE
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4872279Z hint: Using 'master' as the name for the initial branch. This default branch name
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4873794Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4874797Z hint: to use in all of your new repositories, which will suppress this warning,
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4875719Z hint: call:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4876262Z hint:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4876767Z hint: 	git config --global init.defaultBranch <name>
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4877384Z hint:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4877950Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4878890Z hint: 'development'. The just-created branch can be renamed via this command:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4879893Z hint:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4880533Z hint: 	git branch -m <name>
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4881403Z hint:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4882173Z hint: Disable this message with "git config set advice.defaultBranchName false"
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4883215Z Initialized empty Git repository in /home/runner/work/VibeDynaLITE/VibeDynaLITE/.git/
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4884914Z [command]/usr/bin/git remote add origin https://github.com/bennames/VibeDynaLITE
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4925975Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4929981Z ##[group]Disabling automatic garbage collection
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4931118Z [command]/usr/bin/git config --local gc.auto 0
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4959915Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4960792Z ##[group]Setting up auth
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4965967Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+test	Run actions/checkout@v4	2026-06-21T04:29:36.4998828Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5308035Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5338711Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5566651Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5598056Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5824709Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5858959Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5859752Z ##[group]Fetching the repository
+test	Run actions/checkout@v4	2026-06-21T04:29:36.5867987Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +daf28496d0d0e492541072f87fdca339e6075c6f:refs/remotes/origin/main
+test	Run actions/checkout@v4	2026-06-21T04:29:36.7926751Z From https://github.com/bennames/VibeDynaLITE
+test	Run actions/checkout@v4	2026-06-21T04:29:36.7927733Z  * [new ref]         daf28496d0d0e492541072f87fdca339e6075c6f -> origin/main
+test	Run actions/checkout@v4	2026-06-21T04:29:36.7958680Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.7961517Z ##[group]Determining the checkout info
+test	Run actions/checkout@v4	2026-06-21T04:29:36.7962474Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.7966594Z [command]/usr/bin/git sparse-checkout disable
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8009763Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8038777Z ##[group]Checking out the ref
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8043358Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8182729Z Switched to a new branch 'main'
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8185278Z branch 'main' set up to track 'origin/main'.
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8191842Z ##[endgroup]
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8238053Z [command]/usr/bin/git log -1 --format=%H
+test	Run actions/checkout@v4	2026-06-21T04:29:36.8262242Z daf28496d0d0e492541072f87fdca339e6075c6f
+test	Set up Python 3.11	﻿2026-06-21T04:29:36.8546257Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+test	Set up Python 3.11	2026-06-21T04:29:36.8549114Z ##[group]Run actions/setup-python@v5
+test	Set up Python 3.11	2026-06-21T04:29:36.8549638Z with:
+test	Set up Python 3.11	2026-06-21T04:29:36.8550045Z   python-version: 3.11
+test	Set up Python 3.11	2026-06-21T04:29:36.8550489Z   cache: pip
+test	Set up Python 3.11	2026-06-21T04:29:36.8551068Z   check-latest: false
+test	Set up Python 3.11	2026-06-21T04:29:36.8555542Z   token: ***
+test	Set up Python 3.11	2026-06-21T04:29:36.8555971Z   update-environment: true
+test	Set up Python 3.11	2026-06-21T04:29:36.8556463Z   allow-prereleases: false
+test	Set up Python 3.11	2026-06-21T04:29:36.8556938Z   freethreaded: false
+test	Set up Python 3.11	2026-06-21T04:29:36.8557376Z ##[endgroup]
+test	Set up Python 3.11	2026-06-21T04:29:36.9884360Z ##[group]Installed versions
+test	Set up Python 3.11	2026-06-21T04:29:36.9966222Z (node:2274) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+test	Set up Python 3.11	2026-06-21T04:29:36.9968341Z (Use `node --trace-deprecation ...` to show where the warning was created)
+test	Set up Python 3.11	2026-06-21T04:29:36.9969193Z Successfully set up CPython (3.11.15)
+test	Set up Python 3.11	2026-06-21T04:29:36.9970205Z ##[endgroup]
+test	Set up Python 3.11	2026-06-21T04:29:37.0570916Z [command]/opt/hostedtoolcache/Python/3.11.15/x64/bin/pip cache dir
+test	Set up Python 3.11	2026-06-21T04:29:37.3279722Z /home/runner/.cache/pip
+test	Set up Python 3.11	2026-06-21T04:29:37.4180064Z pip cache is not found
+test	Install dependencies	﻿2026-06-21T04:29:37.4325210Z ##[group]Run pip install -e ".[dev]"
+test	Install dependencies	2026-06-21T04:29:37.4325875Z ^[[36;1mpip install -e ".[dev]"^[[0m
+test	Install dependencies	2026-06-21T04:29:37.4460969Z shell: /usr/bin/bash -e {0}
+test	Install dependencies	2026-06-21T04:29:37.4461486Z env:
+test	Install dependencies	2026-06-21T04:29:37.4461962Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Install dependencies	2026-06-21T04:29:37.4462639Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.15/x64/lib/pkgconfig
+test	Install dependencies	2026-06-21T04:29:37.4463290Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Install dependencies	2026-06-21T04:29:37.4463866Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Install dependencies	2026-06-21T04:29:37.4464432Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Install dependencies	2026-06-21T04:29:37.4465011Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.15/x64/lib
+test	Install dependencies	2026-06-21T04:29:37.4465560Z ##[endgroup]
+test	Install dependencies	2026-06-21T04:29:38.0104781Z Obtaining file:///home/runner/work/VibeDynaLITE/VibeDynaLITE
+test	Install dependencies	2026-06-21T04:29:38.0121773Z   Installing build dependencies: started
+test	Install dependencies	2026-06-21T04:29:38.7187861Z   Installing build dependencies: finished with status 'done'
+test	Install dependencies	2026-06-21T04:29:38.7193861Z   Checking if build backend supports build_editable: started
+test	Install dependencies	2026-06-21T04:29:38.7712099Z   Checking if build backend supports build_editable: finished with status 'done'
+test	Install dependencies	2026-06-21T04:29:38.7719122Z   Getting requirements to build editable: started
+test	Install dependencies	2026-06-21T04:29:38.9079500Z   Getting requirements to build editable: finished with status 'done'
+test	Install dependencies	2026-06-21T04:29:38.9089653Z   Installing backend dependencies: started
+test	Install dependencies	2026-06-21T04:29:39.3784167Z   Installing backend dependencies: finished with status 'done'
+test	Install dependencies	2026-06-21T04:29:39.3791557Z   Preparing editable metadata (pyproject.toml): started
+test	Install dependencies	2026-06-21T04:29:39.5767821Z   Preparing editable metadata (pyproject.toml): finished with status 'done'
+test	Install dependencies	2026-06-21T04:29:39.6916565Z Collecting h5py>=3.9 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:39.7434826Z   Downloading h5py-3.16.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (3.0 kB)
+test	Install dependencies	2026-06-21T04:29:39.7605039Z Collecting jinja2>=3.1 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:39.7643682Z   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+test	Install dependencies	2026-06-21T04:29:39.9209901Z Collecting numpy>=1.24 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:39.9247603Z   Downloading numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+test	Install dependencies	2026-06-21T04:29:40.0062177Z Collecting mypy>=1.8 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.0098493Z   Downloading mypy-2.1.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.3 kB)
+test	Install dependencies	2026-06-21T04:29:40.0238596Z Collecting pytest-benchmark>=4.0 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.0275928Z   Downloading pytest_benchmark-5.2.3-py3-none-any.whl.metadata (29 kB)
+test	Install dependencies	2026-06-21T04:29:40.0534865Z Collecting pytest>=7.4 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.0568200Z   Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+test	Install dependencies	2026-06-21T04:29:40.3312078Z Collecting ruff>=0.4 (from kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.3351997Z   Downloading ruff-0.15.18-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (26 kB)
+test	Install dependencies	2026-06-21T04:29:40.3789534Z Collecting MarkupSafe>=2.0 (from jinja2>=3.1->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.3824982Z   Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+test	Install dependencies	2026-06-21T04:29:40.3965059Z Collecting typing_extensions>=4.6.0 (from mypy>=1.8->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.4000060Z   Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+test	Install dependencies	2026-06-21T04:29:40.4091279Z Collecting mypy_extensions>=1.0.0 (from mypy>=1.8->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.4128242Z   Downloading mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+test	Install dependencies	2026-06-21T04:29:40.4223957Z Collecting pathspec>=1.0.0 (from mypy>=1.8->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.4237720Z   Using cached pathspec-1.1.1-py3-none-any.whl.metadata (14 kB)
+test	Install dependencies	2026-06-21T04:29:40.5044789Z Collecting librt>=0.11.0 (from mypy>=1.8->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.5082032Z   Downloading librt-0.11.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (1.3 kB)
+test	Install dependencies	2026-06-21T04:29:40.5285667Z Collecting ast-serialize<1.0.0,>=0.3.0 (from mypy>=1.8->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.5320579Z   Downloading ast_serialize-0.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.3 kB)
+test	Install dependencies	2026-06-21T04:29:40.5429131Z Collecting iniconfig>=1.0.1 (from pytest>=7.4->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.5459878Z   Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+test	Install dependencies	2026-06-21T04:29:40.5579275Z Collecting packaging>=22 (from pytest>=7.4->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.5599589Z   Using cached packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+test	Install dependencies	2026-06-21T04:29:40.5707795Z Collecting pluggy<2,>=1.5 (from pytest>=7.4->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.5721278Z   Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+test	Install dependencies	2026-06-21T04:29:40.5902400Z Collecting pygments>=2.7.2 (from pytest>=7.4->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.5944306Z   Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+test	Install dependencies	2026-06-21T04:29:40.6096770Z Collecting py-cpuinfo (from pytest-benchmark>=4.0->kevlargrid==0.1.0)
+test	Install dependencies	2026-06-21T04:29:40.6131533Z   Downloading py_cpuinfo-9.0.0-py3-none-any.whl.metadata (794 bytes)
+test	Install dependencies	2026-06-21T04:29:40.6210187Z Downloading h5py-3.16.0-cp311-cp311-manylinux_2_28_x86_64.whl (5.0 MB)
+test	Install dependencies	2026-06-21T04:29:40.6625844Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.0/5.0 MB 136.0 MB/s  0:00:00
+test	Install dependencies	2026-06-21T04:29:40.6659223Z Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+test	Install dependencies	2026-06-21T04:29:40.6714507Z Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+test	Install dependencies	2026-06-21T04:29:40.6770013Z Downloading mypy-2.1.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (14.9 MB)
+test	Install dependencies	2026-06-21T04:29:40.7642662Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.9/14.9 MB 179.8 MB/s  0:00:00
+test	Install dependencies	2026-06-21T04:29:40.7678066Z Downloading ast_serialize-0.5.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.3 MB)
+test	Install dependencies	2026-06-21T04:29:40.7744885Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 236.5 MB/s  0:00:00
+test	Install dependencies	2026-06-21T04:29:40.7779980Z Downloading librt-0.11.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (497 kB)
+test	Install dependencies	2026-06-21T04:29:40.7883314Z Downloading mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+test	Install dependencies	2026-06-21T04:29:40.7930573Z Downloading numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+test	Install dependencies	2026-06-21T04:29:40.8410921Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.9/16.9 MB 364.8 MB/s  0:00:00
+test	Install dependencies	2026-06-21T04:29:40.8425841Z Using cached pathspec-1.1.1-py3-none-any.whl (57 kB)
+test	Install dependencies	2026-06-21T04:29:40.8459629Z Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+test	Install dependencies	2026-06-21T04:29:40.8501622Z Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+test	Install dependencies	2026-06-21T04:29:40.8533645Z Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+test	Install dependencies	2026-06-21T04:29:40.8562548Z Using cached packaging-26.2-py3-none-any.whl (100 kB)
+test	Install dependencies	2026-06-21T04:29:40.8593985Z Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+test	Install dependencies	2026-06-21T04:29:40.8655933Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 240.1 MB/s  0:00:00
+test	Install dependencies	2026-06-21T04:29:40.8690321Z Downloading pytest_benchmark-5.2.3-py3-none-any.whl (45 kB)
+test	Install dependencies	2026-06-21T04:29:40.8739014Z Downloading ruff-0.15.18-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (11.6 MB)
+test	Install dependencies	2026-06-21T04:29:40.9070895Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.6/11.6 MB 364.6 MB/s  0:00:00
+test	Install dependencies	2026-06-21T04:29:40.9103499Z Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+test	Install dependencies	2026-06-21T04:29:40.9153267Z Downloading py_cpuinfo-9.0.0-py3-none-any.whl (22 kB)
+test	Install dependencies	2026-06-21T04:29:41.0037980Z Building wheels for collected packages: kevlargrid
+test	Install dependencies	2026-06-21T04:29:41.0044934Z   Building editable for kevlargrid (pyproject.toml): started
+test	Install dependencies	2026-06-21T04:29:41.0388870Z   Building editable for kevlargrid (pyproject.toml): finished with status 'done'
+test	Install dependencies	2026-06-21T04:29:41.0393390Z   Created wheel for kevlargrid: filename=kevlargrid-0.1.0-py3-none-any.whl size=4071 sha256=e2b55676cc7ecffb192af44bb36a1170ec5b0c8808b33d3ab8e98e30afd9460b
+test	Install dependencies	2026-06-21T04:29:41.0395374Z   Stored in directory: /tmp/pip-ephem-wheel-cache-6uw6fp0s/wheels/cf/7c/0a/8677af6e60f0fa6db7591485d20af9b10208ab678bcbdde574
+test	Install dependencies	2026-06-21T04:29:41.0412220Z Successfully built kevlargrid
+test	Install dependencies	2026-06-21T04:29:41.0788216Z Installing collected packages: py-cpuinfo, typing_extensions, ruff, pygments, pluggy, pathspec, packaging, numpy, mypy_extensions, MarkupSafe, librt, iniconfig, ast-serialize, pytest, mypy, jinja2, h5py, pytest-benchmark, kevlargrid
+test	Install dependencies	2026-06-21T04:29:45.8924040Z 
+test	Install dependencies	2026-06-21T04:29:45.8938608Z Successfully installed MarkupSafe-3.0.3 ast-serialize-0.5.0 h5py-3.16.0 iniconfig-2.3.0 jinja2-3.1.6 kevlargrid-0.1.0 librt-0.11.0 mypy-2.1.0 mypy_extensions-1.1.0 numpy-2.4.6 packaging-26.2 pathspec-1.1.1 pluggy-1.6.0 py-cpuinfo-9.0.0 pygments-2.20.0 pytest-9.1.1 pytest-benchmark-5.2.3 ruff-0.15.18 typing_extensions-4.15.0
+test	Run unit tests	﻿2026-06-21T04:29:45.9910152Z ##[group]Run pytest tests/unit -v --tb=short
+test	Run unit tests	2026-06-21T04:29:45.9910561Z ^[[36;1mpytest tests/unit -v --tb=short^[[0m
+test	Run unit tests	2026-06-21T04:29:45.9946870Z shell: /usr/bin/bash -e {0}
+test	Run unit tests	2026-06-21T04:29:45.9947127Z env:
+test	Run unit tests	2026-06-21T04:29:45.9947401Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Run unit tests	2026-06-21T04:29:45.9947846Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.15/x64/lib/pkgconfig
+test	Run unit tests	2026-06-21T04:29:45.9948260Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Run unit tests	2026-06-21T04:29:45.9948643Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Run unit tests	2026-06-21T04:29:45.9949011Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.15/x64
+test	Run unit tests	2026-06-21T04:29:45.9949380Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.15/x64/lib
+test	Run unit tests	2026-06-21T04:29:45.9949710Z ##[endgroup]
+test	Run unit tests	2026-06-21T04:29:46.5055395Z ============================= test session starts ==============================
+test	Run unit tests	2026-06-21T04:29:46.5056487Z platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- /opt/hostedtoolcache/Python/3.11.15/x64/bin/python
+test	Run unit tests	2026-06-21T04:29:46.5057197Z cachedir: .pytest_cache
+test	Run unit tests	2026-06-21T04:29:46.5057897Z benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+test	Run unit tests	2026-06-21T04:29:46.5058651Z rootdir: /home/runner/work/VibeDynaLITE/VibeDynaLITE
+test	Run unit tests	2026-06-21T04:29:46.5058978Z configfile: pyproject.toml
+test	Run unit tests	2026-06-21T04:29:46.5059222Z plugins: benchmark-5.2.3
+test	Run unit tests	2026-06-21T04:29:46.7899640Z collecting ... collected 41 items / 1 error
+test	Run unit tests	2026-06-21T04:29:46.7900297Z 
+test	Run unit tests	2026-06-21T04:29:46.7900531Z ==================================== ERRORS ====================================
+test	Run unit tests	2026-06-21T04:29:46.7901254Z _________________ ERROR collecting tests/unit/test_sprint2.py __________________
+test	Run unit tests	2026-06-21T04:29:46.7902301Z ImportError while importing test module '/home/runner/work/VibeDynaLITE/VibeDynaLITE/tests/unit/test_sprint2.py'.
+test	Run unit tests	2026-06-21T04:29:46.7902907Z Hint: make sure your test modules/packages have valid Python names.
+test	Run unit tests	2026-06-21T04:29:46.7903262Z Traceback:
+test	Run unit tests	2026-06-21T04:29:46.7903663Z /opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+test	Run unit tests	2026-06-21T04:29:46.7904208Z     return _bootstrap._gcd_import(name[level:], package, level)
+test	Run unit tests	2026-06-21T04:29:46.7904555Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test	Run unit tests	2026-06-21T04:29:46.7904865Z tests/unit/test_sprint2.py:5: in <module>
+test	Run unit tests	2026-06-21T04:29:46.7905139Z     import taichi as ti
+test	Run unit tests	2026-06-21T04:29:46.7905409Z E   ModuleNotFoundError: No module named 'taichi'
+test	Run unit tests	2026-06-21T04:29:46.7905769Z =========================== short test summary info ============================
+test	Run unit tests	2026-06-21T04:29:46.7906120Z ERROR tests/unit/test_sprint2.py
+test	Run unit tests	2026-06-21T04:29:46.7906473Z !!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+test	Run unit tests	2026-06-21T04:29:46.7906868Z =============================== 1 error in 0.27s ===============================
+test	Run unit tests	2026-06-21T04:29:46.8220545Z ##[error]Process completed with exit code 2.
+test	Post Run actions/checkout@v4	﻿2026-06-21T04:29:46.8354087Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.8355266Z Post job cleanup.
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9184012Z [command]/usr/bin/git version
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9254446Z git version 2.54.0
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9288528Z Temporarily overriding HOME='/home/runner/work/_temp/20654eb3-78d3-4a36-b3fd-9dd9abd35305' before making global git config changes
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9289483Z Adding repository directory to the temporary git global config as a safe directory
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9293737Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/VibeDynaLITE/VibeDynaLITE
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9334396Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9368695Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9609506Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9634398Z http.https://github.com/.extraheader
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9644687Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9677197Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9911138Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+test	Post Run actions/checkout@v4	2026-06-21T04:29:46.9942304Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+test	Complete job	﻿2026-06-21T04:29:47.0312501Z Cleaning up orphan processes
+test	Complete job	2026-06-21T04:29:47.0594890Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

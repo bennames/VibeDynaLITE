@@ -1,0 +1,41 @@
+[2026-07-07 08:57:54] [WARNING]: Projectile initially overlaps Kevlar grid. Adjusted Z starting position to -0.010000 m to ensure tangent contact.
+[2026-07-07 08:57:54] [INFO]: ============================================================
+[2026-07-07 08:57:54] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-07-07 08:57:54] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-07-07 08:57:54] [INFO]: Python: 3.12.13
+[2026-07-07 08:57:54] [INFO]: Active Backend: numba
+[2026-07-07 08:57:54] [INFO]: Numba Threads Configured: 10
+[2026-07-07 08:57:54] [INFO]: Grid Dimensions: 5x5 (plies: 1)
+[2026-07-07 08:57:54] [INFO]: Grid Nodes: 25 | Springs: 72
+[2026-07-07 08:57:54] [INFO]: Projectile: Shape=sphere | Mass=0.05000 kg | Initial Velocity=[0.0, 0.0, 400.0] m/s
+[2026-07-07 08:57:54] [INFO]: Initial System Energy: 4000.0000 J
+[2026-07-07 08:57:54] [INFO]: ============================================================
+[2026-07-07 08:57:54] [ERROR]: Simulation run failed with exception:
+[2026-07-07 08:57:54] [ERROR]: Traceback (most recent call last):
+  File "/Users/bennames/Developer/VibeDynaLITE/src/kevlargrid/solver/worker.py", line 658, in run_solver_process
+    is_penetrated = reason == "penetration"
+                    ^^^^^^
+UnboundLocalError: cannot access local variable 'reason' where it is not associated with a value
+
+[2026-07-07 08:57:54] [INFO]: ============================================================
+[2026-07-07 08:57:54] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-07-07 08:57:54] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-07-07 08:57:54] [INFO]: Python: 3.12.13
+[2026-07-07 08:57:54] [INFO]: Active Backend: numba
+[2026-07-07 08:57:54] [INFO]: Numba Threads Configured: 10
+[2026-07-07 08:57:54] [INFO]: Grid Dimensions: 5x5 (plies: 1)
+[2026-07-07 08:57:54] [INFO]: Grid Nodes: 25 | Springs: 72
+[2026-07-07 08:57:54] [INFO]: Projectile: Shape=sphere | Mass=0.05000 kg | Initial Velocity=[0.0, 0.0, 400.0] m/s
+[2026-07-07 08:57:54] [INFO]: Initial System Energy: 4000.0000 J
+[2026-07-07 08:57:54] [INFO]: ============================================================
+[2026-07-07 08:58:10] [INFO]: Step 7: t=1.9 us | z_pos=-14.242 mm | v_z=400.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-07-07 08:58:10] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4000.0000 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=4000.0000
+[2026-07-07 08:58:10] [INFO]: ============================================================
+[2026-07-07 08:58:10] [INFO]: Simulation Run Completed Successfully
+[2026-07-07 08:58:10] [INFO]: Outcome: ARRESTED
+[2026-07-07 08:58:10] [INFO]: Final Velocity: 400.00 m/s
+[2026-07-07 08:58:10] [INFO]: Peak Deceleration: 0.00 g
+[2026-07-07 08:58:10] [INFO]: Failed Springs: 0 (0.00%)
+[2026-07-07 08:58:10] [INFO]: Max Layer Perforated: -1
+[2026-07-07 08:58:10] [INFO]: Energy Dissipation Efficiency: 0.00%
+[2026-07-07 08:58:10] [INFO]: ============================================================

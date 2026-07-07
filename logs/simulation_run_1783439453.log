@@ -1,0 +1,12 @@
+[2026-07-07 08:50:53] [INFO]: ============================================================
+[2026-07-07 08:50:53] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-07-07 08:50:53] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-07-07 08:50:53] [INFO]: Python: 3.12.13
+[2026-07-07 08:50:53] [INFO]: Active Backend: taichi
+[2026-07-07 08:50:53] [INFO]: Taichi CPU/GPU Integration active
+[2026-07-07 08:50:53] [INFO]: Grid Dimensions: 200x200 (plies: 1)
+[2026-07-07 08:50:53] [INFO]: Grid Nodes: 40000 | Springs: 158802
+[2026-07-07 08:50:53] [INFO]: Projectile: Shape=propeller | Mass=1.70000 kg | Initial Velocity=[0.0, 0.0, 70.0] m/s
+[2026-07-07 08:50:53] [INFO]: Initial System Energy: 4623.2465 J
+[2026-07-07 08:50:53] [INFO]: ============================================================
+[2026-07-07 08:50:53] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.

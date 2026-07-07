@@ -267,6 +267,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         n_chunk = 100
         save_interval = 10
         is_paused = False
+        reason = None
 
         while t_sim < duration:
             # Check for control signals from GUI process
