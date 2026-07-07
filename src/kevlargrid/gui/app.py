@@ -618,7 +618,7 @@ def launch() -> None:
                 thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
                 tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                 t_ply=cfg["grid"].get("t_ply", None),
-                structure_type=cfg.get("structure_type", "fabric"),
+                structure_type=cfg.get("simulation", {}).get("structure_type", "fabric"),
             )
             viewport3d.draw_projectile(
                 np.array(cfg["projectile"]["position"], dtype=np.float64),
@@ -709,7 +709,7 @@ def launch() -> None:
             thickness_ratio=reset_cfg["projectile"].get("thickness_ratio", 12.0),
             tip_radius=reset_cfg["projectile"].get("tip_radius", 0.002),
             t_ply=reset_cfg["grid"].get("t_ply", None),
-            structure_type=reset_cfg.get("structure_type", "fabric"),
+            structure_type=reset_cfg.get("simulation", {}).get("structure_type", "fabric"),
         )
         viewport3d.draw_projectile(
             np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
@@ -860,7 +860,7 @@ def launch() -> None:
         thickness_ratio=initial_cfg["projectile"].get("thickness_ratio", 12.0),
         tip_radius=initial_cfg["projectile"].get("tip_radius", 0.002),
         t_ply=initial_cfg["grid"].get("t_ply", None),
-        structure_type=initial_cfg.get("structure_type", "fabric"),
+        structure_type=initial_cfg.get("simulation", {}).get("structure_type", "fabric"),
     )
     viewport3d.draw_projectile(
         np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
@@ -967,7 +967,7 @@ def launch() -> None:
                         thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
                         tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                         t_ply=cfg["grid"].get("t_ply", None),
-                        structure_type=cfg.get("structure_type", "fabric"),
+                        structure_type=cfg.get("simulation", {}).get("structure_type", "fabric"),
                     )
                     viewport3d.draw_projectile(
                         np.array(cfg["projectile"]["position"], dtype=np.float64),
