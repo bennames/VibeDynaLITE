@@ -1813,9 +1813,6 @@ def numba_step_shell_forces_and_failures(
         q_damp_x = rayleigh_beta * G_s * thickness * gam_dot_xz
         q_damp_y = rayleigh_beta * G_s * thickness * gam_dot_yz
 
-        if e == 5:
-            print("    EL 5: gam_xz =", gam_xz, "el_strains[6] =", element_strains[e, 6], "d_gam_xz =", d_gam_xz, "gam_dot_xz =", gam_dot_xz, "q_damp_x =", q_damp_x)
-
         Q_x = G_s * thickness * gam_xz + q_damp_x
         Q_y = G_s * thickness * gam_yz + q_damp_y
 
@@ -2346,9 +2343,6 @@ def _fused_shell_loop_jit(
         ang_accel = net_torques / rot_inertia_col
         ang_velocities = omega_half + 0.5 * ang_accel * dt
 
-        if step < 5:
-            print("    Step", step, "Node 7: net_torque =", net_torques[7], "ang_accel =", ang_accel[7], "omega_half =", omega_half[7], "ang_vel =", ang_velocities[7])
-
         # CFL velocity clamping
         v_full_mag = sqrt(sum(velocities**2, axis=1))
         for i in range(n_nodes):
@@ -2371,13 +2365,6 @@ def _fused_shell_loop_jit(
                 trans_ke = 0.5 * sum(grid_masses * sum(velocities**2, axis=1))
                 rot_ke_sheet = 0.5 * sum(rot_inertia * sum(ang_velocities**2, axis=1))
                 ke = trans_ke + rot_ke_sheet
-
-                if frame_idx < 3:
-                    print("    frame", frame_idx, "trans_ke =", trans_ke, "rot_ke =", rot_ke_sheet, "rot_inertia7 =", rot_inertia[7])
-                if frame_idx == 2:
-                    print("    frame 2, rot_inertia * sum(ang_vel**2, axis=1) =")
-                    for i in range(25):
-                        print("      node", i, "term =", rot_inertia[i] * sum(ang_velocities[i]**2), "inertia =", rot_inertia[i], "ang_vel =", ang_velocities[i])
 
                 # Strain energy se: estimate from element elastic stresses
                 se = 0.0
