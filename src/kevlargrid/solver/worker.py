@@ -685,18 +685,51 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         center_idx = int(np.argmin(dists_in_plane))
 
         max_layer_perf = -1
+        structure_type = sim_cfg.get("structure_type", "fabric")
         for layer in range(n_layers):
             c = center_idx + layer * n_nodes_per_layer
-            start_sp = grid.node_spring_offsets[c]
-            end_sp = grid.node_spring_offsets[c + 1]
-            sp_ids = grid.node_spring_ids[start_sp:end_sp]
-            if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
-                max_layer_perf = layer
+            if structure_type == "metallic_sheet":
+                containing_elements = []
+                for e_idx, elem in enumerate(grid.elements):
+                    if c in elem:
+                        containing_elements.append(e_idx)
+                if len(containing_elements) > 0 and np.all(grid.failed[containing_elements]):
+                    max_layer_perf = layer
+            else:
+                start_sp = grid.node_spring_offsets[c]
+                end_sp = grid.node_spring_offsets[c + 1]
+                sp_ids = grid.node_spring_ids[start_sp:end_sp]
+                if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
+                    max_layer_perf = layer
 
         diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
         lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
         strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-        active_strains = strains[~grid.failed]
+
+        if structure_type == "metallic_sheet":
+            n_nodes = len(grid.nodes)
+            node_elements_report: list[list[int]] = [[] for _ in range(n_nodes)]
+            for e_idx, elem in enumerate(grid.elements):
+                for node in elem:
+                    node_elements_report[node].append(e_idx)
+            spring_elements_report: list[list[int]] = []
+            for n0, n1 in grid.springs:
+                shared = list(set(node_elements_report[n0]).intersection(node_elements_report[n1]))
+                spring_elements_report.append(shared)
+
+            failed_springs = np.zeros(len(grid.springs), dtype=bool)
+            for s_idx, el_indices in enumerate(spring_elements_report):
+                if len(el_indices) > 0:
+                    failed_springs[s_idx] = True
+                    for e_idx in el_indices:
+                        if not grid.failed[e_idx]:
+                            failed_springs[s_idx] = False
+                            break
+            failed_mask = failed_springs
+        else:
+            failed_mask = grid.failed
+
+        active_strains = strains[~failed_mask]
         final_peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
 
         report = {

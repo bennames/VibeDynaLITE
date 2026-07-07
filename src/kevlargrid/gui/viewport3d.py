@@ -472,6 +472,9 @@ class Viewport3D:
                         lighting=False,
                     )
 
+                    # Add global CSYS axes tripod S8.4
+                    self.plotter.add_axes(line_width=3, label_color='white')
+
                     # Projectile mesh will be created by redraw() since _last_mesh_params was deleted
                     # Show to initialize offscreen rendering context window
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
@@ -557,6 +560,7 @@ class Viewport3D:
                             line_width=2.5,
                             lighting=False,
                         )
+                    self.plotter.add_axes(line_width=3, label_color='white')
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
 
                     texture_reg_tag = "viewport_texture_registry"
@@ -950,6 +954,32 @@ class Viewport3D:
                     )
             except Exception as e:
                 logger.error(f"Fallback projectile draw failed: {e}")
+
+            # Draw a global CSYS axes tripod in the bottom-left corner of the canvas in fallback mode S8.4
+            if not (HAS_PYVISTA and self.has_pyvista):
+                try:
+                    ox = 50.0
+                    oy = float(self.height) - 50.0
+                    axis_x = R @ np.array([30.0, 0.0, 0.0])
+                    axis_y = R @ np.array([0.0, 30.0, 0.0])
+                    axis_z = R @ np.array([0.0, 0.0, 30.0])
+                    ex_x, ey_x = ox + axis_x[0], oy - axis_x[1]
+                    ex_y, ey_y = ox + axis_y[0], oy - axis_y[1]
+                    ex_z, ey_z = ox + axis_z[0], oy - axis_z[1]
+
+                    # X axis (Red)
+                    dpg.draw_line([ox, oy], [ex_x, ey_x], color=[255, 0, 0, 255], thickness=2, parent=self.canvas_tag)
+                    dpg.draw_text([ex_x + 3, ey_x - 3], "X", color=[255, 0, 0, 255], size=12, parent=self.canvas_tag)
+
+                    # Y axis (Green)
+                    dpg.draw_line([ox, oy], [ex_y, ey_y], color=[0, 255, 0, 255], thickness=2, parent=self.canvas_tag)
+                    dpg.draw_text([ex_y + 3, ey_y - 3], "Y", color=[0, 255, 0, 255], size=12, parent=self.canvas_tag)
+
+                    # Z axis (Blue)
+                    dpg.draw_line([ox, oy], [ex_z, ey_z], color=[0, 120, 255, 255], thickness=2, parent=self.canvas_tag)
+                    dpg.draw_text([ex_z + 3, ey_z - 3], "Z", color=[0, 120, 255, 255], size=12, parent=self.canvas_tag)
+                except Exception as e:
+                    logger.error(f"Fallback axes tripod draw failed: {e}")
 
     def _get_shape_wireframe_lines(self) -> list[tuple[np.ndarray, np.ndarray]]:
         shape = self.proj_shape_type.lower()
