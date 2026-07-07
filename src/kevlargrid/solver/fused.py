@@ -1848,6 +1848,7 @@ def numba_step_shell_forces_and_failures(
 )
 def _fused_shell_loop_jit(
     positions,
+    X_ref,
     velocities,
     grid_masses,
     boundary_mask,
@@ -1906,7 +1907,6 @@ def _fused_shell_loop_jit(
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
-    X_ref = positions.copy()
     m_frames = max(1, n_steps // save_interval)
 
     # Pre-allocate history structures (compatible with JIT vector allocations)
@@ -2431,6 +2431,7 @@ def fused_leapfrog_loop(
     elements: np.ndarray | None = None,
     youngs_modulus_gpa: float = 71.0,
     thickness: float = 0.002,
+    X_ref: np.ndarray | None = None,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -2469,6 +2470,9 @@ def fused_leapfrog_loop(
     if hist_proj_quat is None:
         hist_proj_quat = np.zeros((max(1, n_steps // save_interval), 4), dtype=np.float64)
 
+    if X_ref is None:
+        X_ref = positions.copy()
+
     # Map shape type to integer code
     shape_map = {"box": 0, "sphere": 1, "cylinder": 2, "bullet": 3, "propeller": 4}
     shape_code = shape_map.get(proj_shape_type.lower(), 0)
@@ -2487,6 +2491,7 @@ def fused_leapfrog_loop(
             elements = np.zeros((0, 4), dtype=np.int32)
         return _fused_shell_loop_jit(
             positions,
+            X_ref,
             velocities,
             grid_masses,
             boundary_mask,

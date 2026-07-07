@@ -268,6 +268,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         save_interval = 10
         is_paused = False
         reason = None
+        X_ref = grid.nodes.copy()
 
         while t_sim < duration:
             # Check for control signals from GUI process
@@ -408,6 +409,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     contact_energy_init=contact_energy,
                     mu_s=mu_s,
                     friction_dissipated_init=friction_dissipated,
+                    X_ref=X_ref,
                     **extra_kwargs,
                 )
                 hist_peak_strain = np.zeros(len(hist_time))
