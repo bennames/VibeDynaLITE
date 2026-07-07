@@ -48,6 +48,8 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
   - Toggling **Structure Type** to `"Metallic Sheet"` also hides the **Number of Plies** and **Analysis Mode** rows (since steel is a single-thickness sheet and not stacked fabric plies).
   - Automatically filters presets list to only show fabrics when `"Fabric"` is selected, and metallic presets when `"Metallic Sheet"` is selected.
 - Updated `current_grid_key` tracking in `src/kevlargrid/gui/app.py` to watch corrugations, structure type, and thickness changes, allowing the interactive 3D viewport preview to update instantly and dynamically as sliders/inputs are adjusted.
+- Added **Initial Orientation** (Roll, Pitch, and Yaw in degrees) and **Initial Rotation** (RPM) input fields to the GUI Projectile section. The configuration panel dynamically converts these inputs to quaternions and rad/s angular velocity for the backend solver.
+- Guarded all propeller shape calculations in both the solver (`projectile.py`) and GUI (`viewport3d.py`) against division by zero when span is $0.0$.
 
 ---
 
