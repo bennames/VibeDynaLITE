@@ -24,6 +24,44 @@ from kevlargrid.utils import get_logger
 logger = get_logger("gui.config_panel")
 
 
+def euler_to_quaternion(roll_deg: float, pitch_deg: float, yaw_deg: float) -> list[float]:
+    """Convert Euler angles in degrees (roll, pitch, yaw) to quaternion [w, x, y, z]."""
+    phi = math.radians(roll_deg)
+    theta = math.radians(pitch_deg)
+    psi = math.radians(yaw_deg)
+
+    c_phi = math.cos(phi / 2.0)
+    s_phi = math.sin(phi / 2.0)
+    c_theta = math.cos(theta / 2.0)
+    s_theta = math.sin(theta / 2.0)
+    c_psi = math.cos(psi / 2.0)
+    s_psi = math.sin(psi / 2.0)
+
+    w = c_phi * c_theta * c_psi + s_phi * s_theta * s_psi
+    x = s_phi * c_theta * c_psi - c_phi * s_theta * s_psi
+    y = c_phi * s_theta * c_psi + s_phi * c_theta * s_psi
+    z = c_phi * c_theta * s_psi - s_phi * s_theta * c_psi
+
+    return [w, x, y, z]
+
+
+def quaternion_to_euler(w: float, x: float, y: float, z: float) -> tuple[float, float, float]:
+    """Convert quaternion [w, x, y, z] to Euler angles in degrees (roll, pitch, yaw)."""
+    t0 = 2.0 * (w * x + y * z)
+    t1 = 1.0 - 2.0 * (x * x + y * y)
+    roll = math.degrees(math.atan2(t0, t1))
+
+    t2 = 2.0 * (w * y - z * x)
+    t2 = max(-1.0, min(1.0, t2))
+    pitch = math.degrees(math.asin(t2))
+
+    t3 = 2.0 * (w * z + x * y)
+    t4 = 1.0 - 2.0 * (y * y + z * z)
+    yaw = math.degrees(math.atan2(t3, t4))
+
+    return roll, pitch, yaw
+
+
 class ConfigPanel:
     """DearPyGui panel for simulation configuration input."""
 
@@ -74,10 +112,9 @@ class ConfigPanel:
         self.proj_wx = "proj_wx"
         self.proj_wy = "proj_wy"
         self.proj_wz = "proj_wz"
-        self.proj_qw = "proj_qw"
-        self.proj_qx = "proj_qx"
-        self.proj_qy = "proj_qy"
-        self.proj_qz = "proj_qz"
+        self.proj_roll = "proj_roll"
+        self.proj_pitch = "proj_pitch"
+        self.proj_yaw = "proj_yaw"
         self.proj_width = "proj_width"
         self.proj_thickness = "proj_thickness"
         self.proj_shape = "proj_shape"
@@ -466,7 +503,7 @@ class ConfigPanel:
                         label="Z0", width=70, tag=self.proj_pz, default_value=-0.005
                     )
 
-                dpg.add_text("Initial Rotation (rad/s):")
+                dpg.add_text("Initial Rotation (RPM):")
                 with dpg.group(horizontal=True):
                     dpg.add_input_float(
                         label="Wx",
@@ -490,33 +527,26 @@ class ConfigPanel:
                         callback=self._on_projectile_change,
                     )
 
-                dpg.add_text("Initial Orientation (Quaternion: w,x,y,z):")
+                dpg.add_text("Initial Orientation (Euler Angles: Roll, Pitch, Yaw in degrees):")
                 with dpg.group(horizontal=True):
                     dpg.add_input_float(
-                        label="Qw",
-                        width=60,
-                        tag=self.proj_qw,
-                        default_value=1.0,
-                        callback=self._on_projectile_change,
-                    )
-                    dpg.add_input_float(
-                        label="Qx",
-                        width=60,
-                        tag=self.proj_qx,
+                        label="Roll",
+                        width=70,
+                        tag=self.proj_roll,
                         default_value=0.0,
                         callback=self._on_projectile_change,
                     )
                     dpg.add_input_float(
-                        label="Qy",
-                        width=60,
-                        tag=self.proj_qy,
+                        label="Pitch",
+                        width=70,
+                        tag=self.proj_pitch,
                         default_value=0.0,
                         callback=self._on_projectile_change,
                     )
                     dpg.add_input_float(
-                        label="Qz",
-                        width=60,
-                        tag=self.proj_qz,
+                        label="Yaw",
+                        width=70,
+                        tag=self.proj_yaw,
                         default_value=0.0,
                         callback=self._on_projectile_change,
                     )
@@ -1195,21 +1225,20 @@ class ConfigPanel:
                     dpg.get_value(self.proj_vz),
                 ],
                 "omega": [
-                    dpg.get_value(self.proj_wx),
-                    dpg.get_value(self.proj_wy),
-                    dpg.get_value(self.proj_wz),
+                    dpg.get_value(self.proj_wx) * math.pi / 30.0,
+                    dpg.get_value(self.proj_wy) * math.pi / 30.0,
+                    dpg.get_value(self.proj_wz) * math.pi / 30.0,
                 ],
                 "position": [
                     dpg.get_value(self.proj_px),
                     dpg.get_value(self.proj_py),
                     dpg.get_value(self.proj_pz),
                 ],
-                "quat": [
-                    dpg.get_value(self.proj_qw),
-                    dpg.get_value(self.proj_qx),
-                    dpg.get_value(self.proj_qy),
-                    dpg.get_value(self.proj_qz),
-                ],
+                "quat": euler_to_quaternion(
+                    float(dpg.get_value(self.proj_roll)),
+                    float(dpg.get_value(self.proj_pitch)),
+                    float(dpg.get_value(self.proj_yaw)),
+                ),
                 "shape": dpg.get_value(self.proj_shape).lower(),
                 "shape_type": dpg.get_value(self.proj_shape).lower(),
                 "blade_width": dpg.get_value(self.proj_width),
@@ -1347,9 +1376,9 @@ class ConfigPanel:
 
         if "omega" in proj:
             omega = proj["omega"]
-            dpg.set_value(self.proj_wx, omega[0])
-            dpg.set_value(self.proj_wy, omega[1])
-            dpg.set_value(self.proj_wz, omega[2])
+            dpg.set_value(self.proj_wx, omega[0] * 30.0 / math.pi)
+            dpg.set_value(self.proj_wy, omega[1] * 30.0 / math.pi)
+            dpg.set_value(self.proj_wz, omega[2] * 30.0 / math.pi)
         else:
             dpg.set_value(self.proj_wx, 0.0)
             dpg.set_value(self.proj_wy, 0.0)
@@ -1361,10 +1390,10 @@ class ConfigPanel:
         dpg.set_value(self.proj_pz, pos[2])
 
         quat = proj.get("quat", [1.0, 0.0, 0.0, 0.0])
-        dpg.set_value(self.proj_qw, quat[0])
-        dpg.set_value(self.proj_qx, quat[1])
-        dpg.set_value(self.proj_qy, quat[2])
-        dpg.set_value(self.proj_qz, quat[3])
+        roll, pitch, yaw = quaternion_to_euler(quat[0], quat[1], quat[2], quat[3])
+        dpg.set_value(self.proj_roll, roll)
+        dpg.set_value(self.proj_pitch, pitch)
+        dpg.set_value(self.proj_yaw, yaw)
 
         shape = proj.get("shape", proj.get("shape_type", "box")).lower()
         shape_cased = "Box"
