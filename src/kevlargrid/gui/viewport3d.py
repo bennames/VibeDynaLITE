@@ -387,12 +387,17 @@ class Viewport3D:
                     for node in elem:
                         node_elements[node].append(e_idx)
 
-                self.spring_elements = []
-                for n0, n1 in grid.springs:
+                n_springs = len(grid.springs)
+                spring_to_elements = np.full((n_springs, 2), -1, dtype=np.int32)
+                for s_idx, (n0, n1) in enumerate(grid.springs):
                     shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
-                    self.spring_elements.append(shared)
+                    if len(shared) > 0:
+                        spring_to_elements[s_idx, 0] = shared[0]
+                    if len(shared) > 1:
+                        spring_to_elements[s_idx, 1] = shared[1]
+                self.spring_to_elements_map = spring_to_elements
             else:
-                self.spring_elements = None
+                self.spring_to_elements_map = None
 
             # Find bounds of single grid center
             if len(grid.nodes) > 0:
@@ -555,10 +560,12 @@ class Viewport3D:
                     if hasattr(self, "proj_mesh") and self.proj_mesh is not None:
                         self.proj_actor = self.plotter.add_mesh(
                             self.proj_mesh,
-                            color=[230, 230, 250],
-                            style="wireframe",
-                            line_width=2.5,
-                            lighting=False,
+                            color=[200, 200, 220],
+                            style="surface",
+                            show_edges=True,
+                            edge_color=[80, 80, 100],
+                            line_width=1.5,
+                            lighting=True,
                         )
                     self.plotter.add_axes(line_width=3, label_color="white")
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
@@ -593,16 +600,12 @@ class Viewport3D:
             springs = self.grid.springs
             n_springs = len(springs)
 
-            if getattr(self, "spring_elements", None) is not None:
+            if getattr(self, "spring_to_elements_map", None) is not None:
                 failed_elements = self.grid.failed
-                failed = np.zeros(n_springs, dtype=bool)
-                for s_idx, el_indices in enumerate(self.spring_elements):
-                    if len(el_indices) > 0:
-                        failed[s_idx] = True
-                        for e_idx in el_indices:
-                            if not failed_elements[e_idx]:
-                                failed[s_idx] = False
-                                break
+                failed_elements_padded = np.append(failed_elements, True)
+                el0 = self.spring_to_elements_map[:, 0]
+                el1 = self.spring_to_elements_map[:, 1]
+                failed = failed_elements_padded[el0] & failed_elements_padded[el1]
             else:
                 failed = self.grid.failed
 
@@ -761,10 +764,12 @@ class Viewport3D:
                                 self.plotter.remove_actor(self.proj_actor)
                         self.proj_actor = self.plotter.add_mesh(
                             self.proj_mesh,
-                            color=[230, 230, 250],
-                            style="wireframe",
-                            line_width=2.5,
-                            lighting=False,
+                            color=[200, 200, 220],
+                            style="surface",
+                            show_edges=True,
+                            edge_color=[80, 80, 100],
+                            line_width=1.5,
+                            lighting=True,
                         )
 
                     # Update projectile position and orientation in actor using 4x4 matrix
