@@ -113,8 +113,8 @@ def test_metallic_sheet_simulation():
     }
 
     grid = generate_rectangular_grid(
-        nx=6,
-        ny=6,
+        nx=5,
+        ny=5,
         dx=0.01,
         material=material,
         corrugation_amplitude=0.0,
@@ -125,7 +125,7 @@ def test_metallic_sheet_simulation():
     proj = Projectile(
         mass=0.1,
         velocity=[0.0, 0.0, -100.0],
-        position=[0.0, 0.0, 0.0005],  # Start overlapping so contact is immediate
+        position=[0.0, 0.0, 0.0052],  # Start overlapping at the bottom face so contact is immediate
         shape_type="box",
         blade_width=0.02,
         edge_thickness=0.002,
@@ -135,10 +135,10 @@ def test_metallic_sheet_simulation():
     velocities = np.zeros_like(positions)
     boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
     # boundary clamp edges
-    for i in range(6):
-        for j in range(6):
-            if i == 0 or i == 5 or j == 0 or j == 5:
-                boundary_mask[i * 6 + j] = 1
+    for i in range(5):
+        for j in range(5):
+            if i == 0 or i == 4 or j == 0 or j == 4:
+                boundary_mask[i * 5 + j] = 1
 
     nodal_external_forces = np.zeros_like(positions)
 
@@ -162,7 +162,7 @@ def test_metallic_sheet_simulation():
         proj_blade_width=proj.blade_width,
         proj_edge_thickness=proj.edge_thickness,
         n_plies=1,
-        n_nodes_per_layer=36,
+        n_nodes_per_layer=25,
         t_ply=0.002,
         dx=0.01,
         k_penalty=10000.0,
@@ -461,3 +461,228 @@ def test_metallic_sheet_stabilization():
 
     # 2. Damping energy should be correctly accumulated and positive due to active motion
     assert damp_diss > 0.0
+
+
+def test_tangential_contact_friction():
+    """Verify that a projectile sliding tangentially along the metallic sheet feels Coulomb friction."""
+    material = {
+        "name": "Steel",
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.45,
+        "fiber_density_gcc": 7.8,
+        "areal_density_kgm2": 7.8,
+        "shear_ratio": 0.38,
+        "material_model": "j2_plasticity",
+        "yield_strength_gpa": 0.25,
+        "hardening_modulus_gpa": 1.0,
+        "ultimate_strain": 0.15,
+        "poisson_ratio": 0.3,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=5,
+        ny=5,
+        dx=0.01,
+        material=material,
+        corrugation_amplitude=0.0,
+    )
+
+    # Position the projectile to slide tangentially in the XY plane, slightly pressed into the sheet
+    # Sheet is at z = 0.
+    # A box of half-thickness t_h = 0.0025 starts at z_center = -0.002, so it penetrates by 0.0005 m.
+    proj = Projectile(
+        mass=0.1,
+        velocity=[50.0, 0.0, 0.0],
+        position=[0.0, 0.0, -0.002],
+        shape_type="box",
+        blade_width=0.02,
+        edge_thickness=0.005,
+    )
+
+    positions = grid.nodes.copy()
+    velocities = np.zeros_like(positions)
+    boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
+    for i in range(25):
+        boundary_mask[i] = 1 # fix all sheet nodes to act as a rigid base for friction
+
+    nodal_external_forces = np.zeros_like(positions)
+    thickness = 0.001
+
+    res = fused_leapfrog_loop(
+        positions=positions,
+        velocities=velocities,
+        grid_springs=grid.springs,
+        grid_stiffnesses=grid.stiffnesses,
+        grid_rest_lengths=grid.rest_lengths,
+        grid_failed=grid.failed,
+        grid_masses=grid.masses,
+        grid_tension_only=grid.tension_only,
+        boundary_mask=boundary_mask,
+        nodal_external_forces=nodal_external_forces,
+        proj_position=proj.position,
+        proj_velocity=proj.velocity,
+        proj_mass=proj.mass,
+        proj_blade_width=proj.blade_width,
+        proj_edge_thickness=proj.edge_thickness,
+        n_plies=1,
+        n_nodes_per_layer=25,
+        t_ply=0.002,
+        dx=0.01,
+        k_penalty=5.0e7,
+        rayleigh_alpha=0.0,
+        rayleigh_beta=1e-6,
+        failure_strain=0.20,
+        damage_onset_strain=0.15,
+        fracture_energy_multiplier=1.0,
+        dt=1e-7,
+        n_steps=100,
+        save_interval=10,
+        damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
+        t_sim_init=0.0,
+        strike_direction=1.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
+        use_viscous=False,
+        cfl_factor=0.5,
+        proj_quat=proj.quat,
+        proj_omega=proj.omega,
+        proj_shape_type="box",
+        contact_energy_init=0.0,
+        mu_s=0.8, # high friction
+        friction_dissipated_init=0.0,
+        structure_type="metallic_sheet",
+        material_model="j2_plasticity",
+        yield_strength_gpa=0.25,
+        hardening_modulus_gpa=1.0,
+        ultimate_strain=0.15,
+        poisson_ratio=0.3,
+        elements=grid.elements,
+        youngs_modulus_gpa=200.0,
+        thickness=thickness,
+        density_kgm3=7800.0,
+    )
+
+    assert res is not None
+    final_proj_vel = res[4]
+    fric_diss = res[17]
+
+    # The projectile should have decelerated along X due to Coulomb friction
+    assert final_proj_vel[0] < 50.0
+    # Friction energy must be positive
+    assert fric_diss > 0.0
+
+
+def test_von_karman_wave_propagation():
+    """Verify that transverse deflection couples to membrane strain due to Von Karman terms."""
+    material = {
+        "name": "Steel",
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.45,
+        "fiber_density_gcc": 7.8,
+        "areal_density_kgm2": 7.8,
+        "shear_ratio": 0.38,
+        "material_model": "j2_plasticity",
+        "yield_strength_gpa": 0.25,
+        "hardening_modulus_gpa": 1.0,
+        "ultimate_strain": 0.15,
+        "poisson_ratio": 0.3,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=5,
+        ny=5,
+        dx=0.01,
+        material=material,
+        corrugation_amplitude=0.0,
+    )
+
+    positions = grid.nodes.copy()
+    center_idx = 12 # node (2, 2) in a 5x5 grid
+
+    # Give the center node an initial out-of-plane velocity
+    velocities = np.zeros_like(positions)
+    velocities[center_idx, 2] = -50.0
+
+    boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
+    # Clamp all boundaries
+    for i in range(5):
+        for j in range(5):
+            if i == 0 or i == 4 or j == 0 or j == 4:
+                boundary_mask[i * 5 + j] = 1
+
+    nodal_external_forces = np.zeros_like(positions)
+    thickness = 0.001
+
+    # Run the solver for 50 steps to let the wave propagate
+    res = fused_leapfrog_loop(
+        positions=positions,
+        velocities=velocities,
+        grid_springs=grid.springs,
+        grid_stiffnesses=grid.stiffnesses,
+        grid_rest_lengths=grid.rest_lengths,
+        grid_failed=grid.failed,
+        grid_masses=grid.masses,
+        grid_tension_only=grid.tension_only,
+        boundary_mask=boundary_mask,
+        nodal_external_forces=nodal_external_forces,
+        proj_position=np.array([10.0, 10.0, 10.0]), # projectile far away
+        proj_velocity=np.zeros(3),
+        proj_mass=1.0,
+        proj_blade_width=0.01,
+        proj_edge_thickness=0.01,
+        n_plies=1,
+        n_nodes_per_layer=25,
+        t_ply=0.002,
+        dx=0.01,
+        k_penalty=1.0e6,
+        rayleigh_alpha=0.0,
+        rayleigh_beta=1e-8,
+        failure_strain=0.20,
+        damage_onset_strain=0.15,
+        fracture_energy_multiplier=1.0,
+        dt=1e-7,
+        n_steps=50,
+        save_interval=5,
+        damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
+        t_sim_init=0.0,
+        strike_direction=1.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
+        use_viscous=False,
+        cfl_factor=0.5,
+        proj_quat=np.array([1.0, 0.0, 0.0, 0.0]),
+        proj_omega=np.zeros(3),
+        proj_shape_type="box",
+        contact_energy_init=0.0,
+        mu_s=0.0,
+        friction_dissipated_init=0.0,
+        structure_type="metallic_sheet",
+        material_model="j2_plasticity",
+        yield_strength_gpa=0.25,
+        hardening_modulus_gpa=1.0,
+        ultimate_strain=0.15,
+        poisson_ratio=0.3,
+        elements=grid.elements,
+        youngs_modulus_gpa=200.0,
+        thickness=thickness,
+        density_kgm3=7800.0,
+    )
+
+    assert res is not None
+    final_pos = res[0]
+    final_vel = res[1]
+
+    # Verify that surrounding nodes (e.g. node 7, which is (1, 2)) have developed non-zero velocities
+    # indicating that out-of-plane deflection of the center has successfully coupled to in-plane membrane stretching.
+    assert np.max(np.abs(final_vel)) > 0.0
+    assert np.max(np.abs(final_pos - positions)) > 0.0

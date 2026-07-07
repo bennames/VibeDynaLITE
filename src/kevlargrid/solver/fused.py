@@ -231,11 +231,23 @@ def numba_eval_sdf(
             else:
                 val = np.abs(zr) - half_t
     else:  # box / legacy
-        x_min = x if x < w_h else w_h
-        x_proj = -w_h if -w_h > x_min else x_min
-        y_min = y if y < t_h else t_h
-        y_proj = -t_h if -t_h > y_min else y_min
-        val = np.sqrt((x - x_proj) ** 2 + (y - y_proj) ** 2 + z**2)
+        h_h = L / 2.0 if L > 0.0 else 0.005
+        d_x = np.abs(x) - w_h
+        d_y = np.abs(y) - t_h
+        d_z = np.abs(z) - h_h
+
+        # External distance
+        dx_pos = d_x if d_x > 0.0 else 0.0
+        dy_pos = d_y if d_y > 0.0 else 0.0
+        dz_pos = d_z if d_z > 0.0 else 0.0
+        ext_dist = np.sqrt(dx_pos**2 + dy_pos**2 + dz_pos**2)
+
+        # Internal distance
+        max_d = d_x if d_x > d_y else d_y
+        max_d = max_d if max_d > d_z else d_z
+        int_dist = max_d if max_d < 0.0 else 0.0
+
+        val = ext_dist + int_dist
     return val
 
 
@@ -1663,10 +1675,14 @@ def numba_step_shell_forces_and_failures(
         tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
         tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
 
-        # Compute strains
-        eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx)
-        eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx)
-        gam_xy = ((u3 - u0) + (u2 - u1)) / (2.0 * dx) + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
+        # Compute out-of-plane deflection gradients
+        dw_dx = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
+        dw_dy = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
+
+        # Compute strains (with Von Karman non-linear membrane strain terms)
+        eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx) + 0.5 * dw_dx**2
+        eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx) + 0.5 * dw_dy**2
+        gam_xy = ((u3 - u0) + (u2 - u1)) / (2.0 * dx) + ((v1 - v0) + (v2 - v3)) / (2.0 * dx) + dw_dx * dw_dy
 
         kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
         kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
@@ -1674,8 +1690,8 @@ def numba_step_shell_forces_and_failures(
             2.0 * dx
         )
 
-        gam_xz = ((w1 - w0) + (w2 - w3)) / (2.0 * dx) + (ty0 + ty1 + ty2 + ty3) / 4.0
-        gam_yz = ((w3 - w0) + (w2 - w1)) / (2.0 * dx) - (tx0 + tx1 + tx2 + tx3) / 4.0
+        gam_xz = dw_dx + (ty0 + ty1 + ty2 + ty3) / 4.0
+        gam_yz = dw_dy - (tx0 + tx1 + tx2 + tx3) / 4.0
 
         # Calculate strain increments
         d_eps_xx = eps_xx - element_strains[e, 0]
@@ -2101,67 +2117,47 @@ def _fused_shell_loop_jit(
         proj_torque = zeros(3, dtype=np.float64)
         proj_contact_e_step = 0.0
 
+        # Projectile 3D SDF contact detection for all shapes (including box shape_code == 0)
+        q_conj = np.array(
+            [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
+        )
         if shape_code == 0:
-            x_proj = proj_position[0]
-            y_proj = proj_position[1]
-            z_proj = proj_position[2]
-            dists = sqrt(
-                (positions[:, 0] - x_proj) ** 2
-                + (positions[:, 1] - y_proj) ** 2
-                + (positions[:, 2] - z_proj) ** 2
-            )
-            contact_mask = dists < proximity_threshold
-
-            # Simple weighting based on projection
-            if sum(contact_mask) > 0:
-                w_raw = maximum(proximity_threshold - dists, 0.0)
-                sum_w = sum(w_raw)
-                w_normalized = w_raw / (sum_w if sum_w != 0.0 else 1.0)
-
-                # scale factor
-                scale_factor = zeros(n_nodes, dtype=positions.dtype)
-                for i in range(n_nodes):
-                    if node_initial_elements[i] > 0:
-                        scale_factor[i] = float(active_counts[i]) / float(node_initial_elements[i])
-                    else:
-                        scale_factor[i] = 1.0
-
-                d_safe = maximum(dists, 1e-4)
-                nx_arr = (positions[:, 0] - x_proj) / d_safe
-                ny_arr = (positions[:, 1] - y_proj) / d_safe
-                nz_arr = (positions[:, 2] - proj_position[2]) / d_safe
-                delta = proximity_threshold - dists
-                f_mags = k_penalty * delta * w_normalized * scale_factor * strike_direction
-                proj_forces[:, 0] = where(contact_mask, f_mags * nx_arr, 0.0)
-                proj_forces[:, 1] = where(contact_mask, f_mags * ny_arr, 0.0)
-                proj_forces[:, 2] = where(contact_mask, f_mags * nz_arr, 0.0)
-                proj_reaction_force[0] = -sum(proj_forces[:, 0])
-                proj_reaction_force[1] = -sum(proj_forces[:, 1])
-                proj_reaction_force[2] = -sum(proj_forces[:, 2])
-
-                # Projectile contact potential energy
-                proj_pe_elements = where(
-                    contact_mask,
-                    0.5 * k_penalty * w_normalized * delta * delta * scale_factor,
-                    0.0,
-                )
-                proj_contact_e_step += np.sum(proj_pe_elements)
+            max_R = max(proj_half_width, max(proj_half_thickness, proj_length / 2.0))
         else:
-            q_conj = np.array(
-                [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
-            )
             max_R = max(proj_radius, max(proj_length, proj_span))
-            cutoff = max_R + proximity_threshold
-            cutoff_sq = cutoff**2
-            for i in range(n_nodes):
-                dx_p = positions[i, 0] - proj_position[0]
-                dy_p = positions[i, 1] - proj_position[1]
-                dz_p = positions[i, 2] - proj_position[2]
-                if dx_p**2 + dy_p**2 + dz_p**2 > cutoff_sq:
-                    continue
-                P_rel = positions[i] - proj_position
-                P_loc = numba_q_rotate(q_conj, P_rel)
-                dist = numba_eval_sdf(
+        cutoff = max_R + proximity_threshold
+        cutoff_sq = cutoff**2
+        for i in range(n_nodes):
+            dx_p = positions[i, 0] - proj_position[0]
+            dy_p = positions[i, 1] - proj_position[1]
+            dz_p = positions[i, 2] - proj_position[2]
+            if dx_p**2 + dy_p**2 + dz_p**2 > cutoff_sq:
+                continue
+            P_rel = positions[i] - proj_position
+            P_loc = numba_q_rotate(q_conj, P_rel)
+            dist = numba_eval_sdf(
+                P_loc,
+                shape_code,
+                proj_radius,
+                proj_length,
+                proj_edge_radius,
+                R_og_val,
+                L_body_val,
+                L_nose_val,
+                proj_z_com,
+                proj_span,
+                proj_root_chord,
+                proj_tip_chord,
+                proj_twist,
+                proj_thickness_ratio,
+                proj_tip_radius,
+                proj_y_com,
+                proj_half_width,
+                proj_half_thickness,
+            )
+            delta = -dist
+            if delta > 0.0:
+                n_loc = numba_eval_sdf_normal(
                     P_loc,
                     shape_code,
                     proj_radius,
@@ -2178,90 +2174,98 @@ def _fused_shell_loop_jit(
                     proj_thickness_ratio,
                     proj_tip_radius,
                     proj_y_com,
-                    0.0,
-                    0.0,
+                    proj_half_width,
+                    proj_half_thickness,
                 )
-                delta = -dist
-                if delta > 0.0:
-                    n_loc = numba_eval_sdf_normal(
-                        P_loc,
-                        shape_code,
-                        proj_radius,
-                        proj_length,
-                        proj_edge_radius,
-                        R_og_val,
-                        L_body_val,
-                        L_nose_val,
-                        proj_z_com,
-                        proj_span,
-                        proj_root_chord,
-                        proj_tip_chord,
-                        proj_twist,
-                        proj_thickness_ratio,
-                        proj_tip_radius,
-                        proj_y_com,
-                        0.0,
-                        0.0,
-                    )
-                    n_world = numba_q_rotate(proj_quat, n_loc)
+                n_world = numba_q_rotate(proj_quat, n_loc)
 
-                    # Compute relative velocity and contact damping
-                    v_proj_point = proj_v_half + np.array(
+                # Compute relative velocity and contact damping
+                v_proj_point = proj_v_half + np.array(
+                    [
+                        proj_omega_half[1] * P_rel[2] - proj_omega_half[2] * P_rel[1],
+                        proj_omega_half[2] * P_rel[0] - proj_omega_half[0] * P_rel[2],
+                        proj_omega_half[0] * P_rel[1] - proj_omega_half[1] * P_rel[0],
+                    ],
+                    dtype=np.float64,
+                )
+
+                v_rel = v_half[i] - v_proj_point
+                delta_dot = -(
+                    v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
+                )
+
+                f_mag = k_penalty * delta + proj_c_damping * delta_dot
+                if f_mag < 0.0:
+                    f_mag = 0.0
+
+                node_scale_factor = 1.0
+                if node_initial_elements[i] > 0:
+                    node_scale_factor = float(active_counts[i]) / float(
+                        node_initial_elements[i]
+                    )
+
+                proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
+                proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
+                proj_forces[i, 2] += f_mag * n_world[2] * node_scale_factor
+
+                proj_reaction_force[0] -= f_mag * n_world[0] * node_scale_factor
+                proj_reaction_force[1] -= f_mag * n_world[1] * node_scale_factor
+                proj_reaction_force[2] -= f_mag * n_world[2] * node_scale_factor
+
+                # Torque update
+                P_contact = P_rel
+                proj_torque[0] += P_contact[1] * (
+                    -f_mag * n_world[2] * node_scale_factor
+                ) - P_contact[2] * (-f_mag * n_world[1] * node_scale_factor)
+                proj_torque[1] += P_contact[2] * (
+                    -f_mag * n_world[0] * node_scale_factor
+                ) - P_contact[0] * (-f_mag * n_world[2] * node_scale_factor)
+                proj_torque[2] += P_contact[0] * (
+                    -f_mag * n_world[1] * node_scale_factor
+                ) - P_contact[1] * (-f_mag * n_world[0] * node_scale_factor)
+
+                # Projectile 6-DOF contact friction
+                if mu_s > 0.0:
+                    v_rel_dot_n = (
+                        v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
+                    )
+                    v_tang = np.array(
                         [
-                            proj_omega_half[1] * P_rel[2] - proj_omega_half[2] * P_rel[1],
-                            proj_omega_half[2] * P_rel[0] - proj_omega_half[0] * P_rel[2],
-                            proj_omega_half[0] * P_rel[1] - proj_omega_half[1] * P_rel[0],
+                            v_rel[0] - v_rel_dot_n * n_world[0],
+                            v_rel[1] - v_rel_dot_n * n_world[1],
+                            v_rel[2] - v_rel_dot_n * n_world[2],
                         ],
                         dtype=np.float64,
                     )
+                    v_rel_sq = v_tang[0] ** 2 + v_tang[1] ** 2 + v_tang[2] ** 2
 
-                    v_rel = v_half[i] - v_proj_point
-                    delta_dot = -(
-                        v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
+                    v0 = 0.01
+                    denom = np.sqrt(v_rel_sq + v0**2)
+
+                    f_fric_mag = mu_s * f_mag * node_scale_factor
+                    F_friction = -f_fric_mag * (v_tang / denom)
+
+                    proj_forces[i, 0] += F_friction[0]
+                    proj_forces[i, 1] += F_friction[1]
+                    proj_forces[i, 2] += F_friction[2]
+
+                    proj_reaction_force[0] -= F_friction[0]
+                    proj_reaction_force[1] -= F_friction[1]
+                    proj_reaction_force[2] -= F_friction[2]
+
+                    proj_torque[0] += P_contact[1] * (-F_friction[2]) - P_contact[2] * (
+                        -F_friction[1]
+                    )
+                    proj_torque[1] += P_contact[2] * (-F_friction[0]) - P_contact[0] * (
+                        -F_friction[2]
+                    )
+                    proj_torque[2] += P_contact[0] * (-F_friction[1]) - P_contact[1] * (
+                        -F_friction[0]
                     )
 
-                    f_mag = k_penalty * delta + proj_c_damping * delta_dot
-                    if f_mag < 0.0:
-                        f_mag = 0.0
+                    friction_dissipated += f_fric_mag * (v_rel_sq / denom) * dt
 
-                    node_scale_factor = 1.0
-                    if node_initial_elements[i] > 0:
-                        node_scale_factor = float(active_counts[i]) / float(
-                            node_initial_elements[i]
-                        )
-
-                    proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
-                    proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
-                    proj_forces[i, 2] += f_mag * n_world[2] * node_scale_factor
-
-                    proj_reaction_force[0] -= f_mag * n_world[0] * node_scale_factor
-                    proj_reaction_force[1] -= f_mag * n_world[1] * node_scale_factor
-                    proj_reaction_force[2] -= f_mag * n_world[2] * node_scale_factor
-
-                    # Torque update
-                    P_contact = P_rel
-                    proj_torque[0] += P_contact[1] * (
-                        -f_mag * n_world[2] * node_scale_factor
-                    ) - P_contact[2] * (-f_mag * n_world[1] * node_scale_factor)
-                    proj_torque[1] += P_contact[2] * (
-                        -f_mag * n_world[0] * node_scale_factor
-                    ) - P_contact[0] * (-f_mag * n_world[2] * node_scale_factor)
-                    proj_torque[2] += P_contact[0] * (
-                        -f_mag * n_world[1] * node_scale_factor
-                    ) - P_contact[1] * (-f_mag * n_world[0] * node_scale_factor)
-
-                    proj_contact_e_step += 0.5 * k_penalty * delta * delta * node_scale_factor
-
-        # Coulomb friction
-        # identical to spring solver
-        if mu_s > 0.0:
-            if shape_code >= 0:
-                for _i in range(n_nodes):
-                    # compute relative friction and update proj_torque/proj_reaction_force
-                    pass
-            elif shape_code == 0:
-                # same box legacy friction
-                pass
+                proj_contact_e_step += 0.5 * k_penalty * delta * delta * node_scale_factor
 
         interply_forces, contact_e_step, fric_diss_step = compute_interply_contact_forces(
             positions,

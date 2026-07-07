@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 10: Robust 3D SDF Contact, Coulomb Friction, and Von Karman Wave Propagation
+
+### Added
+- **Coulomb Contact Friction**: Implemented relative sliding velocity and Coulomb contact friction opposing tangential motion of the projectile relative to the metallic sheet.
+- **Von Karman Non-linear Membrane Strains**: Added quadratic deflection gradient terms ($\frac{1}{2}(\frac{\partial w}{\partial x})^2, \dots$) to the Q4 shell element strain calculations. This couples out-of-plane deflections to membrane stretching, enabling lateral tension waves to propagate through the metallic sheet.
+
+### Fixed
+- **3D Signed Distance Fields for Box Shape**: Fixed the box projectile SDF to be mathematically exact and signed (allowing negative values inside the box) and bounded along the Z-axis.
+- **Box Contact Logic in Shell Solver**: Unified all projectile shapes (including box shapes) to run through the 3D SDF contact loop rather than using a center-node spherical projection shortcut.
+- **Corrected Proximity Parameter Passing**: Passed the actual half-width and half-thickness values of the box to the SDF contact loop rather than hardcoded `0.0, 0.0` values, preventing the box shape from collapsing.
+
+---
+
 ## [Unreleased] — Sprint 9: 6-DOF Rotational Physics Correction, Labeled Global CSYS & Viewport redrawing stability
 
 ### Added
