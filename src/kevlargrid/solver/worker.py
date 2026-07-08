@@ -269,6 +269,14 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         is_paused = False
         reason = None
         X_ref = grid.nodes.copy()
+        structure_type = sim_cfg.get("structure_type", "fabric")
+        if structure_type == "metallic_sheet":
+            n_elems = len(grid.elements)
+            grid.element_stress = np.zeros((n_elems, 3, 3), dtype=np.float64)
+            grid.element_peeq = np.zeros((n_elems, 3), dtype=np.float64)
+            grid.element_damage = np.zeros((n_elems, 3), dtype=np.float64)
+            if grid.failed.shape[0] != n_elems:
+                grid.failed = np.zeros(n_elems, dtype=bool)
 
         while t_sim < duration:
             # Check for control signals from GUI process
@@ -330,6 +338,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "thickness": thickness,
                 "density_kgm3": float(mat.get("fiber_density_gcc", 1.44) * 1000.0),
             }
+            if structure_type == "metallic_sheet":
+                extra_kwargs["element_stress"] = grid.element_stress
+                extra_kwargs["element_peeq"] = grid.element_peeq
+                extra_kwargs["element_damage"] = grid.element_damage
 
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")

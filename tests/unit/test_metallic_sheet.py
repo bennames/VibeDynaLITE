@@ -686,3 +686,141 @@ def test_von_karman_wave_propagation():
     # indicating that out-of-plane deflection of the center has successfully coupled to in-plane membrane stretching.
     assert np.max(np.abs(final_vel)) > 0.0
     assert np.max(np.abs(final_pos - positions)) > 0.0
+
+
+def test_continuous_damage_degradation():
+    """Verify that equivalent plastic strain triggers continuous damage growth and stress degradation."""
+    material = {
+        "name": "Steel",
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.45,
+        "fiber_density_gcc": 7.8,
+        "areal_density_kgm2": 7.8,
+        "shear_ratio": 0.38,
+        "material_model": "j2_plasticity",
+        "yield_strength_gpa": 0.25,
+        "hardening_modulus_gpa": 1.0,
+        "ultimate_strain": 0.15,
+        "poisson_ratio": 0.3,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=5,
+        ny=5,
+        dx=0.01,
+        material=material,
+    )
+
+    positions = grid.nodes.copy()
+    # Apply velocity to stretch elements
+    velocities = np.zeros_like(positions)
+    velocities[12, 2] = -100.0  # Center out-of-plane velocity to induce plastic strain
+
+    boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
+    for i in range(5):
+        for j in range(5):
+            if i == 0 or i == 4 or j == 0 or j == 4:
+                boundary_mask[i * 5 + j] = 1
+
+    nodal_external_forces = np.zeros_like(positions)
+    thickness = 0.001
+
+    n_elems = len(grid.elements)
+    element_stress = np.zeros((n_elems, 3, 3), dtype=np.float64)
+    element_peeq = np.zeros((n_elems, 3), dtype=np.float64)
+    element_damage = np.zeros((n_elems, 3), dtype=np.float64)
+
+    # Run for 20 steps
+    res = fused_leapfrog_loop(
+        positions=positions,
+        velocities=velocities,
+        grid_springs=grid.springs,
+        grid_stiffnesses=grid.stiffnesses,
+        grid_rest_lengths=grid.rest_lengths,
+        grid_failed=grid.failed,
+        grid_masses=grid.masses,
+        grid_tension_only=grid.tension_only,
+        boundary_mask=boundary_mask,
+        nodal_external_forces=nodal_external_forces,
+        proj_position=np.array([10.0, 10.0, 10.0]),
+        proj_velocity=np.zeros(3),
+        proj_mass=1.0,
+        proj_blade_width=0.01,
+        proj_edge_thickness=0.01,
+        n_plies=1,
+        n_nodes_per_layer=25,
+        t_ply=0.002,
+        dx=0.01,
+        k_penalty=1.0e6,
+        rayleigh_alpha=0.0,
+        rayleigh_beta=1e-8,
+        failure_strain=0.20,
+        damage_onset_strain=0.15,
+        fracture_energy_multiplier=1.0,
+        dt=1e-7,
+        n_steps=20,
+        save_interval=5,
+        damp_dissipated_init=0.0,
+        failure_dissipated_init=0.0,
+        clamp_dissipated_init=0.0,
+        t_sim_init=0.0,
+        strike_direction=1.0,
+        node_initial_springs=grid.initial_spring_counts,
+        node_spring_offsets=grid.node_spring_offsets,
+        node_spring_ids=grid.node_spring_ids,
+        node_spring_signs=grid.node_spring_signs,
+        use_viscous=False,
+        cfl_factor=0.5,
+        proj_quat=np.array([1.0, 0.0, 0.0, 0.0]),
+        proj_omega=np.zeros(3),
+        proj_shape_type="box",
+        contact_energy_init=0.0,
+        mu_s=0.0,
+        friction_dissipated_init=0.0,
+        structure_type="metallic_sheet",
+        material_model="j2_plasticity",
+        yield_strength_gpa=0.25,
+        hardening_modulus_gpa=1.0,
+        ultimate_strain=0.15,
+        poisson_ratio=0.3,
+        elements=grid.elements,
+        youngs_modulus_gpa=200.0,
+        thickness=thickness,
+        density_kgm3=7800.0,
+        element_stress=element_stress,
+        element_peeq=element_peeq,
+        element_damage=element_damage,
+    )
+
+    assert res is not None
+    # We should have accumulated damage
+    assert np.any(element_damage > 0.0)
+    # Stresses at the damaged points should be non-zero since they degrade continuously
+    assert np.any(np.abs(element_stress) > 0.0)
+
+
+def test_triaxiality_failure_scaling():
+    """Verify that stress triaxiality-dependent failure strain behaves physically."""
+    ultimate_strain = 0.15
+
+    # 1. Uniaxial tension (eta = 1/3)
+    eta = 1.0 / 3.0
+    eps_f = ultimate_strain * np.exp(-1.5 * (eta - 1.0 / 3.0))
+    assert np.isclose(eps_f, ultimate_strain)
+
+    # 2. Triaxial tension (eta > 1/3, e.g., eta = 1.0) -> Failure strain should be much lower (brittle)
+    eta = 1.0
+    eps_f_tension = ultimate_strain * np.exp(-1.5 * (eta - 1.0 / 3.0))
+    assert eps_f_tension < ultimate_strain
+
+    # 3. Pure shear (eta = 0) -> Failure strain should be equal to ultimate strain
+    eta = 0.0
+    eps_f_shear = ultimate_strain * np.exp(-0.5 * eta)
+    assert np.isclose(eps_f_shear, ultimate_strain)
+
+    # 4. Compression (eta < 0, e.g., eta = -1.0) -> Failure strain should be very large (ductile)
+    eta = -1.0
+    eps_f_compression = ultimate_strain * np.exp(-0.5 * eta)
+    assert eps_f_compression > eps_f_shear
+

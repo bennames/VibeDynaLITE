@@ -9,6 +9,9 @@ All notable changes to this project are documented in this file.
 ### Added
 - **Coulomb Contact Friction**: Implemented relative sliding velocity and Coulomb contact friction opposing tangential motion of the projectile relative to the metallic sheet.
 - **Von Karman Non-linear Membrane Strains**: Added quadratic deflection gradient terms ($\frac{1}{2}(\frac{\partial w}{\partial x})^2, \dots$) to the Q4 shell element strain calculations. This couples out-of-plane deflections to membrane stretching, enabling lateral tension waves to propagate through the metallic sheet.
+- **Continuous Stiffness Degradation Damage**: Integrated a continuous scalar damage variable $D \in [0, 1]$ at each thickness integration point of the 2D shell elements, scaling integrated stresses by $(1 - D)$ to represent physical ductile damage accumulation.
+- **Stress-Triaxiality Dependent Failure Strain**: Added stress-triaxiality ($\eta = \sigma_m / \sigma_{eq}$) scaling to the ultimate failure strain, reducing failure strain under triaxial tension and increasing it under compression/shear.
+- **State Persistence Across Solver Chunks**: Preserved `element_stress`, `element_peeq`, `element_damage`, and `element_failed` states across time-integration chunks, resolving a major issue where the material would reset to a stress-free state at each chunk.
 
 ### Fixed
 - **3D Signed Distance Fields for Box Shape**: Fixed the box projectile SDF to be mathematically exact and signed (allowing negative values inside the box) and bounded along the Z-axis.

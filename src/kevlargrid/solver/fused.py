@@ -1576,6 +1576,7 @@ def numba_step_shell_forces_and_failures(
     element_strains,
     element_stress,
     element_peeq,
+    element_damage,
     element_failed,
     dx,
     rayleigh_beta,
@@ -1708,7 +1709,6 @@ def numba_step_shell_forces_and_failures(
 
             peeq_old = element_peeq[e, k]
             yield_val = yield_strength + hardening_modulus * peeq_old
-
             f_yield = sig_vm_trial - yield_val
 
             sig_xx_new = sig_xx_trial
@@ -1716,6 +1716,7 @@ def numba_step_shell_forces_and_failures(
             tau_xy_new = tau_xy_trial
             peeq_new = peeq_old
 
+            d_peeq = 0.0
             if f_yield > 0.0 and yield_strength > 0.0:
                 # Radial return plastic strain increment
                 d_peeq = f_yield / (3.0 * G + hardening_modulus)
@@ -1738,7 +1739,31 @@ def numba_step_shell_forces_and_failures(
             element_stress[e, k, 2] = tau_xy_new
             element_peeq[e, k] = peeq_new
 
-            if peeq_new <= ultimate_strain:
+            # Damage evolution & stress triaxiality
+            if ultimate_strain > 0.0:
+                if d_peeq > 0.0:
+                    # Mean stress
+                    sig_m = (sig_xx_new + sig_yy_new) / 3.0
+                    # Von Mises equivalent stress
+                    sig_vm = np.sqrt(sig_xx_new**2 + sig_yy_new**2 - sig_xx_new * sig_yy_new + 3.0 * tau_xy_new**2)
+                    eta = sig_m / (sig_vm if sig_vm > 1e-5 else 1e-5)
+
+                    # Triaxiality-dependent failure strain scaling
+                    eps_f = ultimate_strain
+                    if eta > 0.0:
+                        eps_f = ultimate_strain * np.exp(-1.5 * (eta - 1.0 / 3.0))
+                    else:
+                        eps_f = ultimate_strain * np.exp(-0.5 * eta)
+
+                    if eps_f < 0.005:
+                        eps_f = 0.005
+
+                    d_damage = d_peeq / eps_f
+                    element_damage[e, k] = np.minimum(1.0, element_damage[e, k] + d_damage)
+
+                if element_damage[e, k] < 1.0:
+                    all_failed = False
+            else:
                 all_failed = False
 
         # Element erosion check
@@ -1763,9 +1788,12 @@ def numba_step_shell_forces_and_failures(
             sig_yy_damp = rayleigh_beta * C * (e_dot_yy_k + nu * e_dot_xx_k)
             tau_xy_damp = rayleigh_beta * G * g_dot_xy_k
 
-            sig_xx_total = sig_xx + sig_xx_damp
-            sig_yy_total = sig_yy + sig_yy_damp
-            tau_xy_total = tau_xy + tau_xy_damp
+            # Degrade nominal stiffness of shell element (using scalar damage)
+            d_factor = 1.0 - element_damage[e, k] if ultimate_strain > 0.0 else 1.0
+
+            sig_xx_total = (sig_xx + sig_xx_damp) * d_factor
+            sig_yy_total = (sig_yy + sig_yy_damp) * d_factor
+            tau_xy_total = (tau_xy + tau_xy_damp) * d_factor
 
             N_xx += wk * sig_xx_total
             N_yy += wk * sig_yy_total
@@ -1911,6 +1939,10 @@ def _fused_shell_loop_jit(
     mu_s,
     friction_dissipated_init,
     elements,
+    element_stress,
+    element_peeq,
+    element_damage,
+    element_failed,
     yield_strength_gpa,
     hardening_modulus_gpa,
     ultimate_strain,
@@ -1953,9 +1985,6 @@ def _fused_shell_loop_jit(
 
     # Shell element DB
     element_strains = zeros((n_elements, 8), dtype=positions.dtype)
-    element_stress = zeros((n_elements, 3, 3), dtype=positions.dtype)
-    element_peeq = zeros((n_elements, 3), dtype=positions.dtype)
-    element_failed = zeros(n_elements, dtype=np.int32)
 
     rot_inertia = (1.0 / 12.0) * grid_masses * (dx * dx)
     rot_inertia = maximum(rot_inertia, 1e-12)  # safeguard against division by zero
@@ -2059,6 +2088,7 @@ def _fused_shell_loop_jit(
                 element_strains,
                 element_stress,
                 element_peeq,
+                element_damage,
                 element_failed,
                 dx,
                 rayleigh_beta,
@@ -2439,6 +2469,9 @@ def fused_leapfrog_loop(
     X_ref: np.ndarray | None = None,
     density_kgm3: float = 7800.0,
     proximity_threshold: float = -1.0,
+    element_stress: np.ndarray | None = None,
+    element_peeq: np.ndarray | None = None,
+    element_damage: np.ndarray | None = None,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -2498,6 +2531,20 @@ def fused_leapfrog_loop(
     if structure_type == "metallic_sheet":
         if elements is None:
             elements = np.zeros((0, 4), dtype=np.int32)
+        n_elems = len(elements)
+        if element_stress is None:
+            element_stress = np.zeros((n_elems, 3, 3), dtype=positions.dtype)
+        if element_peeq is None:
+            element_peeq = np.zeros((n_elems, 3), dtype=positions.dtype)
+        if element_damage is None:
+            element_damage = np.zeros((n_elems, 3), dtype=positions.dtype)
+
+        # Recover or allocate element_failed
+        if grid_failed.shape[0] == n_elems:
+            element_failed = grid_failed.astype(np.int32)
+        else:
+            element_failed = np.zeros(n_elems, dtype=np.int32)
+
         return _fused_shell_loop_jit(
             positions,
             X_ref,
@@ -2550,6 +2597,10 @@ def fused_leapfrog_loop(
             mu_s,
             friction_dissipated_init,
             elements,
+            element_stress,
+            element_peeq,
+            element_damage,
+            element_failed,
             yield_strength_gpa,
             hardening_modulus_gpa,
             ultimate_strain,
