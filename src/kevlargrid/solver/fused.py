@@ -1061,9 +1061,7 @@ def _fused_leapfrog_loop_jit(
         w_mean = w_sum / where(n_contacts > 0, n_contacts, 1)
         w_mean_safe = where(w_mean > 0.0, w_mean, 1.0)
         w_normalized = where(contact_mask, w_i / w_mean_safe, 0.0)
-        scale_factor = where(
-            node_initial_springs > 0, active_counts / node_initial_springs, 0.0
-        )
+        scale_factor = where(node_initial_springs > 0, active_counts / node_initial_springs, 0.0)
 
         if cfl_factor > 0.0:
             if backend.BACKEND == "numba" and backend.HAS_NUMBA:
@@ -1288,15 +1286,15 @@ def _fused_leapfrog_loop_jit(
 
                 # Surface projection for torque moment arm
                 P_contact = P_rel - delta * n_world
-                proj_torque[0] += P_contact[1] * (-f_mag * n_world[2] * node_scale_factor) - P_contact[2] * (
-                    -f_mag * n_world[1] * node_scale_factor
-                )
-                proj_torque[1] += P_contact[2] * (-f_mag * n_world[0] * node_scale_factor) - P_contact[0] * (
+                proj_torque[0] += P_contact[1] * (
                     -f_mag * n_world[2] * node_scale_factor
-                )
-                proj_torque[2] += P_contact[0] * (-f_mag * n_world[1] * node_scale_factor) - P_contact[1] * (
+                ) - P_contact[2] * (-f_mag * n_world[1] * node_scale_factor)
+                proj_torque[1] += P_contact[2] * (
                     -f_mag * n_world[0] * node_scale_factor
-                )
+                ) - P_contact[0] * (-f_mag * n_world[2] * node_scale_factor)
+                proj_torque[2] += P_contact[0] * (
+                    -f_mag * n_world[1] * node_scale_factor
+                ) - P_contact[1] * (-f_mag * n_world[0] * node_scale_factor)
 
                 # Projectile 6-DOF contact friction
                 if mu_s > 0.0:
@@ -1745,7 +1743,12 @@ def numba_step_shell_forces_and_failures(
                     # Mean stress
                     sig_m = (sig_xx_new + sig_yy_new) / 3.0
                     # Von Mises equivalent stress
-                    sig_vm = np.sqrt(sig_xx_new**2 + sig_yy_new**2 - sig_xx_new * sig_yy_new + 3.0 * tau_xy_new**2)
+                    sig_vm = np.sqrt(
+                        sig_xx_new**2
+                        + sig_yy_new**2
+                        - sig_xx_new * sig_yy_new
+                        + 3.0 * tau_xy_new**2
+                    )
                     eta = sig_m / (sig_vm if sig_vm > 1e-5 else 1e-5)
 
                     # Triaxiality-dependent failure strain scaling

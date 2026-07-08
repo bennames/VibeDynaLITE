@@ -823,4 +823,3 @@ def test_triaxiality_failure_scaling():
     eta = -1.0
     eps_f_compression = ultimate_strain * np.exp(-0.5 * eta)
     assert eps_f_compression > eps_f_shear
-

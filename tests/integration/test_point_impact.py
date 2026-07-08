@@ -379,8 +379,12 @@ class TestPointImpact:
             lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
             strains = (lengths - grid.rest_lengths) / grid.rest_lengths
             se_springs = compute_strain_energy(
-                strains, grid.stiffnesses, grid.rest_lengths, grid_failed, grid_damage,
-                tension_only=grid.tension_only
+                strains,
+                grid.stiffnesses,
+                grid.rest_lengths,
+                grid_failed,
+                grid_damage,
+                tension_only=grid.tension_only,
             )
             ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
 
