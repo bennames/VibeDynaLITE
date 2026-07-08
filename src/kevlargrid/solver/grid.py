@@ -45,6 +45,9 @@ class Grid:
     tension_only: np.ndarray
     damage: np.ndarray
     elements: np.ndarray
+    element_stress: np.ndarray | None
+    element_peeq: np.ndarray | None
+    element_damage: np.ndarray | None
     n_nodes: int
     n_springs: int
     initial_spring_counts: np.ndarray
@@ -73,6 +76,9 @@ class Grid:
         self.failed = failed
         self.tension_only = tension_only
         self.elements = elements if elements is not None else np.zeros((0, 4), dtype=np.int32)
+        self.element_stress = None
+        self.element_peeq = None
+        self.element_damage = None
         if damage is None:
             self.damage = failed.astype(np.float64)
         else:
