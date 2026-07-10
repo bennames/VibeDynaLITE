@@ -48,6 +48,7 @@ def compute_strain_energy(
     thickness: float = 0.002,
     dx: float = 0.01,
     E: float = 71e9,
+    nu: float = 0.3,
 ) -> float:
     """Compute the total elastic strain energy stored in all springs or shell elements.
 
@@ -58,23 +59,25 @@ def compute_strain_energy(
     stiffnesses : np.ndarray
         Axial stiffness per spring, shape ``(n_springs,)``.
     rest_lengths : np.ndarray
-        Natural (rest) length per spring, shape ``(n_springs,)``.
+        Rest length per spring, shape ``(n_springs,)``.
     failed : np.ndarray, optional
-        Boolean failure flags per spring or element, shape ``(n_springs,)`` or ``(n_elements,)``.
+        Boolean failure array.
     damage : np.ndarray, optional
-        Damage fraction per spring, shape ``(n_springs,)``.
+        Scalar damage array.
     tension_only : np.ndarray, optional
-        Boolean tension-only flags per spring, shape ``(n_springs,)``.
+        Boolean indicating if tension-only behavior is active.
     elements : np.ndarray, optional
-        Nodal connectivity for shell elements, shape ``(n_elements, 4)``.
+        Shell element connectivity array.
     element_stress : np.ndarray, optional
-        Element stresses, shape ``(n_elements, 3, 3)``.
-    thickness : float, optional
-        Thickness of shell elements.
-    dx : float, optional
-        Element size.
-    E : float, optional
-        Young's Modulus.
+        Shell element thickness point stresses, shape ``(n_elements, 3, 3)``.
+    thickness : float, default 0.002
+        Shell thickness.
+    dx : float, default 0.01
+        Element length.
+    E : float, default 71e9
+        Young's modulus.
+    nu : float, default 0.3
+        Poisson's ratio.
 
     Returns
     -------
@@ -84,9 +87,20 @@ def compute_strain_energy(
     if elements is not None and element_stress is not None:
         se = 0.0
         n_elements = len(elements)
+        w_pts = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
         for e in range(n_elements):
             if failed is None or not failed[e]:
-                se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e] ** 2) / E
+                el_se = 0.0
+                for k in range(3):
+                    wk = w_pts[k]
+                    s_xx = element_stress[e, k, 0]
+                    s_yy = element_stress[e, k, 1]
+                    t_xy = element_stress[e, k, 2]
+                    u0 = (0.5 / E) * (
+                        s_xx**2 + s_yy**2 - 2.0 * nu * s_xx * s_yy + 2.0 * (1.0 + nu) * t_xy**2
+                    )
+                    el_se += u0 * wk
+                se += el_se * (dx * dx)
         return float(se)
 
     # SE = 0.5 * k * (1 - D) * dx^2 = 0.5 * k_eff * (strain * L0)^2

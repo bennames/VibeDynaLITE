@@ -1320,6 +1320,8 @@ def _fused_leapfrog_loop_jit(
             if delta > 0.0:
                 if active_counts[i] == 0.0:
                     continue
+                if delta > 0.2 * dx:
+                    delta = 0.2 * dx
                 # Cap the penalty contact force to yarn structural capacity
                 f_cap = grid_stiffnesses[0] * dx if len(grid_stiffnesses) > 0 else 1.0e6
 
@@ -1670,6 +1672,9 @@ def numba_step_shell_forces_and_failures(
 
         is_failed = element_failed[e] == 1
         ramp = 1.0
+        N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
+        M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
+        Q_x, Q_y = 0.0, 0.0
 
         if is_failed:
             if element_failed_step[e] < 0:
@@ -1683,8 +1688,6 @@ def numba_step_shell_forces_and_failures(
                 element_strains[e, :] = 0.0
                 continue
 
-            N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
-            M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
             for k in range(3):
                 zk = z_pts[k]
                 wk = w_pts[k]
@@ -1772,10 +1775,6 @@ def numba_step_shell_forces_and_failures(
             # Thickness integration
             all_failed = True
 
-            # Store forces/moments integrals
-            N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
-            M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
-
             for k in range(3):
                 zk = z_pts[k]
                 wk = w_pts[k]
@@ -1813,15 +1812,23 @@ def numba_step_shell_forces_and_failures(
 
                 d_peeq = 0.0
                 if f_yield > 0.0 and yield_strength > 0.0:
-                    # Radial return plastic strain increment
-                    d_peeq = f_yield / (3.0 * G + hardening_modulus)
+                    # Radial return plastic strain increment with softening safeguards
+                    denom = 3.0 * G + hardening_modulus
+                    if denom > 0.0:
+                        d_peeq = f_yield / denom
+                        if d_peeq < 0.0:
+                            d_peeq = 0.0
+                    else:
+                        d_peeq = 0.0
                     peeq_new = peeq_old + d_peeq
 
-                    # Scale stress components
+                    # Scale stress components (strictly dissipative, scale <= 1.0)
                     scale = 1.0 - (3.0 * G * d_peeq) / (
                         sig_vm_trial if sig_vm_trial != 0.0 else 1.0
                     )
-                    if scale < 0.0:
+                    if scale > 1.0:
+                        scale = 1.0
+                    elif scale < 0.0:
                         scale = 0.0
 
                     sig_xx_new = sig_xx_trial * scale
@@ -1916,17 +1923,17 @@ def numba_step_shell_forces_and_failures(
                 * (dx * dx)
             )
 
-        # Transverse shear forces
-        gam_dot_xz = d_gam_xz / dt if dt > 0.0 else 0.0
-        gam_dot_yz = d_gam_yz / dt if dt > 0.0 else 0.0
+            # Transverse shear forces
+            gam_dot_xz = d_gam_xz / dt if dt > 0.0 else 0.0
+            gam_dot_yz = d_gam_yz / dt if dt > 0.0 else 0.0
 
-        q_damp_x = rayleigh_beta * G_s * thickness * gam_dot_xz
-        q_damp_y = rayleigh_beta * G_s * thickness * gam_dot_yz
+            q_damp_x = rayleigh_beta * G_s * thickness * gam_dot_xz
+            q_damp_y = rayleigh_beta * G_s * thickness * gam_dot_yz
 
-        Q_x = G_s * thickness * gam_xz + q_damp_x
-        Q_y = G_s * thickness * gam_yz + q_damp_y
+            Q_x = G_s * thickness * gam_xz + q_damp_x
+            Q_y = G_s * thickness * gam_yz + q_damp_y
 
-        step_stiff_damp_power += (q_damp_x * gam_dot_xz + q_damp_y * gam_dot_yz) * (dx * dx)
+            step_stiff_damp_power += (q_damp_x * gam_dot_xz + q_damp_y * gam_dot_yz) * (dx * dx)
 
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
@@ -2310,11 +2317,28 @@ def _fused_shell_loop_jit(
                                     spring_damage[i] = d
                             if d >= 1.0:
                                 spring_failed[i] = 1
-                                failure_dissipated += 0.5 * (1.0 - d_old) * k_0 * delta * delta
-                            else:
-                                f_mag = (1.0 - d) * k_0 * delta
+                            f_mag = (1.0 - d) * k_0 * delta
                         else:
                             f_mag = k_0 * delta
+
+                        # Calculate analytical energy increment
+                        denom_old = delta_c - d_old * (delta_c - delta_0)
+                        denom_old_safe = denom_old if denom_old != 0.0 else 1.0
+                        e_old = (
+                            0.5 * k_0 * (delta_0**2) * (delta_c * d_old) / denom_old_safe
+                            if d_old < 1.0
+                            else 0.5 * k_0 * delta_0 * delta_c
+                        )
+
+                        denom_new = delta_c - d * (delta_c - delta_0)
+                        denom_new_safe = denom_new if denom_new != 0.0 else 1.0
+                        e_new = (
+                            0.5 * k_0 * (delta_0**2) * (delta_c * d) / denom_new_safe
+                            if d < 1.0
+                            else 0.5 * k_0 * delta_0 * delta_c
+                        )
+
+                        failure_dissipated += e_new - e_old
 
                         if d < 1.0:
                             fx = f_mag * (dx_s / delta)
@@ -2328,14 +2352,6 @@ def _fused_shell_loop_jit(
                             shell_forces[n1, 0] -= fx
                             shell_forces[n1, 1] -= fy
                             shell_forces[n1, 2] -= fz
-
-                            dvx_half = v_half[n1, 0] - v_half[n0, 0]
-                            dvy_half = v_half[n1, 1] - v_half[n0, 1]
-                            dvz_half = v_half[n1, 2] - v_half[n0, 2]
-                            step_fracture_work = (
-                                fx * dvx_half + fy * dvy_half + fz * dvz_half
-                            ) * dt
-                            failure_dissipated += step_fracture_work
 
         # 4. Contact forces
         proj_forces = zeros((n_nodes, 3), dtype=positions.dtype)
@@ -2385,6 +2401,8 @@ def _fused_shell_loop_jit(
             if delta > 0.0:
                 if active_counts[i] == 0.0:
                     continue
+                if delta > 0.2 * dx:
+                    delta = 0.2 * dx
                 # Cap penalty contact force to sheet structural capacity
                 f_cap = yield_strength * dx * thickness
                 if f_cap <= 0.0:
@@ -2566,6 +2584,14 @@ def _fused_shell_loop_jit(
         net_torques = clamp_boundary(net_torques, boundary_mask)
         ang_accel = net_torques / rot_inertia_col
         ang_velocities = omega_half + 0.5 * ang_accel * dt
+        for i in range(n_nodes):
+            if active_counts[i] == 0:
+                ang_velocities[i, 0] = 0.0
+                ang_velocities[i, 1] = 0.0
+                ang_velocities[i, 2] = 0.0
+                ang_accel[i, 0] = 0.0
+                ang_accel[i, 1] = 0.0
+                ang_accel[i, 2] = 0.0
 
         # CFL velocity clamping
         v_full_mag = sqrt(sum(velocities**2, axis=1))
@@ -2592,9 +2618,23 @@ def _fused_shell_loop_jit(
 
                 # Strain energy se: estimate from element elastic stresses
                 se = 0.0
+                w_pts_se = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
                 for e in range(n_elements):
                     if element_failed[e] == 0:
-                        se += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e] ** 2) / E
+                        el_se = 0.0
+                        for k in range(3):
+                            wk = w_pts_se[k]
+                            s_xx = element_stress[e, k, 0]
+                            s_yy = element_stress[e, k, 1]
+                            t_xy = element_stress[e, k, 2]
+                            u0 = (0.5 / E) * (
+                                s_xx**2
+                                + s_yy**2
+                                - 2.0 * poisson_ratio * s_xx * s_yy
+                                + 2.0 * (1.0 + poisson_ratio) * t_xy**2
+                            )
+                            el_se += u0 * wk
+                        se += el_se * (dx * dx)
 
                 proj_rot_ke = 0.0
                 if shape_code >= 0:

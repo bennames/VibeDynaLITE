@@ -1367,17 +1367,11 @@ class Viewport3D:
 
             if getattr(self, "structure_type", "fabric") == "metallic_sheet":
                 if len(failed) != len(self.grid.element_failed):
-                    print(
-                        f"Warning: Update failed size mismatch. Expected {len(self.grid.element_failed)}, got {len(failed)}."
-                    )
                     return
                 self.grid.nodes = np.asarray(positions)
                 self.grid.element_failed = np.asarray(failed)
             else:
                 if len(failed) != len(self.grid.failed):
-                    print(
-                        f"Warning: Update failed size mismatch. Expected {len(self.grid.failed)}, got {len(failed)}."
-                    )
                     return
                 self.grid.nodes = np.asarray(positions)
                 self.grid.failed = np.asarray(failed)
