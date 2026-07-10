@@ -107,10 +107,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         if val_to_set > 0:
             if use_czm:
-                x_min = 0.0
-                x_max = (nx - 1) * dx
-                y_min = 0.0
-                y_max = (ny - 1) * dx
+                x_min = -(nx - 1) * dx / 2.0
+                x_max = (nx - 1) * dx / 2.0
+                y_min = -(ny - 1) * dx / 2.0
+                y_max = (ny - 1) * dx / 2.0
                 for idx in range(grid.n_nodes):
                     x = grid.nodes[idx, 0]
                     y = grid.nodes[idx, 1]
