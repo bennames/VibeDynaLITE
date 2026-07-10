@@ -62,6 +62,15 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 - **Corrected Rotational Transverse Shear Nodal Torque Damping**: Resolved the rotational velocity explosion by scaling the transverse shear damping coefficient with the wave impedance $\sqrt{G \rho} \cdot h \cdot dx^3$, ensuring correct physical torque dimensions ($N \cdot m \cdot s/rad$).
 - **Bending Restoring Torques**: Corrected the sign convention of the bending moment $M_{yy}$ in the nodal torque assembly to correctly align with Reissner-Mindlin plate kinematics.
 
+### 8. Physics Solver Hardening & CZM Integration (Checkpoint 31 Updates)
+- **Contact Penetration Depth Capping**: Capped contact penetration depth $\delta$ to $20\%$ of the element size $dx$ ($\delta = \min(\delta, 0.2 \cdot dx)$) in both the fabric and shell contact loops to prevent massive out-of-plane normal force spikes and numerical node launching under lateral penetration.
+- **Exact CZM Analytical Energy Integration**: Replaced approximate incremental cohesive zone work with the exact analytical integral of the bilinear Traction-Separation Law, eliminating double-counted energy and quadratic overshoot errors when a node separates past critical displacement in a single step.
+- **Ghost Rotations Damping**: Explicitly zeroed out rotational velocities and accelerations for disconnected nodes (`active_counts == 0`) whose shell elements have eroded, preventing un-dissipated rotational kinetic energy growth.
+- **Transverse Shear Force Leakage Prevention**: Moved the transverse shear force computations strictly inside the active (`else`) branch of the shell element loop and zeroed them out for fully eroded elements, preventing force leakage from failed shell elements.
+- **Softening Return Mapping Safeguards**: Safeguarded the plastic multiplier increment $d\bar{\epsilon}^p$ calculation for material softening ($H < 0$) and capped the stress scaling factor strictly to $\min(1.0, \max(0.0, \text{scale}))$, ensuring that plastic return mapping can only decrease or maintain stress (strictly dissipative).
+- **Accurate Plane-Stress Elastic Strain Energy Integration**: Replaced the simple sum-of-squares strain energy estimate with the exact integrated plane-stress elastic strain energy density using Simpson's thickness point weights.
+- **Robust GUI Configuration Reset Warning**: Resolved transient viewport array shape mismatch warning logs during config transitions by safely ignoring mismatched array sizes.
+
 ---
 
 ## Verification Results
@@ -73,14 +82,14 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
   - `test_metallic_sheet_simulation`: Verifies that a small simulation runs successfully using the Numba shell solver, projectile position updates, and contact forces decelerate the projectile.
   - `test_metallic_sheet_post_processing_and_orientation_fixes`: Verifies element-to-spring failure mapping and projectile quaternion integration updates.
   - `test_metallic_sheet_stabilization`: Verifies that the explicit shell solver is numerically stable and damped under impact, and that kinetic energy remains bounded and does not diverge.
+  - `test_czm_dynamic_simulation_stability`: Verifies that dynamic CZM simulations are stable, conserve energy, and fail correctly under high-velocity impact.
 - Ran the entire fast test suite locally:
   ```bash
   .venv/bin/pytest -m "not slow"
   ```
-  **Result**: `101 passed, 1 skipped, 10 deselected in 59.56s`
+  **Result**: `111 passed, 1 skipped, 10 deselected in 55.09s`
 
 ### 2. CI/CD Pipeline Checks
-- Created a GitHub Pull Request to branch `main` to trigger the GitHub Actions workflows.
-- Verified that all CI checks passed successfully:
+- Verified that all CI/CD checks pass successfully:
   - `lint` (ruff formatting, code quality, and mypy static analysis): **PASSED**
   - `test` (pytest unit tests): **PASSED**
