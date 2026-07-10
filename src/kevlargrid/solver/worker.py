@@ -76,7 +76,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
         n_plies = grid_cfg["n_plies"]
-        t_ply = grid_cfg["t_ply"]
+        t_ply = grid_cfg.get("t_ply")
         n_nodes_per_layer = nx * ny
         n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
 
@@ -387,7 +387,6 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 from kevlargrid.solver.fused import fused_leapfrog_loop
 
                 extra_kwargs["proj_peak_deceleration"] = proj_peak_deceleration
-
                 (
                     positions,
                     velocities,
@@ -451,6 +450,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     mu_s=mu_s,
                     friction_dissipated_init=friction_dissipated,
                     X_ref=X_ref,
+                    **extra_kwargs,
                 )
                 if structure_type == "metallic_sheet":
                     grid.element_failed = returned_failed
@@ -754,7 +754,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
         lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
-        strains = (lengths - grid.rest_lengths) / grid.rest_lengths
+        safe_rest_lengths = np.where(grid.rest_lengths < 1e-8, 1.0, grid.rest_lengths)
+        strains = (lengths - grid.rest_lengths) / safe_rest_lengths
 
         if structure_type == "metallic_sheet":
             n_nodes = len(grid.nodes)
