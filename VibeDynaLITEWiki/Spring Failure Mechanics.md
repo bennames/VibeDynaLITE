@@ -4,9 +4,11 @@ Spring failure is how VibeDynaLITE models yarn breakage in the Kevlar fabric. Wh
 
 ---
 
-## Binary Failure (Current Model)
+## Failure Models
 
-The current implementation in `failure.py` uses a simple binary check:
+VibeDynaLITE supports two failure models for yarn springs, implemented in `failure.py` and optimized in the JIT solver loops:
+1. **Binary Failure Model**: The spring is active until it reaches a threshold strain, then instantly fails.
+2. **Progressive Damage Model**: Stiffness degrades continuously between a damage onset strain and the ultimate failure strain.
 
 ```python
 failed |= strains > epsilon_fail
@@ -42,9 +44,9 @@ That stored energy simply vanishes from the energy balance — it doesn't appear
 
 ---
 
-## Progressive Damage (Planned)
+## Progressive Damage (Implemented)
 
-The planned upgrade replaces the binary cliff with a gradual linear stiffness degradation between two strain thresholds.
+The progressive damage model replaces the binary cliff with a gradual linear stiffness degradation between two strain thresholds, reducing force discontinuities and preventing unphysical energy spikes.
 
 ### Damage Variable
 
@@ -144,5 +146,6 @@ This is a targeted reordering of the fused loop, not a structural change. The st
 
 ## See Also
 
+- [[2D Shell Finite Elements]] — Description of the Cohesive Zone Model (CZM) tiebreak interface failure
 - [[Energy Conservation]] — How fracture energy fits into the full energy balance
 - [[Kevlar Material Properties]] — Material constants that determine failure strain and stiffness
