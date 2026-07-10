@@ -91,6 +91,11 @@ def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
             return num
         elif unit in ("g/m2", "g/m^2"):
             return num * 1e-3
+    elif expected_base_unit == "jm2":
+        if unit in ("jm2", "j/m2", "j/m^2", "j/m²"):
+            return num
+        elif unit in ("kj/m2", "kj/m^2", "kj/m²"):
+            return num * 1e3
 
     raise ValidationError(
         f"Unknown or incompatible unit '{unit_str}' for expected unit type '{expected_base_unit}'"
@@ -172,6 +177,10 @@ def normalize_config_units(config: dict) -> None:
             mat["yield_strength_gpa"] = parse_unit_value(mat["yield_strength_gpa"], "gpa")
         if "hardening_modulus_gpa" in mat:
             mat["hardening_modulus_gpa"] = parse_unit_value(mat["hardening_modulus_gpa"], "gpa")
+        if "cohesive_strength_gpa" in mat:
+            mat["cohesive_strength_gpa"] = parse_unit_value(mat["cohesive_strength_gpa"], "gpa")
+        if "fracture_energy_jm2" in mat:
+            mat["fracture_energy_jm2"] = parse_unit_value(mat["fracture_energy_jm2"], "jm2")
 
     if "grid" in config and isinstance(config["grid"], dict):
         grid = config["grid"]
@@ -592,6 +601,34 @@ def validate_config(config: dict) -> bool:
         raise ValidationError(
             f"Simulation parameter 'structure_type' must be 'fabric' or 'metallic_sheet' (got '{sim['structure_type']}')."
         )
+
+    if sim["structure_type"] == "metallic_sheet":
+        if "use_czm" not in sim:
+            sim["use_czm"] = True
+        if not isinstance(sim["use_czm"], bool):
+            raise ValidationError(
+                f"Simulation parameter 'use_czm' must be a boolean (got {type(sim['use_czm']).__name__})."
+            )
+        if sim["use_czm"]:
+            from kevlargrid.materials.library import MATERIALS
+
+            mat_name = mat.get("name", "")
+            if "cohesive_strength_gpa" not in mat:
+                if mat_name in MATERIALS and "cohesive_strength_gpa" in MATERIALS[mat_name]:
+                    mat["cohesive_strength_gpa"] = MATERIALS[mat_name]["cohesive_strength_gpa"]
+                else:
+                    mat["cohesive_strength_gpa"] = mat.get("tensile_strength_gpa", 0.485)
+            if "fracture_energy_jm2" not in mat:
+                if mat_name in MATERIALS and "fracture_energy_jm2" in MATERIALS[mat_name]:
+                    mat["fracture_energy_jm2"] = MATERIALS[mat_name]["fracture_energy_jm2"]
+                else:
+                    mat["fracture_energy_jm2"] = 50000.0
+
+            for key in ["cohesive_strength_gpa", "fracture_energy_jm2"]:
+                if not isinstance(mat[key], (int, float)) or mat[key] <= 0.0:
+                    raise ValidationError(
+                        f"Material cohesive property '{key}' must be a positive number (got {mat[key]})."
+                    )
 
     model = sim.get("damping_model")
     if model is None:

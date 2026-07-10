@@ -823,3 +823,79 @@ def test_triaxiality_failure_scaling():
     eta = -1.0
     eps_f_compression = ultimate_strain * np.exp(-0.5 * eta)
     assert eps_f_compression > eps_f_shear
+
+
+def test_czm_mesh_duplication():
+    """Verify that CZM mesh duplication correctly separates elements and defines tiebreak springs."""
+    material = {
+        "name": "Steel",
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.485,
+        "fiber_density_gcc": 7.85,
+        "areal_density_kgm2": 15.7,
+        "shear_ratio": 0.38,
+        "cohesive_strength_gpa": 0.485,
+        "fracture_energy_jm2": 50000.0,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=5,
+        ny=5,
+        dx=0.01,
+        material=material,
+        use_czm=True,
+    )
+
+    # 5x5 grid has (5-1)*(5-1) = 16 elements.
+    # In CZM, each element is fully duplicated: 16 * 4 = 64 nodes.
+    assert len(grid.elements) == 16
+    assert len(grid.nodes) == 64
+    assert grid.n_nodes == 64
+
+    # All springs should be tiebreak springs
+    assert len(grid.springs) > 0
+    assert np.all(grid.is_tiebreak)
+    assert np.all(grid.rest_lengths == 0.0)
+
+    # Masses should be distributed equally to the 4 corners of each element
+    m_cell = 15.7 * 0.01 * 0.01
+    expected_node_mass = 0.25 * m_cell
+    assert np.allclose(grid.masses, expected_node_mass)
+
+
+def test_czm_spring_softening_equations():
+    """Verify that the bilinear Traction-Separation Law softening equations evaluate correctly."""
+    cohesive_strength_gpa = 0.485
+    fracture_energy_jm2 = 50000.0
+    sig_max = cohesive_strength_gpa * 1e9
+    g_c = fracture_energy_jm2
+
+    dx = 0.01
+    thickness = 0.002
+    A_trib = 0.5 * dx * thickness
+    F_max = sig_max * A_trib
+
+    delta_c = 2.0 * g_c / sig_max
+    delta_0 = 0.01 * delta_c
+    k_0 = F_max / delta_0
+
+    # 1. Before damage initiation (delta <= delta_0)
+    delta = 0.5 * delta_0
+    d = 0.0
+    f_mag = (1.0 - d) * k_0 * delta
+    assert np.isclose(f_mag, F_max * 0.5)
+
+    # 2. Softening region (delta_0 < delta < delta_c)
+    delta = 0.5 * (delta_0 + delta_c)
+    d_cand = (delta_c * (delta - delta_0)) / (delta * (delta_c - delta_0))
+    d = min(1.0, d_cand)
+    f_mag = (1.0 - d) * k_0 * delta
+    expected_f_mag = ((delta_c - delta) / (delta_c - delta_0)) * F_max
+    assert np.isclose(f_mag, expected_f_mag)
+
+    # 3. Completely failed region (delta >= delta_c)
+    delta = 1.5 * delta_c
+    d_cand = (delta_c * (delta - delta_0)) / (delta * (delta_c - delta_0))
+    d = min(1.0, d_cand)
+    assert np.isclose(d, 1.0)

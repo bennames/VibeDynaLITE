@@ -14,6 +14,8 @@ MATERIALS: dict[str, dict[str, str | float | tuple[int, int]]] = {
         "denier": 3000,
         "yarn_count": (17, 17),
         "crimp_factor": 0.10,
+        "cohesive_strength_gpa": 2.92,
+        "fracture_energy_jm2": 30000.0,
     },
     "Kevlar 49": {
         "tensile_modulus_gpa": 112.4,
@@ -26,6 +28,8 @@ MATERIALS: dict[str, dict[str, str | float | tuple[int, int]]] = {
         "denier": 1140,
         "yarn_count": (17, 17),
         "crimp_factor": 0.10,
+        "cohesive_strength_gpa": 3.00,
+        "fracture_energy_jm2": 30000.0,
     },
     "Kevlar KM2": {
         "tensile_modulus_gpa": 84.62,
@@ -38,6 +42,8 @@ MATERIALS: dict[str, dict[str, str | float | tuple[int, int]]] = {
         "denier": 600,
         "yarn_count": (34, 34),
         "crimp_factor": 0.10,
+        "cohesive_strength_gpa": 3.40,
+        "fracture_energy_jm2": 40000.0,
     },
     "Corten Steel (14 Gauge)": {
         "tensile_modulus_gpa": 200.0,
@@ -53,6 +59,8 @@ MATERIALS: dict[str, dict[str, str | float | tuple[int, int]]] = {
         "hardening_modulus_gpa": 1.0,
         "ultimate_strain": 0.20,
         "poisson_ratio": 0.30,
+        "cohesive_strength_gpa": 0.485,
+        "fracture_energy_jm2": 50000.0,
     },
 }
 

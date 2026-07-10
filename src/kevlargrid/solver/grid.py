@@ -48,6 +48,7 @@ class Grid:
     element_stress: np.ndarray | None
     element_peeq: np.ndarray | None
     element_damage: np.ndarray | None
+    is_tiebreak: np.ndarray
     n_nodes: int
     n_springs: int
     initial_spring_counts: np.ndarray
@@ -67,6 +68,7 @@ class Grid:
         initial_spring_counts: np.ndarray | None = None,
         damage: np.ndarray | None = None,
         elements: np.ndarray | None = None,
+        is_tiebreak: np.ndarray | None = None,
     ) -> None:
         self.nodes = nodes
         self.springs = springs
@@ -79,6 +81,10 @@ class Grid:
         self.element_stress = None
         self.element_peeq = None
         self.element_damage = None
+        if is_tiebreak is None:
+            self.is_tiebreak = np.zeros(len(springs), dtype=bool)
+        else:
+            self.is_tiebreak = is_tiebreak
         if damage is None:
             self.damage = failed.astype(np.float64)
         else:
@@ -134,6 +140,7 @@ def generate_rectangular_grid(
     corrugation_amplitude: float = 0.0,
     corrugation_period: float = 1.0,
     corrugation_axis: str = "x",
+    use_czm: bool = False,
 ) -> Grid:
     """Create a rectangular grid with orthogonal and diagonal springs.
 
@@ -166,6 +173,8 @@ def generate_rectangular_grid(
     Grid
         A fully initialised :class:`Grid` instance.
     """
+    is_tiebreak = None
+
     # 1. Base properties (single layer)
     x = np.arange(nx) * dx
     y = np.arange(ny) * dx
@@ -312,13 +321,79 @@ def generate_rectangular_grid(
         tension_only = np.concatenate(all_tension_only, axis=0)
         elements = np.concatenate(all_elements, axis=0)
     else:
-        nodes = base_nodes
-        springs = base_springs
-        masses = base_masses
-        stiffnesses = base_stiffnesses
-        rest_lengths = base_rest_lengths
-        tension_only = base_tension_only
-        elements = base_elements
+        if use_czm:
+            # Number of elements in base grid
+            N_el = (nx - 1) * (ny - 1)
+            nodes = np.zeros((4 * N_el, 3), dtype=np.float64)
+
+            # Populate coordinates from base_nodes
+            for i in range(nx - 1):
+                for j in range(ny - 1):
+                    e = i * (ny - 1) + j
+                    nodes[4 * e + 0] = base_nodes[i * ny + j]
+                    nodes[4 * e + 1] = base_nodes[(i + 1) * ny + j]
+                    nodes[4 * e + 2] = base_nodes[(i + 1) * ny + (j + 1)]
+                    nodes[4 * e + 3] = base_nodes[i * ny + (j + 1)]
+
+            elements = np.zeros((N_el, 4), dtype=np.int32)
+            for e in range(N_el):
+                elements[e] = [4 * e + 0, 4 * e + 1, 4 * e + 2, 4 * e + 3]
+
+            # Masses are distributed equally to element corners
+            masses = np.ones(4 * N_el, dtype=np.float64) * (0.25 * m_cell)
+
+            # Build tiebreak springs
+            springs_list = []
+            stiffness_list = []
+
+            cohesive_strength_gpa = material.get("cohesive_strength_gpa", 0.485)
+            fracture_energy_jm2 = material.get("fracture_energy_jm2", 50000.0)
+
+            sig_max = cohesive_strength_gpa * 1e9
+            g_c = fracture_energy_jm2
+            # thickness t
+            t = areal_density / (fiber_density_gcc * 1000.0)
+            # cohesive stiffness
+            k_cohesive = (sig_max**2 * dx * t) / (0.04 * g_c)
+
+            for i in range(nx - 1):
+                for j in range(ny - 1):
+                    e = i * (ny - 1) + j
+
+                    # Check right neighbor
+                    if i < nx - 2:
+                        e_right = (i + 1) * (ny - 1) + j
+                        # Corner 1 of e connected to Corner 0 of e_right
+                        springs_list.append((4 * e + 1, 4 * e_right + 0))
+                        stiffness_list.append(k_cohesive)
+                        # Corner 2 of e connected to Corner 3 of e_right
+                        springs_list.append((4 * e + 2, 4 * e_right + 3))
+                        stiffness_list.append(k_cohesive)
+
+                    # Check top neighbor
+                    if j < ny - 2:
+                        e_top = i * (ny - 1) + (j + 1)
+                        # Corner 3 of e connected to Corner 0 of e_top
+                        springs_list.append((4 * e + 3, 4 * e_top + 0))
+                        stiffness_list.append(k_cohesive)
+                        # Corner 2 of e connected to Corner 1 of e_top
+                        springs_list.append((4 * e + 2, 4 * e_top + 1))
+                        stiffness_list.append(k_cohesive)
+
+            springs = np.array(springs_list, dtype=np.int32)
+            stiffnesses = np.array(stiffness_list, dtype=np.float64)
+            rest_lengths = np.zeros(len(springs), dtype=np.float64)
+            tension_only = np.zeros(len(springs), dtype=bool)
+            is_tiebreak = np.ones(len(springs), dtype=bool)
+        else:
+            nodes = base_nodes
+            springs = base_springs
+            masses = base_masses
+            stiffnesses = base_stiffnesses
+            rest_lengths = base_rest_lengths
+            tension_only = base_tension_only
+            elements = base_elements
+            is_tiebreak = None
 
     failed = np.zeros(len(springs), dtype=bool)
 
@@ -331,4 +406,5 @@ def generate_rectangular_grid(
         failed=failed,
         tension_only=tension_only,
         elements=elements,
+        is_tiebreak=is_tiebreak,
     )

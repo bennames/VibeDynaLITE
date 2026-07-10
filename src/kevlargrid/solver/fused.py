@@ -1888,6 +1888,7 @@ def numba_step_shell_forces_and_failures(
         "use_viscous",
         "cfl_factor",
         "shape_code",
+        "use_czm",
     ),
 )
 def _fused_shell_loop_jit(
@@ -1954,6 +1955,13 @@ def _fused_shell_loop_jit(
     youngs_modulus_gpa,
     density_kgm3,
     proximity_threshold,
+    springs,
+    spring_failed,
+    spring_damage,
+    is_tiebreak,
+    cohesive_strength_gpa,
+    fracture_energy_jm2,
+    use_czm,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
@@ -1998,9 +2006,28 @@ def _fused_shell_loop_jit(
     yield_strength = yield_strength_gpa * 1e9
     hardening_modulus = hardening_modulus_gpa * 1e9
 
+    if use_czm:
+        cohesive_strength = cohesive_strength_gpa * 1e9
+        A_trib = 0.5 * dx * thickness
+        F_max = cohesive_strength * A_trib
+        delta_c = 2.0 * fracture_energy_jm2 / cohesive_strength
+        delta_0 = 0.01 * delta_c
+        k_0 = F_max / delta_0
+    else:
+        cohesive_strength = 0.0
+        A_trib = 0.0
+        F_max = 0.0
+        delta_c = 0.0
+        delta_0 = 0.0
+        k_0 = 0.0
+
     if cfl_factor > 0.0:
         c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
         omega_max = 2.0 * c_p / dx
+        if use_czm:
+            omega_spring = sqrt(2.0 * k_0 / mass_min)
+            if omega_spring > omega_max:
+                omega_max = omega_spring
         dt_crit = sqrt(rayleigh_beta**2 + 4.0 / (omega_max**2)) - rayleigh_beta
         if k_penalty > 0.0:
             dt_contact = 2.0 * sqrt(mass_min / k_penalty)
@@ -2101,6 +2128,47 @@ def _fused_shell_loop_jit(
         )
         failure_dissipated += step_fracture_energy
         damp_dissipated += step_stiff_damp_power * dt
+
+        if use_czm:
+            for i in range(len(springs)):
+                if is_tiebreak[i] and spring_failed[i] == 0:
+                    n0 = springs[i, 0]
+                    n1 = springs[i, 1]
+                    dx_s = positions[n1, 0] - positions[n0, 0]
+                    dy_s = positions[n1, 1] - positions[n0, 1]
+                    dz_s = positions[n1, 2] - positions[n0, 2]
+                    delta = sqrt(dx_s * dx_s + dy_s * dy_s + dz_s * dz_s)
+                    if delta > 0.0:
+                        d = spring_damage[i]
+                        if delta > delta_0:
+                            d_cand = (delta_c * (delta - delta_0)) / (delta * (delta_c - delta_0))
+                            if d_cand > d:
+                                d = min(1.0, d_cand)
+                                spring_damage[i] = d
+                            if d >= 1.0:
+                                spring_failed[i] = 1
+
+                        if d < 1.0:
+                            f_mag = (1.0 - d) * k_0 * delta
+                            fx = f_mag * (dx_s / delta)
+                            fy = f_mag * (dy_s / delta)
+                            fz = f_mag * (dz_s / delta)
+
+                            shell_forces[n0, 0] += fx
+                            shell_forces[n0, 1] += fy
+                            shell_forces[n0, 2] += fz
+
+                            shell_forces[n1, 0] -= fx
+                            shell_forces[n1, 1] -= fy
+                            shell_forces[n1, 2] -= fz
+
+                            dvx_half = v_half[n1, 0] - v_half[n0, 0]
+                            dvy_half = v_half[n1, 1] - v_half[n0, 1]
+                            dvz_half = v_half[n1, 2] - v_half[n0, 2]
+                            step_fracture_work = (
+                                fx * dvx_half + fy * dvy_half + fz * dvz_half
+                            ) * dt
+                            failure_dissipated += step_fracture_work
 
         # 4. Contact forces
         proj_forces = zeros((n_nodes, 3), dtype=positions.dtype)
@@ -2475,6 +2543,10 @@ def fused_leapfrog_loop(
     element_stress: np.ndarray | None = None,
     element_peeq: np.ndarray | None = None,
     element_damage: np.ndarray | None = None,
+    is_tiebreak: np.ndarray | None = None,
+    cohesive_strength_gpa: float = 0.485,
+    fracture_energy_jm2: float = 50000.0,
+    use_czm: bool = False,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -2612,6 +2684,13 @@ def fused_leapfrog_loop(
             youngs_modulus_gpa,
             density_kgm3,
             proximity_threshold_val,
+            grid_springs,
+            grid_failed,
+            grid_damage,
+            is_tiebreak if is_tiebreak is not None else np.zeros(n_springs, dtype=bool),
+            cohesive_strength_gpa,
+            fracture_energy_jm2,
+            use_czm,
         )
 
     return _fused_leapfrog_loop_jit(

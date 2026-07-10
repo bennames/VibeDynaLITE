@@ -79,6 +79,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         t_ply = grid_cfg["t_ply"]
 
         # Build grid
+        use_czm = sim_cfg.get("structure_type", "fabric") == "metallic_sheet" and sim_cfg.get(
+            "use_czm", True
+        )
         grid = generate_rectangular_grid(
             nx=nx,
             ny=ny,
@@ -89,26 +92,42 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             corrugation_amplitude=grid_cfg.get("corrugation_amplitude", 0.0),
             corrugation_period=grid_cfg.get("corrugation_period", 1.0),
             corrugation_axis=grid_cfg.get("corrugation_axis", "x"),
+            use_czm=use_czm,
         )
 
         # Build boundary mask
         boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
-        n_nodes_per_layer = nx * ny
-        n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
+        val_to_set = 0
         if grid_cfg["boundary_type"] == "fixed":
-            for ply in range(n_layers):
-                offset = ply * n_nodes_per_layer
-                for i in range(nx):
-                    for j in range(ny):
-                        if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                            boundary_mask[offset + i * ny + j] = 1
+            val_to_set = 1
         elif grid_cfg["boundary_type"] == "non-reflecting":
-            for ply in range(n_layers):
-                offset = ply * n_nodes_per_layer
-                for i in range(nx):
-                    for j in range(ny):
-                        if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                            boundary_mask[offset + i * ny + j] = 2
+            val_to_set = 2
+
+        if val_to_set > 0:
+            if use_czm:
+                x_min = 0.0
+                x_max = (nx - 1) * dx
+                y_min = 0.0
+                y_max = (ny - 1) * dx
+                for idx in range(grid.n_nodes):
+                    x = grid.nodes[idx, 0]
+                    y = grid.nodes[idx, 1]
+                    if (
+                        np.abs(x - x_min) < 1e-5
+                        or np.abs(x - x_max) < 1e-5
+                        or np.abs(y - y_min) < 1e-5
+                        or np.abs(y - y_max) < 1e-5
+                    ):
+                        boundary_mask[idx] = val_to_set
+            else:
+                n_nodes_per_layer = nx * ny
+                n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
+                for ply in range(n_layers):
+                    offset = ply * n_nodes_per_layer
+                    for i in range(nx):
+                        for j in range(ny):
+                            if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+                                boundary_mask[offset + i * ny + j] = val_to_set
 
         # Nodal external forces setup
         if "nodal_external_forces" in config:
@@ -307,6 +326,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             fiber_density_gcc = mat.get("fiber_density_gcc", 1.44)
             thickness = areal_density / (fiber_density_gcc * 1000.0)
 
+            use_czm = sim_cfg.get("structure_type", "fabric") == "metallic_sheet" and sim_cfg.get(
+                "use_czm", True
+            )
             extra_kwargs = {
                 "grid_damage": grid.damage,
                 "proj_quat": proj.quat,
@@ -337,6 +359,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "youngs_modulus_gpa": mat.get("tensile_modulus_gpa", 71.0),
                 "thickness": thickness,
                 "density_kgm3": float(mat.get("fiber_density_gcc", 1.44) * 1000.0),
+                "is_tiebreak": grid.is_tiebreak,
+                "cohesive_strength_gpa": mat.get("cohesive_strength_gpa", 0.485),
+                "fracture_energy_jm2": mat.get("fracture_energy_jm2", 50000.0),
+                "use_czm": use_czm,
             }
             if structure_type == "metallic_sheet":
                 extra_kwargs["element_stress"] = grid.element_stress
@@ -457,6 +483,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                                         if not failed_f[e_idx]:
                                             failed_springs_f[s_idx] = False
                                             break
+                                else:
+                                    failed_springs_f[s_idx] = True
                             failed_mask = failed_springs_f
                         else:
                             failed_mask = failed_f
@@ -465,7 +493,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                         dy_f = pos_f[s1, 1] - pos_f[s0, 1]
                         dz_f = pos_f[s1, 2] - pos_f[s0, 2]
                         lens_f = np.sqrt(dx_f**2 + dy_f**2 + dz_f**2)
-                        strains_f = (lens_f - L0) / L0
+                        safe_L0 = np.where(L0 < 1e-8, 1.0, L0)
+                        strains_f = (lens_f - L0) / safe_L0
                         active_strains = np.where(failed_mask, 0.0, strains_f)
                         hist_peak_strain[f] = (
                             np.max(active_strains) if len(active_strains) > 0 else 0.0

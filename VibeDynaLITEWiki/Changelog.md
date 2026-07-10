@@ -7,6 +7,9 @@ All notable changes to this project are documented in this file.
 ## [Unreleased] — Sprint 10: Robust 3D SDF Contact, Coulomb Friction, and Von Karman Wave Propagation
 
 ### Added
+- **Cohesive Zone Model (CZM) Tiebreak Springs**: Added coincident node duplication and zero-length tiebreak springs along all interior element boundaries, allowing elements to physically separate, tear, and petal without unphysical erosion.
+- **Bilinear Traction-Separation Law (TSL)**: Implemented progressive cohesive degradation ($d \in [0, 1]$) and failure tracking based on peak cohesive strength ($\sigma_{\text{max}}$) and critical fracture energy ($G_c$).
+- **Grounded Cohesive Presets**: Expanded the materials library to include researched, physically-grounded default cohesive strengths and fracture energy release rates for Corten Steel and all Kevlar presets.
 - **Coulomb Contact Friction**: Implemented relative sliding velocity and Coulomb contact friction opposing tangential motion of the projectile relative to the metallic sheet.
 - **Von Karman Non-linear Membrane Strains**: Added quadratic deflection gradient terms ($\frac{1}{2}(\frac{\partial w}{\partial x})^2, \dots$) to the Q4 shell element strain calculations. This couples out-of-plane deflections to membrane stretching, enabling lateral tension waves to propagate through the metallic sheet.
 - **Continuous Stiffness Degradation Damage**: Integrated a continuous scalar damage variable $D \in [0, 1]$ at each thickness integration point of the 2D shell elements, scaling integrated stresses by $(1 - D)$ to represent physical ductile damage accumulation.
@@ -14,6 +17,8 @@ All notable changes to this project are documented in this file.
 - **State Persistence Across Solver Chunks**: Preserved `element_stress`, `element_peeq`, `element_damage`, and `element_failed` states across time-integration chunks, resolving a major issue where the material would reset to a stress-free state at each chunk.
 
 ### Fixed
+- **Post-Processing Strain Zero-Division**: Masked out zero-length tiebreak springs and added protection against dividing by zero during post-processing peak strain analysis.
+- **Mypy Type Safety Checks**: Declared and initialized solver arrays on the `Grid` class, resolving type errors during lint runs.
 - **3D Signed Distance Fields for Box Shape**: Fixed the box projectile SDF to be mathematically exact and signed (allowing negative values inside the box) and bounded along the Z-axis.
 - **Box Contact Logic in Shell Solver**: Unified all projectile shapes (including box shapes) to run through the 3D SDF contact loop rather than using a center-node spherical projection shortcut.
 - **Corrected Proximity Parameter Passing**: Passed the actual half-width and half-thickness values of the box to the SDF contact loop rather than hardcoded `0.0, 0.0` values, preventing the box shape from collapsing.
