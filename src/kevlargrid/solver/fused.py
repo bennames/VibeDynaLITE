@@ -442,7 +442,7 @@ def numba_compute_spring_forces(
     for i in range(n_springs):
         is_failed = failed[i]
         k = effective_k[i]
-        
+
         ramp = 1.0
         if is_failed:
             if spring_failed_step[i] < 0:
@@ -530,7 +530,7 @@ def numba_parallel_compute_spring_forces(
     for i in numba.prange(n_springs):
         is_failed = failed[i]
         k = effective_k[i]
-        
+
         ramp = 1.0
         if is_failed:
             if spring_failed_step[i] < 0:
@@ -1322,7 +1322,7 @@ def _fused_leapfrog_loop_jit(
                     continue
                 # Cap the penalty contact force to yarn structural capacity
                 f_cap = grid_stiffnesses[0] * dx if len(grid_stiffnesses) > 0 else 1.0e6
-                
+
                 n_loc = numba_eval_sdf_normal(
                     P_loc,
                     shape_code,
@@ -1548,7 +1548,9 @@ def _fused_leapfrog_loop_jit(
             new_failed_mask = (strains_telem > failure_strain) & ~grid_failed
             if np.any(new_failed_mask):
                 w_fail = 0.5 * grid_stiffnesses * (failure_strain * grid_rest_lengths) ** 2
-                failure_dissipated += float(np.sum(fracture_energy_multiplier * w_fail[new_failed_mask]))
+                failure_dissipated += float(
+                    np.sum(fracture_energy_multiplier * w_fail[new_failed_mask])
+                )
                 grid_failed[new_failed_mask] = True
 
         if step % save_interval == 0:
@@ -1666,9 +1668,9 @@ def numba_step_shell_forces_and_failures(
         n2 = elements[e, 2]
         n3 = elements[e, 3]
 
-        is_failed = (element_failed[e] == 1)
+        is_failed = element_failed[e] == 1
         ramp = 1.0
-        
+
         if is_failed:
             if element_failed_step[e] < 0:
                 element_failed_step[e] = current_step
@@ -1680,7 +1682,7 @@ def numba_step_shell_forces_and_failures(
                 element_stress[e, :, :] = 0.0
                 element_strains[e, :] = 0.0
                 continue
-            
+
             N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
             M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
             for k in range(3):
@@ -1697,7 +1699,7 @@ def numba_step_shell_forces_and_failures(
                 M_xx += wk * sig_xx_total * zk
                 M_yy += wk * sig_yy_total * zk
                 M_xy += wk * tau_xy_total * zk
-            
+
             Q_x = G_s * thickness * element_strains[e, 6] * ramp
             Q_y = G_s * thickness * element_strains[e, 7] * ramp
         else:
@@ -1816,7 +1818,9 @@ def numba_step_shell_forces_and_failures(
                     peeq_new = peeq_old + d_peeq
 
                     # Scale stress components
-                    scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
+                    scale = 1.0 - (3.0 * G * d_peeq) / (
+                        sig_vm_trial if sig_vm_trial != 0.0 else 1.0
+                    )
                     if scale < 0.0:
                         scale = 0.0
 
@@ -2385,7 +2389,7 @@ def _fused_shell_loop_jit(
                 f_cap = yield_strength * dx * thickness
                 if f_cap <= 0.0:
                     f_cap = E * dx * thickness
-                
+
                 n_loc = numba_eval_sdf_normal(
                     P_loc,
                     shape_code,

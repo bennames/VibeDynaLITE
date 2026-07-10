@@ -1113,7 +1113,9 @@ def test_czm_dynamic_simulation_stability():
         )
 
     # Verify that elements or tiebreak springs failed at the end of simulation under such high velocity impact
-    assert np.sum(element_failed) > 0 or np.sum(spring_failed) > 0, "No elements or tiebreak springs failed despite high-velocity impact"
+    assert np.sum(element_failed) > 0 or np.sum(spring_failed) > 0, (
+        "No elements or tiebreak springs failed despite high-velocity impact"
+    )
     # Verify that the final total energy did not double or blow up
     assert tot < initial_energy * 1.5, (
         f"Energy grew excessively: initial={initial_energy:.2f}, final={tot:.2f}"
