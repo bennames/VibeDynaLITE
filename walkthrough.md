@@ -58,6 +58,7 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 - Fixed the post-simulation perforation and strain reporting `IndexError` in `worker.py` for metallic sheets.
 
 ### 7. Explicit Shell Solver Stabilization
+- **Hourglass Damping Orthogonalization (Flanagan-Belytschko)**: Replaced absolute velocity damping with the Flanagan-Belytschko hourglass mode projection operator for Q4 quadrilateral shell elements, ensuring that bulk translations and rotations are completely undamped, while zero-energy hourglass modes are selectively and effectively suppressed, reducing total damping energy dissipation.
 - **Hourglass Damping Wave-Impedance Scaling**: Fixed the unphysical $1.6 \times 10^7 \times$ over-damping and subsequent numerical explosion in the 2D shell solver by scaling the Flanagan-Belytschko hourglass stabilization force and torque coefficients with the wave-impedance formulation $\sqrt{E \rho} \cdot h \cdot dx$ and $\sqrt{E \rho} \cdot h^3 \cdot dx$, respectively.
 - **Corrected Rotational Transverse Shear Nodal Torque Damping**: Resolved the rotational velocity explosion by scaling the transverse shear damping coefficient with the wave impedance $\sqrt{G \rho} \cdot h \cdot dx^3$, ensuring correct physical torque dimensions ($N \cdot m \cdot s/rad$).
 - **Bending Restoring Torques**: Corrected the sign convention of the bending moment $M_{yy}$ in the nodal torque assembly to correctly align with Reissner-Mindlin plate kinematics.
