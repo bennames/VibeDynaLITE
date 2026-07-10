@@ -184,6 +184,9 @@ class SimRunner:
             nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
             n_plies = grid_cfg["n_plies"]
             t_ply = grid_cfg["t_ply"]
+            use_czm = config.get("simulation", {}).get(
+                "structure_type", "fabric"
+            ) == "metallic_sheet" and config.get("simulation", {}).get("use_czm", True)
             # Build parent-side grid placeholder
             grid = generate_rectangular_grid(
                 nx=nx,
@@ -195,6 +198,7 @@ class SimRunner:
                 corrugation_amplitude=grid_cfg.get("corrugation_amplitude", 0.0),
                 corrugation_period=grid_cfg.get("corrugation_period", 1.0),
                 corrugation_axis=grid_cfg.get("corrugation_axis", "x"),
+                use_czm=use_czm,
             )
             with self.lock:
                 self.grid_nodes = grid.nodes.copy()
@@ -589,6 +593,9 @@ def launch() -> None:
             validate_config(cfg)
 
             # Reset and initialize viewport coordinate mappings
+            use_czm = cfg.get("simulation", {}).get(
+                "structure_type", "fabric"
+            ) == "metallic_sheet" and cfg.get("simulation", {}).get("use_czm", True)
             dummy_grid = generate_rectangular_grid(
                 nx=cfg["grid"]["nx"],
                 ny=cfg["grid"]["ny"],
@@ -599,6 +606,7 @@ def launch() -> None:
                 corrugation_amplitude=cfg["grid"].get("corrugation_amplitude", 0.0),
                 corrugation_period=cfg["grid"].get("corrugation_period", 1.0),
                 corrugation_axis=cfg["grid"].get("corrugation_axis", "x"),
+                use_czm=use_czm,
             )
             viewport3d.reset(
                 grid=dummy_grid,
@@ -685,6 +693,9 @@ def launch() -> None:
         reset_cfg = config_panel.get_config()
         z_pos = enforce_projectile_tangency(reset_cfg, update_widget=True)
         reset_cfg["projectile"]["position"][2] = z_pos
+        use_czm = reset_cfg.get("simulation", {}).get(
+            "structure_type", "fabric"
+        ) == "metallic_sheet" and reset_cfg.get("simulation", {}).get("use_czm", True)
         blank_grid = generate_rectangular_grid(
             nx=reset_cfg["grid"]["nx"],
             ny=reset_cfg["grid"]["ny"],
@@ -695,6 +706,7 @@ def launch() -> None:
             corrugation_amplitude=reset_cfg["grid"].get("corrugation_amplitude", 0.0),
             corrugation_period=reset_cfg["grid"].get("corrugation_period", 1.0),
             corrugation_axis=reset_cfg["grid"].get("corrugation_axis", "x"),
+            use_czm=use_czm,
         )
         viewport3d.reset(
             blank_grid,
@@ -841,6 +853,9 @@ def launch() -> None:
     initial_cfg = config_panel.get_config()
     z_pos = enforce_projectile_tangency(initial_cfg, update_widget=True)
     initial_cfg["projectile"]["position"][2] = z_pos
+    use_czm = initial_cfg.get("simulation", {}).get(
+        "structure_type", "fabric"
+    ) == "metallic_sheet" and initial_cfg.get("simulation", {}).get("use_czm", True)
     init_grid = generate_rectangular_grid(
         nx=initial_cfg["grid"]["nx"],
         ny=initial_cfg["grid"]["ny"],
@@ -851,6 +866,7 @@ def launch() -> None:
         corrugation_amplitude=initial_cfg["grid"].get("corrugation_amplitude", 0.0),
         corrugation_period=initial_cfg["grid"].get("corrugation_period", 1.0),
         corrugation_axis=initial_cfg["grid"].get("corrugation_axis", "x"),
+        use_czm=use_czm,
     )
     viewport3d.reset(
         init_grid,
@@ -952,6 +968,9 @@ def launch() -> None:
                     cfg = config_panel.get_config()
                     z_pos = enforce_projectile_tangency(cfg, update_widget=True)
                     cfg["projectile"]["position"][2] = z_pos
+                    use_czm = cfg.get("simulation", {}).get(
+                        "structure_type", "fabric"
+                    ) == "metallic_sheet" and cfg.get("simulation", {}).get("use_czm", True)
 
                     preview_grid = generate_rectangular_grid(
                         nx=cfg["grid"]["nx"],
@@ -963,6 +982,7 @@ def launch() -> None:
                         corrugation_amplitude=cfg["grid"].get("corrugation_amplitude", 0.0),
                         corrugation_period=cfg["grid"].get("corrugation_period", 1.0),
                         corrugation_axis=cfg["grid"].get("corrugation_axis", "x"),
+                        use_czm=use_czm,
                     )
                     viewport3d.reset(
                         preview_grid,
