@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 11: Ramberg-Osgood Nonlinear Hardening & Stable Plastic Saturation
+
+### Added
+- **Ramberg-Osgood Nonlinear Plasticity**: Integrated power-law Ramberg-Osgood yield hardening in J2 plasticity shell return mapping.
+- **Newton-Raphson 1D Solver**: Coded a robust 1D Newton-Raphson scheme in Numba for nonlinear radial return mapping.
+- **Post-Ultimate Strain Extreme Softening**: Allowed the yield stress curve to transition to a very soft tangent modulus ($10$ MPa) past the `ultimate_strain` limit, modeling plastic stress saturation.
+
+### Fixed
+- **Deactivated Element Erosion**: Disabled the element deletion and continuous damage mechanisms to prevent force discontinuities and contact spikes.
+- **Deactivated Cohesive Zone Model**: Scrapped coincident duplicate node generation and CZM springs for studying pure plate continuum deforming plastically.
+- **Conditional Contact Force Scaling**: Adjusted `node_scale_factor` in the contact force loop to support both duplicate-node (CZM) and shared-node (non-CZM) shell meshes correctly.
+
+---
+
 ## [Unreleased] — Sprint 10: Robust 3D SDF Contact, Coulomb Friction, and Von Karman Wave Propagation
 
 ### Added

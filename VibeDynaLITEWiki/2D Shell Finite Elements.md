@@ -29,82 +29,56 @@ The solver utilizes a **Q4 Reissner-Mindlin Bilinear Quadrilateral Shell Element
 
 ---
 
-## J2 Radial Return Plasticity
+## J2 Radial Return Plasticity with Ramberg-Osgood Hardening
 
-For metallic materials like Corten Steel, a **J2 radial return plasticity model** is implemented at each through-thickness integration point:
+For metallic materials like Corten Steel, a **J2 radial return plasticity model with Ramberg-Osgood nonlinear hardening** is implemented at each through-thickness integration point:
 
 1. **Stress-Strain Update**: Strains and curvatures are evaluated from nodal displacement rates. An elastic trial stress is computed under plane-stress assumptions:
    $$\sigma_{xx}^{\text{trial}} = \sigma_{xx}^n + \frac{E}{1-\nu^2} (\Delta \epsilon_{xx} + \nu \Delta \epsilon_{yy})$$
    $$\sigma_{yy}^{\text{trial}} = \sigma_{yy}^n + \frac{E}{1-\nu^2} (\Delta \epsilon_{yy} + \nu \Delta \epsilon_{xx})$$
    $$\tau_{xy}^{\text{trial}} = \tau_{xy}^n + G \Delta \gamma_{xy}$$
-2. **Yield Criterion**: The von Mises equivalent trial stress $\sigma_{\text{vm}}^{\text{trial}}$ is evaluated:
-   $$\sigma_{\text{vm}}^{\text{trial}} = \sqrt{(\sigma_{xx}^{\text{trial}})^2 + (\sigma_{yy}^{\text{trial}})^2 - \sigma_{xx}^{\text{trial}} \sigma_{yy}^{\text{trial}} + 3 (\tau_{xy}^{\text{trial}})^2}$$
-   and compared to the isotropic-hardened yield strength:
-   $$f = \sigma_{\text{vm}}^{\text{trial}} - (\sigma_{y,0} + H e_{\text{peeq}}^n)$$
-   where $H$ is the isotropic hardening modulus, and $e_{\text{peeq}}$ is the equivalent plastic strain.
-3. **Radial Return Mapping**: If $f > 0$, plastic flow occurs. Stresses are radially scaled back to the yield surface:
-   $$\Delta e_{\text{peeq}} = \frac{f}{3G + H}$$
+2. **Yield Criterion**: The von Mises equivalent trial stress $\sigma_{\text{vm}}^{\text{trial}}$ is compared to the yield strength $\sigma_y(e_{\text{peeq}})$.
+3. **Ramberg-Osgood Hardening Curve**: The yield stress varies nonlinearly with equivalent plastic strain $p$:
+   - **For $p \le \epsilon_u$** (under ultimate strain):
+     $$\sigma_y(p) = \sigma_{y,0} + K_{\text{RO}} \left[ (p + \epsilon_{\text{reg}})^{0.2} - \epsilon_{\text{reg}}^{0.2} \right]$$
+     where $K_{\text{RO}}$ is fit to match the ultimate tensile strength $\sigma_u$ at $p = \epsilon_u$, and $\epsilon_{\text{reg}} = 10^{-5}$.
+   - **For $p > \epsilon_u$** (post-ultimate extreme softening):
+     $$\sigma_y(p) = \sigma_u + H_{\text{soft}} (p - \epsilon_u)$$
+     where $H_{\text{soft}} = 10\text{ MPa}$ is an extremely small tangent modulus to model stress saturation.
+4. **Newton-Raphson Return Mapping**: Stresses are radially scaled back to the yield surface. The plastic multiplier increment $\Delta e_{\text{peeq}}$ is solved iteratively using a 1D Newton-Raphson scheme:
+   $$g(\Delta e_{\text{peeq}}) = \sigma_{\text{vm}}^{\text{trial}} - 3G \Delta e_{\text{peeq}} - \sigma_y(e_{\text{peeq}}^n + \Delta e_{\text{peeq}}) = 0$$
    $$\sigma^{n+1} = \left(1 - \frac{3G \Delta e_{\text{peeq}}}{\sigma_{\text{vm}}^{\text{trial}}}\right) \sigma^{\text{trial}}$$
-   $$e_{\text{peeq}}^{n+1} = e_{\text{peeq}}^n + \Delta e_{\text{peeq}}$$
-   where $G = \frac{E}{2(1+\nu)}$ is the shear modulus.
-4. **Plastic Dissipation**: The energy dissipated by plastic work during the step is accumulated:
-   $$\Delta W_{\text{plastic}} = \left(\sigma_{y,0} + H e_{\text{peeq}}^n\right) \Delta e_{\text{peeq}} \cdot w_k \cdot dx^2$$
+5. **Plastic Dissipation**: The energy dissipated by plastic work is accumulated:
+   $$\Delta W_{\text{plastic}} = \sigma_y(e_{\text{peeq}}^{n+1}) \Delta e_{\text{peeq}} \cdot w_k \cdot dx^2$$
 
 ---
 
 ## Continuous Damage Mechanics (CDM) & Stress Triaxiality
 
-To model progressive failure and ductile tearing, VibeDynaLITE integrates a scalar continuous damage variable $D \in [0, 1]$ at each through-thickness integration point:
+> [!WARNING]
+> **Status: Deactivated / Scrapped**
+> Element damage accumulation, stiffness degradation, and element erosion are currently deactivated in the active solver to study nonlinear plastic saturation under the Ramberg-Osgood model.
 
-1. **Damage Accumulation**: Damage evolves based on the increment of equivalent plastic strain scaled by a triaxiality-dependent failure strain $\epsilon_f$:
-   $$\Delta D = \frac{\Delta e_{\text{peeq}}}{\epsilon_f}$$
-   $$D_{n+1} = \min(1.0, D_n + \Delta D)$$
-2. **Stress Triaxiality ($\eta$)**: Computed as the ratio of hydrostatic (mean) stress to von Mises equivalent stress:
-   $$\eta = \frac{\sigma_m}{\sigma_{\text{vm}}} = \frac{\sigma_{xx} + \sigma_{yy}}{3 \sigma_{\text{vm}}}$$
-3. **Triaxiality-Dependent Failure Strain ($\epsilon_f$)**: The ultimate failure strain scales according to the local stress state to capture ductile vs. shear damage mechanisms:
-   - **Tension ($\eta > 0$)**: Failure strain decays exponentially under multi-axial tension (brittle tearing behavior):
-     $$\epsilon_f = \epsilon_{\text{ult}} \exp\left(-1.5\left(\eta - \frac{1}{3}\right)\right)$$
-   - **Compression & Shear ($\eta \le 0$)**: Failure strain increases to capture higher ductility:
-     $$\epsilon_f = \epsilon_{\text{ult}} \exp(-0.5\eta)$$
-   - **Regularization Limit**: A lower bound is enforced to prevent premature or instant failure: $\epsilon_f \ge 0.005$.
-4. **Stiffness Degradation**: The nominal stress (both elastic-plastic and viscous Rayleigh damping stresses) is degraded by the active damage parameter:
-   $$\sigma_{\text{total}} = (\sigma_{\text{nominal}} + \sigma_{\text{damp}}) (1 - D)$$
-5. **Element Erosion / Deletion**: An element is eroded and deleted from the simulation ONLY when the damage parameter reaches $D \ge 1.0$ at all 3 thickness integration points. Once deleted, its contribution to internal forces drops to zero, and it is excluded from contact calculations.
+To model progressive failure and ductile tearing when activated, VibeDynaLITE integrates a scalar continuous damage variable $D \in [0, 1]$ at each through-thickness integration point:
+1. **Damage Accumulation**: $\Delta D = \frac{\Delta e_{\text{peeq}}}{\epsilon_f}$
+2. **Triaxiality-Dependent Failure Strain ($\epsilon_f$)**: The ultimate failure strain scales according to the local stress triaxiality state $\eta$:
+   - **Tension ($\eta > 0$)**: $\epsilon_f = \epsilon_{\text{ult}} \exp\left(-1.5\left(\eta - \frac{1}{3}\right)\right)$
+   - **Compression & Shear ($\eta \le 0$)**: $\epsilon_f = \epsilon_{\text{ult}} \exp(-0.5\eta)$
+3. **Stiffness Degradation**: Stresses are degraded: $\sigma_{\text{total}} = \sigma_{\text{nominal}} (1 - D)$.
+4. **Element Erosion**: Elements are deleted when $D \ge 1.0$ at all 3 thickness integration points.
 
 ---
 
 ## Cohesive Zone Model (CZM) & Tiebreak Springs
 
-To simulate structural tearing, petaling, and separation along element boundaries without relying solely on element erosion (which deletes mass and can create artificial holes), VibeDynaLITE implements an interface **Cohesive Zone Model (CZM)**:
+> [!WARNING]
+> **Status: Deactivated / Scrapped**
+> Cohesive inter-element tiebreak springs and duplicate node generation are currently bypassed (`use_czm = False`) to prevent artificial energy injection and study the pure shell continuum formulation.
 
-```
-Normal Shared Mesh:
-Node 0 ------------ Node 1
-  |   e1 (shared)     |
-  |                   |
-
-CZM Duplicated Mesh:
-Node e1_0 --------- Node e1_1   <-- Element 1
-=============================   <-- Inter-element Boundary (Tiebreak Springs)
-Node e2_3 --------- Node e2_2   <-- Element 2
-```
-
-1. **Mesh Duplication**: In CZM mode, the finite element mesh is duplicated such that elements do not share nodes. Each bilinear quadrilateral element $e$ has 4 unique node IDs, resulting in $4 \times N_{el}$ total nodes. Corner coordinates are initially coincident.
-2. **Tiebreak Springs**: Adjacent element edges are bonded together by zero-length tiebreak springs at the corners. These springs govern the interface separation behavior under a bilinear **Traction-Separation Law (TSL)**:
-   - **Tributary Area**: $A_{\text{trib}} = 0.5 dx \cdot h$ (where $h$ is the sheet thickness)
-   - **Peak Force Capacity**: $F_{\text{max}} = \sigma_{\text{cohesive}} A_{\text{trib}}$
-   - **Critical Separation (Complete Failure)**: $\delta_c = \frac{2 G_c}{\sigma_{\text{cohesive}}}$
-   - **Elastic Limit Separation (Damage Initiation)**: $\delta_0 = 0.01 \delta_c$
-   - **Initial Cohesive Stiffness**: $k_0 = \frac{F_{\text{max}}}{\delta_0} = \frac{\sigma_{\text{cohesive}}^2 dx \cdot h}{0.04 G_c}$
-3. **Damage & Softening**: 
-   - The separation distance is measured between coincident nodes: $\delta = \|\mathbf{x}_{n1} - \mathbf{x}_{n0}\|$.
-   - For separations exceeding the elastic limit $\delta > \delta_0$, a scalar damage variable $d \in [0, 1]$ accumulates irreversibly:
-     $$d = \min\left(1.0, \max\left(d_n, \frac{\delta_c (\delta - \delta_0)}{\delta (\delta_c - \delta_0)}\right)\right)$$
-   - The spring force is softened continuously:
-     $$F_{\text{cohesive}} = (1 - d) k_0 \delta$$
-   - Once $d \ge 1.0$, the tiebreak spring is broken permanently (`spring_failed = 1`), allowing elements to physically separate, tear, and petal.
-4. **Energy Tracking**: Cohesive fracture work is accumulated dynamically:
-   $$\Delta W_{\text{cohesive}} = \mathbf{F}_{\text{cohesive}} \cdot \Delta \mathbf{v}_{\text{half}} \cdot dt$$
+When active, inter-element boundaries are bonded by zero-length cohesive springs governing a bilinear Traction-Separation Law (TSL):
+- **Initial Cohesive Stiffness**: $k_0 = \frac{\sigma_{\text{cohesive}}^2 dx \cdot h}{0.04 G_c}$
+- **Damage & Softening**: Softened force is $F_{\text{cohesive}} = (1 - d) k_0 \delta$.
+- **Rupture**: Permanent spring failure occurs when damage $d \ge 1.0$, allowing elements to separate.
 
 ---
 

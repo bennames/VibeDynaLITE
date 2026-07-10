@@ -110,3 +110,9 @@ Additionally, the stress scaling factor $\text{scale} = 1 - \frac{3G d\bar{\epsi
 \]
 This guarantees that plastic return mapping can only decrease or keep stress constant, preventing spurious energy injection.
 
+---
+
+## 5. Deactivation of Erosion in favor of Plastic Saturation (Current Stage)
+
+To completely eliminate numerical instabilities and energy spikes associated with element deletion, element erosion is currently deactivated. Instead, the solver utilizes a **nonlinear Ramberg-Osgood plasticity curve** that transitions to an extremely soft tangent modulus ($H_{\text{soft}} = 10$ MPa) past the material's `ultimate_strain` limit. This allows stresses to saturate near the tensile strength and the elements to deform plastically indefinitely without creating force discontinuities or contact spikes.
+
