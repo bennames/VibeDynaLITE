@@ -659,7 +659,7 @@ class Viewport3D:
                 springs = self.edge_nodes
                 n_springs = len(springs)
                 failed_elements = getattr(self.grid, "element_failed", None)
-                if failed_elements is not None:
+                if failed_elements is not None and len(failed_elements) * 4 == n_springs:
                     failed = np.repeat(failed_elements, 4)
                 else:
                     failed = np.zeros(n_springs, dtype=bool)
@@ -671,8 +671,9 @@ class Viewport3D:
             else:
                 springs = self.grid.springs
                 n_springs = len(springs)
-                failed = self.grid.failed
-
+                failed = getattr(self.grid, "failed", None)
+                if failed is None or len(failed) != n_springs:
+                    failed = np.zeros(n_springs, dtype=bool)
                 p1 = self.grid.nodes[springs[:, 0]]
                 p2 = self.grid.nodes[springs[:, 1]]
                 lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
@@ -1358,14 +1359,24 @@ class Viewport3D:
     def update(self, positions: np.ndarray, failed: np.ndarray) -> None:
         """Update node coordinate positions dynamically."""
         with self.render_lock:
-            if self.grid is not None:
+            if self.grid is None:
+                return
+
+            if len(positions) != len(self.grid.nodes):
+                return
+
+            if getattr(self, "structure_type", "fabric") == "metallic_sheet":
+                if len(failed) != len(self.grid.element_failed):
+                    print(f"Warning: Update failed size mismatch. Expected {len(self.grid.element_failed)}, got {len(failed)}.")
+                    return
                 self.grid.nodes = np.asarray(positions)
-                if getattr(self, "structure_type", "fabric") == "metallic_sheet":
-                    self.grid.element_failed = np.asarray(failed)
-                else:
-                    self.grid.failed = np.asarray(failed)
-                # We do NOT call self.redraw() here; it will be called by draw_projectile()
-                # to render the complete synchronized frame containing the projectile.
+                self.grid.element_failed = np.asarray(failed)
+            else:
+                if len(failed) != len(self.grid.failed):
+                    print(f"Warning: Update failed size mismatch. Expected {len(self.grid.failed)}, got {len(failed)}.")
+                    return
+                self.grid.nodes = np.asarray(positions)
+                self.grid.failed = np.asarray(failed)
 
     def draw_projectile(
         self,

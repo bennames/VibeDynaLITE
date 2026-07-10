@@ -2821,6 +2821,12 @@ def fused_leapfrog_loop(
 
         if element_strains is None or element_strains.shape[0] != n_elems:
             element_strains = np.zeros((n_elems, 8), dtype=positions.dtype)
+        if ang_positions is None or ang_positions.shape[0] != n_nodes:
+            ang_positions = np.zeros((n_nodes, 3), dtype=positions.dtype)
+        if ang_velocities is None or ang_velocities.shape[0] != n_nodes:
+            ang_velocities = np.zeros((n_nodes, 3), dtype=positions.dtype)
+        if ang_accel is None or ang_accel.shape[0] != n_nodes:
+            ang_accel = np.zeros((n_nodes, 3), dtype=positions.dtype)
 
         return _fused_shell_loop_jit(
             positions,

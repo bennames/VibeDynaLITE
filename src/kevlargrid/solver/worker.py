@@ -460,6 +460,14 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     mu_s=mu_s,
                     friction_dissipated_init=friction_dissipated,
                     X_ref=X_ref,
+                    spring_failed_step=grid.spring_failed_step,
+                    element_failed_step=grid.element_failed_step,
+                    element_strains=grid.element_strains,
+                    ang_positions=grid.ang_positions,
+                    ang_velocities=grid.ang_velocities,
+                    ang_accel=grid.ang_accel,
+                    erosion_softening_steps=sim_cfg.get("erosion_softening_steps", 10),
+                    velocity_clamping_multiplier=sim_cfg.get("velocity_clamping_multiplier", 2.0),
                     **extra_kwargs,
                 )
                 if structure_type == "metallic_sheet":
