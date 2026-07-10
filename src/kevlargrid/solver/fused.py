@@ -2143,7 +2143,7 @@ def _fused_shell_loop_jit(
                         if delta > delta_0:
                             d_cand = (delta_c * (delta - delta_0)) / (delta * (delta_c - delta_0))
                             if d_cand > d:
-                                d = min(1.0, d_cand)
+                                d = d_cand if d_cand < 1.0 else 1.0
                                 spring_damage[i] = d
                             if d >= 1.0:
                                 spring_failed[i] = 1
