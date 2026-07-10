@@ -425,9 +425,14 @@ def numba_compute_spring_forces(
     velocities: np.ndarray,
     springs: np.ndarray,
     effective_k: np.ndarray,
+    stiffnesses: np.ndarray,
     rest_lengths: np.ndarray,
     tension_only: np.ndarray,
     rayleigh_beta: float,
+    failed: np.ndarray,
+    spring_failed_step: np.ndarray,
+    current_step: int,
+    erosion_softening_steps: int,
 ) -> tuple[np.ndarray, float]:
     n_nodes = len(positions)
     n_springs = len(springs)
@@ -435,8 +440,24 @@ def numba_compute_spring_forces(
     stiff_damp_energy = 0.0
 
     for i in range(n_springs):
+        is_failed = failed[i]
         k = effective_k[i]
-        if k == 0.0:
+        
+        ramp = 1.0
+        if is_failed:
+            if spring_failed_step[i] < 0:
+                spring_failed_step[i] = current_step
+            age = current_step - spring_failed_step[i]
+            denom = erosion_softening_steps
+            denom_safe = denom if denom != 0 else 1
+            ramp = 1.0 - age / denom_safe
+            if ramp <= 0.0:
+                continue
+            k_soft = stiffnesses[i] * ramp
+        else:
+            k_soft = k
+
+        if k_soft == 0.0:
             continue
 
         n0 = springs[i, 0]
@@ -454,15 +475,15 @@ def numba_compute_spring_forces(
         if tension_only[i] and strain < 0.0:
             continue
 
-        f_mag = k * strain * rest_lengths[i]
+        f_mag = k_soft * strain * rest_lengths[i]
 
         damp_mag = 0.0
-        if rayleigh_beta > 0.0:
+        if rayleigh_beta > 0.0 and not is_failed:
             dvx = velocities[n1, 0] - velocities[n0, 0]
             dvy = velocities[n1, 1] - velocities[n0, 1]
             dvz = velocities[n1, 2] - velocities[n0, 2]
             v_proj = (dvx * dx + dvy * dy + dvz * dz) / length_safe
-            damp_mag = rayleigh_beta * k * v_proj
+            damp_mag = rayleigh_beta * k_soft * v_proj
             stiff_damp_energy += damp_mag * v_proj
 
         total_mag = f_mag + damp_mag
@@ -489,12 +510,17 @@ def numba_parallel_compute_spring_forces(
     velocities: np.ndarray,
     springs: np.ndarray,
     effective_k: np.ndarray,
+    stiffnesses: np.ndarray,
     rest_lengths: np.ndarray,
     tension_only: np.ndarray,
     node_spring_offsets: np.ndarray,
     node_spring_ids: np.ndarray,
     node_spring_signs: np.ndarray,
     rayleigh_beta: float,
+    failed: np.ndarray,
+    spring_failed_step: np.ndarray,
+    current_step: int,
+    erosion_softening_steps: int,
 ) -> tuple[np.ndarray, float]:
     n_springs = len(springs)
     n_nodes = len(positions)
@@ -502,9 +528,26 @@ def numba_parallel_compute_spring_forces(
     stiff_damp_energy = 0.0
 
     for i in numba.prange(n_springs):
+        is_failed = failed[i]
         k = effective_k[i]
-        if k == 0.0:
+        
+        ramp = 1.0
+        if is_failed:
+            if spring_failed_step[i] < 0:
+                spring_failed_step[i] = current_step
+            age = current_step - spring_failed_step[i]
+            denom = erosion_softening_steps
+            denom_safe = denom if denom != 0 else 1
+            ramp = 1.0 - age / denom_safe
+            if ramp <= 0.0:
+                continue
+            k_soft = stiffnesses[i] * ramp
+        else:
+            k_soft = k
+
+        if k_soft == 0.0:
             continue
+
         n0 = springs[i, 0]
         n1 = springs[i, 1]
         dx = positions[n1, 0] - positions[n0, 0]
@@ -515,15 +558,17 @@ def numba_parallel_compute_spring_forces(
         strain = (length - rest_lengths[i]) / rest_lengths[i]
         if tension_only[i] and strain < 0.0:
             continue
-        f_mag = k * strain * rest_lengths[i]
+
+        f_mag = k_soft * strain * rest_lengths[i]
         damp_mag = 0.0
-        if rayleigh_beta > 0.0:
+        if rayleigh_beta > 0.0 and not is_failed:
             dvx = velocities[n1, 0] - velocities[n0, 0]
             dvy = velocities[n1, 1] - velocities[n0, 1]
             dvz = velocities[n1, 2] - velocities[n0, 2]
             v_proj = (dvx * dx + dvy * dy + dvz * dz) / length_safe
-            damp_mag = rayleigh_beta * k * v_proj
+            damp_mag = rayleigh_beta * k_soft * v_proj
             stiff_damp_energy += damp_mag * v_proj
+
         total_mag = f_mag + damp_mag
         f_coeff = total_mag / length_safe
         force_vecs[i, 0] = f_coeff * dx
@@ -560,9 +605,13 @@ def numba_compute_effective_k(
     damage_onset_strain: float,
     failure_strain: float,
     grid_damage: np.ndarray,
-) -> np.ndarray:
+    spring_failed_step: np.ndarray,
+    current_step: int,
+    fracture_energy_multiplier: float,
+) -> tuple[np.ndarray, float]:
     n_springs = len(springs)
     effective_k = np.zeros(n_springs, dtype=positions.dtype)
+    step_fracture_energy = 0.0
     for i in numba.prange(n_springs):
         if failed[i]:
             effective_k[i] = 0.0
@@ -583,12 +632,15 @@ def numba_compute_effective_k(
             damage = val if val < 1.0 else 1.0
         new_damage = damage if damage > grid_damage[i] else grid_damage[i]
         grid_damage[i] = new_damage
-        if new_damage >= 1.0:
+        if failure_strain > 0.0 and (new_damage >= 1.0 or strain > failure_strain):
             failed[i] = True
+            spring_failed_step[i] = current_step
             effective_k[i] = 0.0
+            w_fail = 0.5 * stiffnesses[i] * (failure_strain * rest_lengths[i]) ** 2
+            step_fracture_energy += fracture_energy_multiplier * w_fail
         else:
             effective_k[i] = stiffnesses[i] * (1.0 - new_damage)
-    return effective_k
+    return effective_k, step_fracture_energy
 
 
 @backend.jit(parallel=True, fastmath=True)
@@ -854,6 +906,11 @@ def _fused_leapfrog_loop_jit(
     mu_s: float,
     friction_dissipated_init: float,
     proximity_threshold: float,
+    spring_failed_step: np.ndarray,
+    erosion_softening_steps: int,
+    velocity_clamping_multiplier: float,
+    youngs_modulus_gpa: float,
+    density_kgm3: float,
 ):
     n_nodes = len(positions)
     n_springs = len(grid_springs)
@@ -889,9 +946,12 @@ def _fused_leapfrog_loop_jit(
     L_nose_val = np.sqrt(max(0.0, 2.0 * R_og_val * R0_val - R0_val**2))
     L_body_val = max(0.0, proj_length - L_nose_val)
 
+    c_p = np.sqrt(youngs_modulus_gpa * 1e9 / density_kgm3)
+    v_max_phys = velocity_clamping_multiplier * c_p
+
     # Pre-compute effective_k at step 0 so we can compute initial forces
     if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-        effective_k = numba_compute_effective_k(
+        effective_k, step_fe = numba_compute_effective_k(
             positions,
             grid_springs,
             grid_stiffnesses,
@@ -900,7 +960,11 @@ def _fused_leapfrog_loop_jit(
             damage_onset_strain,
             failure_strain,
             grid_damage,
+            spring_failed_step,
+            0,
+            fracture_energy_multiplier,
         )
+        failure_dissipated += step_fe
     else:
         p1 = positions[grid_springs[:, 0]]
         p2 = positions[grid_springs[:, 1]]
@@ -921,9 +985,14 @@ def _fused_leapfrog_loop_jit(
             velocities,
             grid_springs,
             effective_k,
+            grid_stiffnesses,
             grid_rest_lengths,
             grid_tension_only,
             rayleigh_beta,
+            grid_failed,
+            spring_failed_step,
+            0,
+            erosion_softening_steps,
         )
     else:
         p1 = positions[grid_springs[:, 0]]
@@ -995,7 +1064,7 @@ def _fused_leapfrog_loop_jit(
 
         # 2. Compute Nodal Stiffnesses & CFL Timestep
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-            effective_k = numba_compute_effective_k(
+            effective_k, step_fe = numba_compute_effective_k(
                 positions,
                 grid_springs,
                 grid_stiffnesses,
@@ -1004,7 +1073,11 @@ def _fused_leapfrog_loop_jit(
                 damage_onset_strain,
                 failure_strain,
                 grid_damage,
+                spring_failed_step,
+                step,
+                fracture_energy_multiplier,
             )
+            failure_dissipated += step_fe
             active_counts = numba_gather_active_counts(
                 grid_failed, node_spring_offsets, node_spring_ids
             )
@@ -1142,9 +1215,15 @@ def _fused_leapfrog_loop_jit(
             total_nodal_k = maximum(total_nodal_k, 1e-4)
             dt_crit = min(sqrt(grid_masses / total_nodal_k))
             dt = cfl_factor * dt_crit
-            v_max = dx / dt
+            if dx / dt < v_max_phys:
+                v_max = dx / dt
+            else:
+                v_max = v_max_phys
         else:
-            v_max = dx / dt
+            if dx / dt < v_max_phys:
+                v_max = dx / dt
+            else:
+                v_max = v_max_phys
 
         # 3. Calculate internal node forces (stiffness + damping)
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
@@ -1153,12 +1232,17 @@ def _fused_leapfrog_loop_jit(
                 v_half,
                 grid_springs,
                 effective_k,
+                grid_stiffnesses,
                 grid_rest_lengths,
                 grid_tension_only,
                 node_spring_offsets,
                 node_spring_ids,
                 node_spring_signs,
                 rayleigh_beta,
+                grid_failed,
+                spring_failed_step,
+                step,
+                erosion_softening_steps,
             )
             damp_dissipated += stiff_damp_e * dt
         else:
@@ -1234,6 +1318,11 @@ def _fused_leapfrog_loop_jit(
             )
             delta = proximity_threshold - dist
             if delta > 0.0:
+                if active_counts[i] == 0.0:
+                    continue
+                # Cap the penalty contact force to yarn structural capacity
+                f_cap = grid_stiffnesses[0] * dx if len(grid_stiffnesses) > 0 else 1.0e6
+                
                 n_loc = numba_eval_sdf_normal(
                     P_loc,
                     shape_code,
@@ -1271,6 +1360,8 @@ def _fused_leapfrog_loop_jit(
                 f_mag = k_penalty * delta + proj_c_damping * delta_dot
                 if f_mag < 0.0:
                     f_mag = 0.0
+                if f_mag > f_cap:
+                    f_mag = f_cap
 
                 node_scale_factor = 1.0
                 if node_initial_springs[i] > 0:
@@ -1424,30 +1515,12 @@ def _fused_leapfrog_loop_jit(
         if shape_code >= 0:
             proj_omega[:] = proj_omega_half + 0.5 * omega_dot * dt
 
-        # 5. Irreversible Continuum Damage Mechanics (CDM)
+        # 5. Irreversible Continuum Damage Mechanics (CDM) - already updated at step start
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-            effective_k = numba_compute_effective_k(
-                positions,
-                grid_springs,
-                grid_stiffnesses,
-                grid_rest_lengths,
-                grid_failed,
-                damage_onset_strain,
-                failure_strain,
-                grid_damage,
-            )
+            pass
         else:
-            p1_d = positions[grid_springs[:, 0]]
-            p2_d = positions[grid_springs[:, 1]]
-            lengths_d = sqrt(sum((p2_d - p1_d) ** 2, axis=1))
-            strains_d = (lengths_d - grid_rest_lengths) / grid_rest_lengths
-            denom = failure_strain - damage_onset_strain
-            denom_safe = where(denom == 0.0, 1.0, denom)
-            damage_d = minimum(maximum((strains_d - damage_onset_strain) / denom_safe, 0.0), 1.0)
-            grid_damage[:] = maximum(grid_damage, damage_d)
-            grid_failed[:] = grid_damage >= 1.0
-            effective_k = grid_stiffnesses * (1.0 - grid_damage)
-            effective_k = where(grid_failed, 0.0, effective_k)
+            # Fallback numpy CDM already updated at step start
+            pass
 
         accel_mag = (
             np.sqrt(
@@ -1464,32 +1537,19 @@ def _fused_leapfrog_loop_jit(
         t_sim += dt
 
         if backend.BACKEND == "numba" and backend.HAS_NUMBA:
-            failure_dissipated = numba_compute_failure_dissipated(
-                grid_springs,
-                grid_stiffnesses,
-                grid_rest_lengths,
-                grid_failed,
-                grid_damage,
-                damage_onset_strain,
-                failure_strain,
-                fracture_energy_multiplier,
-            )
+            # failure_dissipated already incrementally accumulated
+            pass
         else:
-            # Python/NumPy fallback failure energy tracking
-            k = grid_stiffnesses
-            L0 = grid_rest_lengths
-            x_onset = damage_onset_strain
-            x_fail = failure_strain
-            D = grid_damage
-
-            w_failed = (k * L0**2 / 6.0) * (x_fail**2 + x_fail * x_onset + x_onset**2)
-            denom_val = x_fail - x_onset
-            denom_safe_val = 1.0 if denom_val == 0.0 else denom_val
-            x_peak = x_onset + D * (x_fail - x_onset)
-            w_diss = (k * L0**2 / (6.0 * denom_safe_val)) * (x_peak**3 - x_onset**3)
-
-            diss_arr = np.where(grid_failed, w_failed, np.where(D > 0.0, w_diss, 0.0))
-            failure_dissipated = float(np.sum(fracture_energy_multiplier * diss_arr))
+            # Python/NumPy fallback incremental energy tracking
+            p1_telem = positions[grid_springs[:, 0]]
+            p2_telem = positions[grid_springs[:, 1]]
+            lengths_telem = sqrt(sum((p2_telem - p1_telem) ** 2, axis=1))
+            strains_telem = (lengths_telem - grid_rest_lengths) / grid_rest_lengths
+            new_failed_mask = (strains_telem > failure_strain) & ~grid_failed
+            if np.any(new_failed_mask):
+                w_fail = 0.5 * grid_stiffnesses * (failure_strain * grid_rest_lengths) ** 2
+                failure_dissipated += float(np.sum(fracture_energy_multiplier * w_fail[new_failed_mask]))
+                grid_failed[new_failed_mask] = True
 
         if step % save_interval == 0:
             frame_idx = step // save_interval
@@ -1580,6 +1640,9 @@ def numba_step_shell_forces_and_failures(
     rayleigh_beta,
     dt,
     density_kgm3,
+    element_failed_step,
+    current_step,
+    erosion_softening_steps,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
@@ -1598,181 +1661,218 @@ def numba_step_shell_forces_and_failures(
     step_stiff_damp_power = 0.0
 
     for e in range(n_elements):
-        if element_failed[e] == 1:
-            continue
-
         n0 = elements[e, 0]
         n1 = elements[e, 1]
         n2 = elements[e, 2]
         n3 = elements[e, 3]
 
-        # Current nodal displacements
-        u0 = positions[n0, 0] - X_ref[n0, 0]
-        v0 = positions[n0, 1] - X_ref[n0, 1]
-        w0 = positions[n0, 2] - X_ref[n0, 2]
+        is_failed = (element_failed[e] == 1)
+        ramp = 1.0
+        
+        if is_failed:
+            if element_failed_step[e] < 0:
+                element_failed_step[e] = current_step
+            age = current_step - element_failed_step[e]
+            denom_s = erosion_softening_steps
+            denom_s_safe = denom_s if denom_s != 0 else 1
+            ramp = 1.0 - age / denom_s_safe
+            if ramp <= 0.0:
+                element_stress[e, :, :] = 0.0
+                element_strains[e, :] = 0.0
+                continue
+            
+            N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
+            M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
+            for k in range(3):
+                zk = z_pts[k]
+                wk = w_pts[k]
+                sig_xx_total = element_stress[e, k, 0] * ramp
+                sig_yy_total = element_stress[e, k, 1] * ramp
+                tau_xy_total = element_stress[e, k, 2] * ramp
 
-        u1 = positions[n1, 0] - X_ref[n1, 0]
-        v1 = positions[n1, 1] - X_ref[n1, 1]
-        w1 = positions[n1, 2] - X_ref[n1, 2]
+                N_xx += wk * sig_xx_total
+                N_yy += wk * sig_yy_total
+                N_xy += wk * tau_xy_total
 
-        u2 = positions[n2, 0] - X_ref[n2, 0]
-        v2 = positions[n2, 1] - X_ref[n2, 1]
-        w2 = positions[n2, 2] - X_ref[n2, 2]
+                M_xx += wk * sig_xx_total * zk
+                M_yy += wk * sig_yy_total * zk
+                M_xy += wk * tau_xy_total * zk
+            
+            Q_x = G_s * thickness * element_strains[e, 6] * ramp
+            Q_y = G_s * thickness * element_strains[e, 7] * ramp
+        else:
+            # Current nodal displacements
+            u0 = positions[n0, 0] - X_ref[n0, 0]
+            v0 = positions[n0, 1] - X_ref[n0, 1]
+            w0 = positions[n0, 2] - X_ref[n0, 2]
 
-        u3 = positions[n3, 0] - X_ref[n3, 0]
-        v3 = positions[n3, 1] - X_ref[n3, 1]
-        w3 = positions[n3, 2] - X_ref[n3, 2]
+            u1 = positions[n1, 0] - X_ref[n1, 0]
+            v1 = positions[n1, 1] - X_ref[n1, 1]
+            w1 = positions[n1, 2] - X_ref[n1, 2]
 
-        # Nodal rotations (theta_x, theta_y)
-        tx0, ty0 = ang_positions[n0, 0], ang_positions[n0, 1]
-        tx1, ty1 = ang_positions[n1, 0], ang_positions[n1, 1]
-        tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
-        tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
+            u2 = positions[n2, 0] - X_ref[n2, 0]
+            v2 = positions[n2, 1] - X_ref[n2, 1]
+            w2 = positions[n2, 2] - X_ref[n2, 2]
 
-        # Compute out-of-plane deflection gradients
-        dw_dx = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
-        dw_dy = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
+            u3 = positions[n3, 0] - X_ref[n3, 0]
+            v3 = positions[n3, 1] - X_ref[n3, 1]
+            w3 = positions[n3, 2] - X_ref[n3, 2]
 
-        # Compute strains (with Von Karman non-linear membrane strain terms)
-        eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx) + 0.5 * dw_dx**2
-        eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx) + 0.5 * dw_dy**2
-        gam_xy = (
-            ((u3 - u0) + (u2 - u1)) / (2.0 * dx)
-            + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
-            + dw_dx * dw_dy
-        )
+            # Nodal rotations (theta_x, theta_y)
+            tx0, ty0 = ang_positions[n0, 0], ang_positions[n0, 1]
+            tx1, ty1 = ang_positions[n1, 0], ang_positions[n1, 1]
+            tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
+            tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
 
-        kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
-        kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
-        kappa_xy = ((ty3 - ty0) + (ty2 - ty1)) / (2.0 * dx) - ((tx1 - tx0) + (tx2 - tx3)) / (
-            2.0 * dx
-        )
+            # Compute out-of-plane deflection gradients
+            dw_dx = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
+            dw_dy = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
 
-        gam_xz = dw_dx + (ty0 + ty1 + ty2 + ty3) / 4.0
-        gam_yz = dw_dy - (tx0 + tx1 + tx2 + tx3) / 4.0
-
-        # Calculate strain increments
-        d_eps_xx = eps_xx - element_strains[e, 0]
-        d_eps_yy = eps_yy - element_strains[e, 1]
-        d_gam_xy = gam_xy - element_strains[e, 2]
-
-        d_kappa_xx = kappa_xx - element_strains[e, 3]
-        d_kappa_yy = kappa_yy - element_strains[e, 4]
-        d_kappa_xy = kappa_xy - element_strains[e, 5]
-        d_gam_xz = gam_xz - element_strains[e, 6]
-        d_gam_yz = gam_yz - element_strains[e, 7]
-
-        # Store strains
-        element_strains[e, 0] = eps_xx
-        element_strains[e, 1] = eps_yy
-        element_strains[e, 2] = gam_xy
-        element_strains[e, 3] = kappa_xx
-        element_strains[e, 4] = kappa_yy
-        element_strains[e, 5] = kappa_xy
-        element_strains[e, 6] = gam_xz
-        element_strains[e, 7] = gam_yz
-
-        # Thickness integration
-        all_failed = True
-
-        # Store forces/moments integrals
-        N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
-        M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
-
-        for k in range(3):
-            zk = z_pts[k]
-            wk = w_pts[k]
-
-            d_exx_k = d_eps_xx + zk * d_kappa_xx
-            d_eyy_k = d_eps_yy + zk * d_kappa_yy
-            d_gxy_k = d_gam_xy + zk * d_kappa_xy
-
-            # Elastic trial stress
-            sig_xx_old = element_stress[e, k, 0]
-            sig_yy_old = element_stress[e, k, 1]
-            tau_xy_old = element_stress[e, k, 2]
-
-            C = E / (1.0 - nu * nu)
-            sig_xx_trial = sig_xx_old + C * (d_exx_k + nu * d_eyy_k)
-            sig_yy_trial = sig_yy_old + C * (d_eyy_k + nu * d_exx_k)
-            tau_xy_trial = tau_xy_old + G * d_gxy_k
-
-            # Yield check (von Mises yield criterion)
-            sig_vm_trial = np.sqrt(
-                sig_xx_trial**2
-                + sig_yy_trial**2
-                - sig_xx_trial * sig_yy_trial
-                + 3.0 * tau_xy_trial**2
+            # Compute strains (with Von Karman non-linear membrane strain terms)
+            eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx) + 0.5 * dw_dx**2
+            eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx) + 0.5 * dw_dy**2
+            gam_xy = (
+                ((u3 - u0) + (u2 - u1)) / (2.0 * dx)
+                + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
+                + dw_dx * dw_dy
             )
 
-            peeq_old = element_peeq[e, k]
-            yield_val = yield_strength + hardening_modulus * peeq_old
-            f_yield = sig_vm_trial - yield_val
+            kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
+            kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
+            kappa_xy = ((ty3 - ty0) + (ty2 - ty1)) / (2.0 * dx) - ((tx1 - tx0) + (tx2 - tx3)) / (
+                2.0 * dx
+            )
 
-            sig_xx_new = sig_xx_trial
-            sig_yy_new = sig_yy_trial
-            tau_xy_new = tau_xy_trial
-            peeq_new = peeq_old
+            gam_xz = dw_dx + (ty0 + ty1 + ty2 + ty3) / 4.0
+            gam_yz = dw_dy - (tx0 + tx1 + tx2 + tx3) / 4.0
 
-            d_peeq = 0.0
-            if f_yield > 0.0 and yield_strength > 0.0:
-                # Radial return plastic strain increment
-                d_peeq = f_yield / (3.0 * G + hardening_modulus)
-                peeq_new = peeq_old + d_peeq
+            # Calculate strain increments
+            d_eps_xx = eps_xx - element_strains[e, 0]
+            d_eps_yy = eps_yy - element_strains[e, 1]
+            d_gam_xy = gam_xy - element_strains[e, 2]
 
-                # Scale stress components
-                scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
-                if scale < 0.0:
-                    scale = 0.0
+            d_kappa_xx = kappa_xx - element_strains[e, 3]
+            d_kappa_yy = kappa_yy - element_strains[e, 4]
+            d_kappa_xy = kappa_xy - element_strains[e, 5]
+            d_gam_xz = gam_xz - element_strains[e, 6]
+            d_gam_yz = gam_yz - element_strains[e, 7]
 
-                sig_xx_new = sig_xx_trial * scale
-                sig_yy_new = sig_yy_trial * scale
-                tau_xy_new = tau_xy_trial * scale
+            # Store strains
+            element_strains[e, 0] = eps_xx
+            element_strains[e, 1] = eps_yy
+            element_strains[e, 2] = gam_xy
+            element_strains[e, 3] = kappa_xx
+            element_strains[e, 4] = kappa_yy
+            element_strains[e, 5] = kappa_xy
+            element_strains[e, 6] = gam_xz
+            element_strains[e, 7] = gam_yz
 
-                # Plastic dissipation energy
-                step_fracture_energy += yield_val * d_peeq * wk * (dx * dx)
+            # Thickness integration
+            all_failed = True
 
-            element_stress[e, k, 0] = sig_xx_new
-            element_stress[e, k, 1] = sig_yy_new
-            element_stress[e, k, 2] = tau_xy_new
-            element_peeq[e, k] = peeq_new
+            # Store forces/moments integrals
+            N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
+            M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
 
-            # Damage evolution & stress triaxiality
-            if ultimate_strain > 0.0:
-                if d_peeq > 0.0:
-                    # Mean stress
-                    sig_m = (sig_xx_new + sig_yy_new) / 3.0
-                    # Von Mises equivalent stress
-                    sig_vm = np.sqrt(
-                        sig_xx_new**2
-                        + sig_yy_new**2
-                        - sig_xx_new * sig_yy_new
-                        + 3.0 * tau_xy_new**2
-                    )
-                    eta = sig_m / (sig_vm if sig_vm > 1e-5 else 1e-5)
+            for k in range(3):
+                zk = z_pts[k]
+                wk = w_pts[k]
 
-                    # Triaxiality-dependent failure strain scaling
-                    eps_f = ultimate_strain
-                    if eta > 0.0:
-                        eps_f = ultimate_strain * np.exp(-1.5 * (eta - 1.0 / 3.0))
-                    else:
-                        eps_f = ultimate_strain * np.exp(-0.5 * eta)
+                d_exx_k = d_eps_xx + zk * d_kappa_xx
+                d_eyy_k = d_eps_yy + zk * d_kappa_yy
+                d_gxy_k = d_gam_xy + zk * d_kappa_xy
 
-                    if eps_f < 0.005:
-                        eps_f = 0.005
+                # Elastic trial stress
+                sig_xx_old = element_stress[e, k, 0]
+                sig_yy_old = element_stress[e, k, 1]
+                tau_xy_old = element_stress[e, k, 2]
 
-                    d_damage = d_peeq / eps_f
-                    element_damage[e, k] = np.minimum(1.0, element_damage[e, k] + d_damage)
+                C = E / (1.0 - nu * nu)
+                sig_xx_trial = sig_xx_old + C * (d_exx_k + nu * d_eyy_k)
+                sig_yy_trial = sig_yy_old + C * (d_eyy_k + nu * d_exx_k)
+                tau_xy_trial = tau_xy_old + G * d_gxy_k
 
-                if element_damage[e, k] < 1.0:
+                # Yield check (von Mises yield criterion)
+                sig_vm_trial = np.sqrt(
+                    sig_xx_trial**2
+                    + sig_yy_trial**2
+                    - sig_xx_trial * sig_yy_trial
+                    + 3.0 * tau_xy_trial**2
+                )
+
+                peeq_old = element_peeq[e, k]
+                yield_val = yield_strength + hardening_modulus * peeq_old
+                f_yield = sig_vm_trial - yield_val
+
+                sig_xx_new = sig_xx_trial
+                sig_yy_new = sig_yy_trial
+                tau_xy_new = tau_xy_trial
+                peeq_new = peeq_old
+
+                d_peeq = 0.0
+                if f_yield > 0.0 and yield_strength > 0.0:
+                    # Radial return plastic strain increment
+                    d_peeq = f_yield / (3.0 * G + hardening_modulus)
+                    peeq_new = peeq_old + d_peeq
+
+                    # Scale stress components
+                    scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
+                    if scale < 0.0:
+                        scale = 0.0
+
+                    sig_xx_new = sig_xx_trial * scale
+                    sig_yy_new = sig_yy_trial * scale
+                    tau_xy_new = tau_xy_trial * scale
+
+                    # Plastic dissipation energy
+                    step_fracture_energy += yield_val * d_peeq * wk * (dx * dx)
+
+                element_stress[e, k, 0] = sig_xx_new
+                element_stress[e, k, 1] = sig_yy_new
+                element_stress[e, k, 2] = tau_xy_new
+                element_peeq[e, k] = peeq_new
+
+                # Damage evolution & stress triaxiality
+                if ultimate_strain > 0.0:
+                    if d_peeq > 0.0:
+                        # Mean stress
+                        sig_m = (sig_xx_new + sig_yy_new) / 3.0
+                        # Von Mises equivalent stress
+                        sig_vm = np.sqrt(
+                            sig_xx_new**2
+                            + sig_yy_new**2
+                            - sig_xx_new * sig_yy_new
+                            + 3.0 * tau_xy_new**2
+                        )
+                        eta = sig_m / (sig_vm if sig_vm > 1e-5 else 1e-5)
+
+                        # Triaxiality-dependent failure strain scaling
+                        eps_f = ultimate_strain
+                        if eta > 0.0:
+                            eps_f = ultimate_strain * np.exp(-1.5 * (eta - 1.0 / 3.0))
+                        else:
+                            eps_f = ultimate_strain * np.exp(-0.5 * eta)
+
+                        if eps_f < 0.005:
+                            eps_f = 0.005
+
+                        d_damage = d_peeq / eps_f
+                        element_damage[e, k] = np.minimum(1.0, element_damage[e, k] + d_damage)
+
+                    if element_damage[e, k] < 1.0:
+                        all_failed = False
+                else:
                     all_failed = False
-            else:
-                all_failed = False
 
-        # Element erosion check
-        if all_failed and ultimate_strain > 0.0:
-            element_failed[e] = 1
-            continue
+            # Element erosion check
+            if all_failed and ultimate_strain > 0.0:
+                element_failed[e] = 1
+                element_failed_step[e] = current_step
+                w_fail = 0.0
+                for k in range(3):
+                    w_fail += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e, k] ** 2) / E
+                step_fracture_energy += w_fail
+                ramp = 1.0
 
         # Recompute forces and moments integrals
         for k in range(3):
@@ -1857,9 +1957,9 @@ def numba_step_shell_forces_and_failures(
 
         # Hourglass stabilization damping on nodal velocities
         # Correct dimensional mismatch using wave impedance
-        C_damp = 0.015 * sqrt(E * density_kgm3) * thickness * dx
-        C_rot_damp = 0.015 * sqrt(E * density_kgm3) * (thickness**3) * dx
-        shear_damping = 0.015 * sqrt(G * density_kgm3) * thickness * (dx * dx * dx)
+        C_damp = 0.015 * sqrt(E * density_kgm3) * thickness * dx * ramp
+        C_rot_damp = 0.015 * sqrt(E * density_kgm3) * (thickness**3) * dx * ramp
+        shear_damping = 0.015 * sqrt(G * density_kgm3) * thickness * (dx * dx * dx) * ramp
         for n_idx in (n0, n1, n2, n3):
             forces[n_idx, 0] -= C_damp * velocities[n_idx, 0]
             forces[n_idx, 1] -= C_damp * velocities[n_idx, 1]
@@ -1962,6 +2062,13 @@ def _fused_shell_loop_jit(
     cohesive_strength_gpa,
     fracture_energy_jm2,
     use_czm,
+    element_strains,
+    ang_positions,
+    ang_velocities,
+    ang_accel,
+    element_failed_step,
+    erosion_softening_steps,
+    velocity_clamping_multiplier,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
@@ -1988,14 +2095,6 @@ def _fused_shell_loop_jit(
     proj_reaction_force = zeros(3, dtype=np.float64)
     proj_torque = zeros(3, dtype=np.float64)
     omega_dot = zeros(3, dtype=np.float64)
-
-    # Nodal rotational DOFs
-    ang_positions = zeros((n_nodes, 3), dtype=positions.dtype)
-    ang_velocities = zeros((n_nodes, 3), dtype=positions.dtype)
-    ang_accel = zeros((n_nodes, 3), dtype=positions.dtype)
-
-    # Shell element DB
-    element_strains = zeros((n_elements, 8), dtype=positions.dtype)
 
     rot_inertia = (1.0 / 12.0) * grid_masses * (dx * dx)
     rot_inertia = maximum(rot_inertia, 1e-12)  # safeguard against division by zero
@@ -2098,7 +2197,12 @@ def _fused_shell_loop_jit(
                 active_counts[n2] += 1
                 active_counts[n3] += 1
 
-        v_max = dx / dt
+        c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
+        v_max_phys = velocity_clamping_multiplier * c_p
+        if dx / dt < v_max_phys:
+            v_max = dx / dt
+        else:
+            v_max = v_max_phys
 
         # 3. Calculate internal forces and moments
         shell_forces, shell_torques, step_fracture_energy, step_stiff_damp_power = (
@@ -2124,6 +2228,9 @@ def _fused_shell_loop_jit(
                 rayleigh_beta,
                 dt,
                 density_kgm3,
+                element_failed_step,
+                step,
+                erosion_softening_steps,
             )
         )
         failure_dissipated += step_fracture_energy
@@ -2272,6 +2379,13 @@ def _fused_shell_loop_jit(
             )
             delta = proximity_threshold - dist
             if delta > 0.0:
+                if active_counts[i] == 0.0:
+                    continue
+                # Cap penalty contact force to sheet structural capacity
+                f_cap = yield_strength * dx * thickness
+                if f_cap <= 0.0:
+                    f_cap = E * dx * thickness
+                
                 n_loc = numba_eval_sdf_normal(
                     P_loc,
                     shape_code,
@@ -2310,6 +2424,8 @@ def _fused_shell_loop_jit(
                 f_mag = k_penalty * delta + proj_c_damping * delta_dot
                 if f_mag < 0.0:
                     f_mag = 0.0
+                if f_mag > f_cap:
+                    f_mag = f_cap
 
                 node_scale_factor = 1.0
                 if node_initial_elements[i] > 0:
@@ -2604,6 +2720,14 @@ def fused_leapfrog_loop(
     cohesive_strength_gpa: float = 0.485,
     fracture_energy_jm2: float = 50000.0,
     use_czm: bool = False,
+    spring_failed_step: np.ndarray | None = None,
+    element_failed_step: np.ndarray | None = None,
+    element_strains: np.ndarray | None = None,
+    ang_positions: np.ndarray | None = None,
+    ang_velocities: np.ndarray | None = None,
+    ang_accel: np.ndarray | None = None,
+    erosion_softening_steps: int = 10,
+    velocity_clamping_multiplier: float = 2.0,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -2624,9 +2748,18 @@ def fused_leapfrog_loop(
     float,  # contact_energy
     float,  # friction_dissipated
 ]:
+    n_nodes = len(positions)
     n_springs = len(grid_springs)
     if grid_damage is None:
         grid_damage = np.zeros(n_springs, dtype=np.float64)
+    if spring_failed_step is None:
+        spring_failed_step = np.zeros(n_springs, dtype=np.int32) - 1
+    if ang_positions is None:
+        ang_positions = np.zeros((n_nodes, 3), dtype=np.float64)
+    if ang_velocities is None:
+        ang_velocities = np.zeros((n_nodes, 3), dtype=np.float64)
+    if ang_accel is None:
+        ang_accel = np.zeros((n_nodes, 3), dtype=np.float64)
     if proj_quat is None:
         proj_quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
     if proj_omega is None:
@@ -2676,6 +2809,14 @@ def fused_leapfrog_loop(
             element_failed = np.zeros(n_elems, dtype=np.int32)
         else:
             element_failed = element_failed.astype(np.int32)
+
+        if element_failed_step is None or element_failed_step.shape[0] != n_elems:
+            element_failed_step = np.zeros(n_elems, dtype=np.int32) - 1
+        else:
+            element_failed_step = element_failed_step.astype(np.int32)
+
+        if element_strains is None or element_strains.shape[0] != n_elems:
+            element_strains = np.zeros((n_elems, 8), dtype=positions.dtype)
 
         return _fused_shell_loop_jit(
             positions,
@@ -2748,6 +2889,13 @@ def fused_leapfrog_loop(
             cohesive_strength_gpa,
             fracture_energy_jm2,
             use_czm,
+            element_strains,
+            ang_positions,
+            ang_velocities,
+            ang_accel,
+            element_failed_step,
+            erosion_softening_steps,
+            velocity_clamping_multiplier,
         )
 
     return _fused_leapfrog_loop_jit(
@@ -2814,4 +2962,9 @@ def fused_leapfrog_loop(
         mu_s,
         friction_dissipated_init,
         proximity_threshold_val,
+        spring_failed_step,
+        erosion_softening_steps,
+        velocity_clamping_multiplier,
+        youngs_modulus_gpa,
+        density_kgm3,
     )

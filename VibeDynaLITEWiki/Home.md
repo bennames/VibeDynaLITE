@@ -13,6 +13,7 @@ The primary use case is predicting the **V50 ballistic limit** — the velocity 
 - [[Damping Models]] — Viscous and Rayleigh damping for numerical stability
 - [[Energy Conservation]] — Tracking kinetic, strain, and dissipated energy budgets
 - [[Spring Failure Mechanics]] — Strain-based rupture criteria for yarn breakage
+- [[Element Erosion Instability]] — Physics and numerical treatments for stable erosion
 - [[2D Shell Finite Elements]] — Q4 shell formulation, J2 plasticity, and element erosion
 - [[Kevlar Material Properties]] — Fiber modulus, density, failure strain, and weave parameters
 - [[Mass Scaling]] — Why we chose not to implement it, and what it would do

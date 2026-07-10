@@ -650,6 +650,10 @@ def validate_config(config: dict) -> bool:
         sim["auto_cfl"] = True
     if "dt" not in sim:
         sim["dt"] = 1.5e-7
+    if "erosion_softening_steps" not in sim:
+        sim["erosion_softening_steps"] = 10
+    if "velocity_clamping_multiplier" not in sim:
+        sim["velocity_clamping_multiplier"] = 2.0
 
     for key in [
         "duration",
@@ -661,6 +665,8 @@ def validate_config(config: dict) -> bool:
         "auto_cfl",
         "dt",
         "structure_type",
+        "erosion_softening_steps",
+        "velocity_clamping_multiplier",
     ]:
         if key not in sim:
             raise ValidationError(f"Simulation section missing required key: '{key}'")
@@ -708,6 +714,18 @@ def validate_config(config: dict) -> bool:
     if not isinstance(beta, (int, float)) or beta < 0.0:
         raise ValidationError(
             f"Simulation parameter 'rayleigh_beta' must be a non-negative number (got {beta})."
+        )
+
+    soft_steps = sim["erosion_softening_steps"]
+    if not isinstance(soft_steps, int) or soft_steps < 0:
+        raise ValidationError(
+            f"Simulation parameter 'erosion_softening_steps' must be a non-negative integer (got {soft_steps})."
+        )
+
+    v_mult = sim["velocity_clamping_multiplier"]
+    if not isinstance(v_mult, (int, float)) or v_mult <= 0.0:
+        raise ValidationError(
+            f"Simulation parameter 'velocity_clamping_multiplier' must be a positive number (got {v_mult})."
         )
 
     logger.info("Configuration validation succeeded.")

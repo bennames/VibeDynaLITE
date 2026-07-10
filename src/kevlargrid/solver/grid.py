@@ -50,6 +50,12 @@ class Grid:
     element_damage: np.ndarray | None
     element_failed: np.ndarray | None
     is_tiebreak: np.ndarray
+    spring_failed_step: np.ndarray
+    element_failed_step: np.ndarray | None
+    element_strains: np.ndarray
+    ang_positions: np.ndarray
+    ang_velocities: np.ndarray
+    ang_accel: np.ndarray
     n_nodes: int
     n_springs: int
     initial_spring_counts: np.ndarray
@@ -84,8 +90,16 @@ class Grid:
         self.element_damage = None
         if elements is not None and len(elements) > 0:
             self.element_failed = np.zeros(len(elements), dtype=bool)
+            self.element_failed_step = np.zeros(len(elements), dtype=np.int32) - 1
+            self.element_strains = np.zeros((len(elements), 8), dtype=np.float64)
         else:
             self.element_failed = None
+            self.element_failed_step = None
+            self.element_strains = np.zeros((0, 8), dtype=np.float64)
+        self.spring_failed_step = np.zeros(len(springs), dtype=np.int32) - 1
+        self.ang_positions = np.zeros((len(nodes), 3), dtype=np.float64)
+        self.ang_velocities = np.zeros((len(nodes), 3), dtype=np.float64)
+        self.ang_accel = np.zeros((len(nodes), 3), dtype=np.float64)
         if is_tiebreak is None:
             self.is_tiebreak = np.zeros(len(springs), dtype=bool)
         else:

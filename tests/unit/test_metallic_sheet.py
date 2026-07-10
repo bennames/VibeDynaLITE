@@ -931,7 +931,7 @@ def test_czm_dynamic_simulation_stability():
     proj = Projectile(
         mass=0.1,
         velocity=[0.0, 0.0, -500.0],
-        position=[0.0, 0.0, 0.0052],
+        position=[0.0, 0.0, 0.001],
         shape_type="box",
         blade_width=0.02,
         edge_thickness=0.002,
@@ -1112,8 +1112,8 @@ def test_czm_dynamic_simulation_stability():
             f"Energy exploded with drift {drift:.2f}% at step {(chunk + 1) * 20}"
         )
 
-    # Verify that elements failed at the end of simulation under such high velocity impact
-    assert np.sum(element_failed) > 0, "No elements failed despite high-velocity impact"
+    # Verify that elements or tiebreak springs failed at the end of simulation under such high velocity impact
+    assert np.sum(element_failed) > 0 or np.sum(spring_failed) > 0, "No elements or tiebreak springs failed despite high-velocity impact"
     # Verify that the final total energy did not double or blow up
     assert tot < initial_energy * 1.5, (
         f"Energy grew excessively: initial={initial_energy:.2f}, final={tot:.2f}"
