@@ -407,6 +407,34 @@ class Viewport3D:
             else:
                 self.spring_to_elements_map = None
 
+            if (
+                structure_type == "metallic_sheet"
+                and grid.elements is not None
+                and len(grid.elements) > 0
+            ):
+                n_el = len(grid.elements)
+                elements = grid.elements
+                edge_nodes = np.empty((n_el, 4, 2), dtype=np.int32)
+                edge_nodes[:, 0, 0] = elements[:, 0]
+                edge_nodes[:, 0, 1] = elements[:, 1]
+                edge_nodes[:, 1, 0] = elements[:, 1]
+                edge_nodes[:, 1, 1] = elements[:, 2]
+                edge_nodes[:, 2, 0] = elements[:, 2]
+                edge_nodes[:, 2, 1] = elements[:, 3]
+                edge_nodes[:, 3, 0] = elements[:, 3]
+                edge_nodes[:, 3, 1] = elements[:, 0]
+                self.edge_nodes = edge_nodes.reshape(-1, 2)
+
+                p1_ref = grid.nodes[self.edge_nodes[:, 0]]
+                p2_ref = grid.nodes[self.edge_nodes[:, 1]]
+                self.edge_rest_lengths = np.sqrt(np.sum((p2_ref - p1_ref) ** 2, axis=1))
+                self.edge_rest_lengths = np.where(
+                    self.edge_rest_lengths < 1e-8, 1.0, self.edge_rest_lengths
+                )
+            else:
+                self.edge_nodes = None
+                self.edge_rest_lengths = None
+
             # Find bounds of single grid center
             if len(grid.nodes) > 0:
                 # Find center of nodes
@@ -462,17 +490,34 @@ class Viewport3D:
                             self._texture_h = self.height
 
                     # Pre-calculate VTK cell-connectivity connectivity line lists once
-                    springs = grid.springs
-                    n_springs = len(springs)
-                    lines = np.empty(n_springs * 3, dtype=np.int32)
-                    lines[0::3] = 2
-                    lines[1::3] = springs[:, 0]
-                    lines[2::3] = springs[:, 1]
+                    if self.edge_nodes is not None:
+                        n_el = len(grid.elements)
+                        elements = grid.elements
+                        cell_lines = np.empty((n_el, 4, 3), dtype=np.int32)
+                        cell_lines[:, :, 0] = 2
+                        cell_lines[:, 0, 1] = elements[:, 0]
+                        cell_lines[:, 0, 2] = elements[:, 1]
+                        cell_lines[:, 1, 1] = elements[:, 1]
+                        cell_lines[:, 1, 2] = elements[:, 2]
+                        cell_lines[:, 2, 1] = elements[:, 2]
+                        cell_lines[:, 2, 2] = elements[:, 3]
+                        cell_lines[:, 3, 1] = elements[:, 3]
+                        cell_lines[:, 3, 2] = elements[:, 0]
+                        lines = cell_lines.ravel()
+                        n_display_springs = len(self.edge_nodes)
+                    else:
+                        springs = grid.springs
+                        n_springs = len(springs)
+                        lines = np.empty(n_springs * 3, dtype=np.int32)
+                        lines[0::3] = 2
+                        lines[1::3] = springs[:, 0]
+                        lines[2::3] = springs[:, 1]
+                        n_display_springs = n_springs
 
                     self.mesh = pv.PolyData(grid.nodes, lines=lines)
 
                     # Initialize cell color array (RGBA uint8)
-                    dummy_colors = np.zeros((n_springs, 4), dtype=np.uint8)
+                    dummy_colors = np.zeros((n_display_springs, 4), dtype=np.uint8)
                     self.mesh.cell_data["colors"] = dummy_colors
 
                     # Add mesh to plotter
@@ -605,31 +650,35 @@ class Viewport3D:
             # 3D Yaw-Pitch camera projection coordinates rotation matrix
             R = np.array([[cy, 0.0, -sy], [-sy * sp, cp, -cy * sp], [sy * cp, sp, cy * cp]])  # noqa: N806
 
-            springs = self.grid.springs
-            n_springs = len(springs)
-
             if (
                 getattr(self, "structure_type", "fabric") == "metallic_sheet"
-                and getattr(self, "spring_to_elements_map", None) is not None
+                and getattr(self, "edge_nodes", None) is not None
             ):
+                springs = self.edge_nodes
+                n_springs = len(springs)
                 failed_elements = getattr(self.grid, "element_failed", None)
                 if failed_elements is not None:
-                    failed_elements_padded = np.append(failed_elements, True)
-                    el0 = self.spring_to_elements_map[:, 0]
-                    el1 = self.spring_to_elements_map[:, 1]
-                    failed = (
-                        failed_elements_padded[el0] & failed_elements_padded[el1]
-                    ) | self.grid.failed
+                    failed = np.repeat(failed_elements, 4)
                 else:
-                    failed = self.grid.failed
+                    failed = np.zeros(n_springs, dtype=bool)
+
+                p1 = self.grid.nodes[springs[:, 0]]
+                p2 = self.grid.nodes[springs[:, 1]]
+                lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                strains = (lengths - self.edge_rest_lengths) / self.edge_rest_lengths
             else:
+                springs = self.grid.springs
+                n_springs = len(springs)
                 failed = self.grid.failed
 
-            # Calculate live engineering strain for color-scale mapping
-            p1 = self.grid.nodes[springs[:, 0]]
-            p2 = self.grid.nodes[springs[:, 1]]
-            lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
-            strains = (lengths - self.grid.rest_lengths) / self.grid.rest_lengths
+                p1 = self.grid.nodes[springs[:, 0]]
+                p2 = self.grid.nodes[springs[:, 1]]
+                lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                safe_rest_lengths = np.where(
+                    self.grid.rest_lengths < 1e-8, 1.0, self.grid.rest_lengths
+                )
+                strains = (lengths - self.grid.rest_lengths) / safe_rest_lengths
+
             fail_thresh = getattr(self, "fail_thresh", 0.036)
 
             # --- PyVista offscreen hardware rendering path ---
@@ -1307,7 +1356,10 @@ class Viewport3D:
         with self.render_lock:
             if self.grid is not None:
                 self.grid.nodes = np.asarray(positions)
-                self.grid.failed = np.asarray(failed)
+                if getattr(self, "structure_type", "fabric") == "metallic_sheet":
+                    self.grid.element_failed = np.asarray(failed)
+                else:
+                    self.grid.failed = np.asarray(failed)
                 # We do NOT call self.redraw() here; it will be called by draw_projectile()
                 # to render the complete synchronized frame containing the projectile.
 

@@ -596,7 +596,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             se = float(hist_se[-1]) if len(hist_se) > 0 else 0.0
             proj_ke = float(hist_proj_ke[-1]) if len(hist_proj_ke) > 0 else 0.0
             peak_strain = float(hist_peak_strain[-1]) if len(hist_peak_strain) > 0 else 0.0
-            failed_count = int(np.sum(grid.failed))
+            if structure_type == "metallic_sheet" and grid.element_failed is not None:
+                failed_count = int(np.sum(grid.element_failed))
+            else:
+                failed_count = int(np.sum(grid.failed))
 
             hist_pos_np = np.asarray(hist_pos)
             hist_failed_np = np.asarray(hist_failed)
@@ -609,7 +612,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "steps": current_steps,
                     "t_sim": float(t_sim),
                     "positions": np.asarray(positions).copy(),
-                    "failed": np.asarray(grid.failed).copy(),
+                    "failed": np.asarray(
+                        grid.element_failed
+                        if (structure_type == "metallic_sheet" and grid.element_failed is not None)
+                        else grid.failed
+                    ).copy(),
                     "projectile_pos": np.asarray(proj.position).copy(),
                     "projectile_vel": np.asarray(proj.velocity).copy(),
                     "projectile_quat": np.asarray(proj.quat).copy(),

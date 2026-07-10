@@ -82,7 +82,10 @@ class Grid:
         self.element_stress = None
         self.element_peeq = None
         self.element_damage = None
-        self.element_failed = None
+        if elements is not None and len(elements) > 0:
+            self.element_failed = np.zeros(len(elements), dtype=bool)
+        else:
+            self.element_failed = None
         if is_tiebreak is None:
             self.is_tiebreak = np.zeros(len(springs), dtype=bool)
         else:
