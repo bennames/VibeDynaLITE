@@ -96,8 +96,11 @@ def compute_strain_energy(
                     s_xx = element_stress[e, k, 0]
                     s_yy = element_stress[e, k, 1]
                     t_xy = element_stress[e, k, 2]
-                    u0 = (0.5 / E) * (
-                        s_xx**2 + s_yy**2 - 2.0 * nu * s_xx * s_yy + 2.0 * (1.0 + nu) * t_xy**2
+                    d_factor = 1.0 - damage[e, k] if damage is not None else 1.0
+                    u0 = (
+                        (0.5 / E)
+                        * (s_xx**2 + s_yy**2 - 2.0 * nu * s_xx * s_yy + 2.0 * (1.0 + nu) * t_xy**2)
+                        * d_factor
                     )
                     el_se += u0 * wk
                 se += el_se * (dx * dx)

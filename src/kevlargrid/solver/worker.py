@@ -364,6 +364,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "cohesive_strength_gpa": mat.get("cohesive_strength_gpa", 0.485),
                 "fracture_energy_jm2": mat.get("fracture_energy_jm2", 50000.0),
                 "use_czm": use_czm,
+                "tensile_strength_gpa": mat.get("tensile_strength_gpa", 0.0),
             }
             if structure_type == "metallic_sheet":
                 extra_kwargs["element_stress"] = grid.element_stress
@@ -479,7 +480,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                                 node_elements[node].append(e_idx)
                         spring_elements: list[list[int]] = []
                         for n0, n1 in grid.springs:
-                            shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
+                            shared = list(set(node_elements[n0]).union(node_elements[n1]))
                             spring_elements.append(shared)
 
                         failed_springs = grid.failed.copy()

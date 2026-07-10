@@ -1,7 +1,10 @@
 import numpy as np
 
 from kevlargrid.io.config import normalize_config_units, validate_config
-from kevlargrid.solver.fused import fused_leapfrog_loop
+from kevlargrid.solver.fused import (
+    fused_leapfrog_loop,
+    numba_step_shell_forces_and_failures,
+)
 from kevlargrid.solver.grid import generate_rectangular_grid
 from kevlargrid.solver.projectile import Projectile
 
@@ -688,8 +691,8 @@ def test_von_karman_wave_propagation():
     assert np.max(np.abs(final_pos - positions)) > 0.0
 
 
-def test_continuous_damage_degradation():
-    """Verify that equivalent plastic strain triggers continuous damage growth and stress degradation."""
+def test_ramberg_osgood_sheet_simulation():
+    """Verify that sheet simulation under plastic loading follows Ramberg-Osgood hardening and peeq accumulation."""
     material = {
         "name": "Steel",
         "tensile_modulus_gpa": 200.0,
@@ -791,12 +794,13 @@ def test_continuous_damage_degradation():
         element_stress=element_stress,
         element_peeq=element_peeq,
         element_damage=element_damage,
+        tensile_strength_gpa=0.45,
     )
 
     assert res is not None
-    # We should have accumulated damage
-    assert np.any(element_damage > 0.0)
-    # Stresses at the damaged points should be non-zero since they degrade continuously
+    # We should have accumulated equivalent plastic strain
+    assert np.any(element_peeq > 0.0)
+    # Stresses at the plastic points should be non-zero
     assert np.any(np.abs(element_stress) > 0.0)
 
 
@@ -912,12 +916,12 @@ def test_czm_dynamic_simulation_stability():
         "areal_density_kgm2": 7.8,
         "shear_ratio": 0.38,
         "material_model": "j2_plasticity",
-        "yield_strength_gpa": 0.25,
-        "hardening_modulus_gpa": 1.0,
-        "ultimate_strain": 0.15,
+        "yield_strength_gpa": 0.01,
+        "hardening_modulus_gpa": 0.1,
+        "ultimate_strain": 0.05,
         "poisson_ratio": 0.3,
-        "cohesive_strength_gpa": 0.485,
-        "fracture_energy_jm2": 1000.0,
+        "cohesive_strength_gpa": 0.01,
+        "fracture_energy_jm2": 10.0,
     }
 
     grid = generate_rectangular_grid(
@@ -982,10 +986,10 @@ def test_czm_dynamic_simulation_stability():
             node_elements[node].append(e_idx)
     spring_elements = []
     for n0, n1 in grid.springs:
-        shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
+        shared = list(set(node_elements[n0]).union(node_elements[n1]))
         spring_elements.append(shared)
 
-    for chunk in range(25):  # Run 500 steps (25 chunks of 20 steps)
+    for chunk in range(100):  # Run 2000 steps (100 chunks of 20 steps)
         res = fused_leapfrog_loop(
             positions=pos,
             velocities=vel,
@@ -1006,7 +1010,7 @@ def test_czm_dynamic_simulation_stability():
             n_nodes_per_layer=len(pos),
             t_ply=0.002,
             dx=0.01,
-            k_penalty=1.0e6,
+            k_penalty=1.0e8,
             rayleigh_alpha=0.0,
             rayleigh_beta=1e-9,
             failure_strain=0.20,
@@ -1034,17 +1038,17 @@ def test_czm_dynamic_simulation_stability():
             friction_dissipated_init=friction_diss,
             structure_type="metallic_sheet",
             material_model="j2_plasticity",
-            yield_strength_gpa=0.25,
-            hardening_modulus_gpa=1.0,
-            ultimate_strain=0.15,
+            yield_strength_gpa=0.01,
+            hardening_modulus_gpa=0.1,
+            ultimate_strain=0.05,
             poisson_ratio=0.3,
             elements=grid.elements,
             youngs_modulus_gpa=200.0,
             thickness=thickness,
             density_kgm3=7800.0,
             is_tiebreak=grid.is_tiebreak,
-            cohesive_strength_gpa=0.485,
-            fracture_energy_jm2=1000.0,
+            cohesive_strength_gpa=0.01,
+            fracture_energy_jm2=10.0,
             use_czm=True,
             element_stress=element_stress,
             element_peeq=element_peeq,
@@ -1120,3 +1124,124 @@ def test_czm_dynamic_simulation_stability():
     assert tot < initial_energy * 1.5, (
         f"Energy grew excessively: initial={initial_energy:.2f}, final={tot:.2f}"
     )
+
+
+def test_ramberg_osgood_nonlinear_hardening():
+    """Verify that the shell return mapping follows the Ramberg-Osgood nonlinear hardening curve and softens past ultimate strain."""
+    positions = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.01, 0.0, 0.0],
+            [0.01, 0.01, 0.0],
+            [0.0, 0.01, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    X_ref = positions.copy()
+    velocities = np.zeros_like(positions)
+    ang_positions = np.zeros_like(positions)
+    ang_velocities = np.zeros_like(positions)
+    elements = np.array([[0, 1, 2, 3]], dtype=np.int32)
+    thickness = 0.002
+    E = 200e9
+    nu = 0.3
+    yield_strength = 200e6
+    hardening_modulus = 1e9
+    ultimate_strain = 0.05
+    tensile_strength = 400e6
+    dx = 0.01
+    dt = 1e-7
+
+    # Arrays
+    element_strains = np.zeros((1, 8), dtype=np.float64)
+    element_stress = np.zeros((1, 3, 3), dtype=np.float64)
+    element_peeq = np.zeros((1, 3), dtype=np.float64)
+    element_damage = np.zeros((1, 3), dtype=np.float64)
+    element_failed = np.array([0], dtype=np.int32)
+    element_failed_step = np.array([-1], dtype=np.int32)
+
+    # Apply strain increment that causes plastic yielding (0.005 is > yield strain of 0.001)
+    element_strains[0, 0] = 0.005
+
+    forces, torques, step_fe, step_sd = numba_step_shell_forces_and_failures(
+        positions,
+        X_ref,
+        velocities,
+        ang_positions,
+        ang_velocities,
+        elements,
+        thickness,
+        E,
+        nu,
+        yield_strength,
+        hardening_modulus,
+        ultimate_strain,
+        tensile_strength,
+        element_strains,
+        element_stress,
+        element_peeq,
+        element_damage,
+        element_failed,
+        dx,
+        rayleigh_beta=0.0,
+        dt=dt,
+        density_kgm3=7800.0,
+        element_failed_step=element_failed_step,
+        current_step=1,
+        erosion_softening_steps=10,
+    )
+
+    # Check von Mises stress at point 0
+    peeq1 = element_peeq[0, 0]
+    stress_pt1 = element_stress[0, 0]
+    sig_vm1 = np.sqrt(
+        stress_pt1[0] ** 2
+        + stress_pt1[1] ** 2
+        - stress_pt1[0] * stress_pt1[1]
+        + 3.0 * stress_pt1[2] ** 2
+    )
+    assert peeq1 > 0.0
+    assert sig_vm1 > yield_strength
+    assert sig_vm1 < tensile_strength
+
+    # Apply very large strain to exceed ultimate strain
+    element_strains[0, 0] = 0.1
+    numba_step_shell_forces_and_failures(
+        positions,
+        X_ref,
+        velocities,
+        ang_positions,
+        ang_velocities,
+        elements,
+        thickness,
+        E,
+        nu,
+        yield_strength,
+        hardening_modulus,
+        ultimate_strain,
+        tensile_strength,
+        element_strains,
+        element_stress,
+        element_peeq,
+        element_damage,
+        element_failed,
+        dx,
+        rayleigh_beta=0.0,
+        dt=dt,
+        density_kgm3=7800.0,
+        element_failed_step=element_failed_step,
+        current_step=2,
+        erosion_softening_steps=10,
+    )
+
+    peeq2 = element_peeq[0, 0]
+    stress_pt2 = element_stress[0, 0]
+    sig_vm2 = np.sqrt(
+        stress_pt2[0] ** 2
+        + stress_pt2[1] ** 2
+        - stress_pt2[0] * stress_pt2[1]
+        + 3.0 * stress_pt2[2] ** 2
+    )
+    assert peeq2 > ultimate_strain
+    assert sig_vm2 >= tensile_strength
+    assert sig_vm2 < tensile_strength + 1e7

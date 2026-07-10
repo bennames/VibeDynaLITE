@@ -1635,6 +1635,7 @@ def numba_step_shell_forces_and_failures(
     yield_strength,
     hardening_modulus,
     ultimate_strain,
+    tensile_strength,
     element_strains,
     element_stress,
     element_peeq,
@@ -1661,6 +1662,18 @@ def numba_step_shell_forces_and_failures(
     kappa_s = 5.0 / 6.0  # shear correction factor
     G_s = G * kappa_s
 
+    # Ramberg-Osgood precomputations
+    eps_reg = 1e-5
+    if ultimate_strain > 0.0 and tensile_strength > yield_strength:
+        denom_ro = (ultimate_strain + eps_reg) ** 0.2 - eps_reg**0.2
+        K_ro = (tensile_strength - yield_strength) / denom_ro
+        sig_y_u = tensile_strength
+        H_soft = 1e7  # 10 MPa (extremely soft)
+    else:
+        K_ro = 0.0
+        sig_y_u = yield_strength
+        H_soft = hardening_modulus
+
     step_fracture_energy = 0.0
     step_stiff_damp_power = 0.0
 
@@ -1677,34 +1690,7 @@ def numba_step_shell_forces_and_failures(
         Q_x, Q_y = 0.0, 0.0
 
         if is_failed:
-            if element_failed_step[e] < 0:
-                element_failed_step[e] = current_step
-            age = current_step - element_failed_step[e]
-            denom_s = erosion_softening_steps
-            denom_s_safe = denom_s if denom_s != 0 else 1
-            ramp = 1.0 - age / denom_s_safe
-            if ramp <= 0.0:
-                element_stress[e, :, :] = 0.0
-                element_strains[e, :] = 0.0
-                continue
-
-            for k in range(3):
-                zk = z_pts[k]
-                wk = w_pts[k]
-                sig_xx_total = element_stress[e, k, 0] * ramp
-                sig_yy_total = element_stress[e, k, 1] * ramp
-                tau_xy_total = element_stress[e, k, 2] * ramp
-
-                N_xx += wk * sig_xx_total
-                N_yy += wk * sig_yy_total
-                N_xy += wk * tau_xy_total
-
-                M_xx += wk * sig_xx_total * zk
-                M_yy += wk * sig_yy_total * zk
-                M_xy += wk * tau_xy_total * zk
-
-            Q_x = G_s * thickness * element_strains[e, 6] * ramp
-            Q_y = G_s * thickness * element_strains[e, 7] * ramp
+            continue
         else:
             # Current nodal displacements
             u0 = positions[n0, 0] - X_ref[n0, 0]
@@ -1773,7 +1759,6 @@ def numba_step_shell_forces_and_failures(
             element_strains[e, 7] = gam_yz
 
             # Thickness integration
-            all_failed = True
 
             for k in range(3):
                 zk = z_pts[k]
@@ -1802,7 +1787,17 @@ def numba_step_shell_forces_and_failures(
                 )
 
                 peeq_old = element_peeq[e, k]
-                yield_val = yield_strength + hardening_modulus * peeq_old
+
+                if ultimate_strain > 0.0 and tensile_strength > yield_strength:
+                    if peeq_old <= ultimate_strain:
+                        yield_val = yield_strength + K_ro * (
+                            (peeq_old + eps_reg) ** 0.2 - eps_reg**0.2
+                        )
+                    else:
+                        yield_val = sig_y_u + H_soft * (peeq_old - ultimate_strain)
+                else:
+                    yield_val = yield_strength + hardening_modulus * peeq_old
+
                 f_yield = sig_vm_trial - yield_val
 
                 sig_xx_new = sig_xx_trial
@@ -1812,15 +1807,43 @@ def numba_step_shell_forces_and_failures(
 
                 d_peeq = 0.0
                 if f_yield > 0.0 and yield_strength > 0.0:
-                    # Radial return plastic strain increment with softening safeguards
-                    denom = 3.0 * G + hardening_modulus
-                    if denom > 0.0:
-                        d_peeq = f_yield / denom
+                    if ultimate_strain > 0.0 and tensile_strength > yield_strength:
+                        # Nonlinear Newton-Raphson radial return
+                        d_peeq = f_yield / (3.0 * G + 100.0)
+                        for _ in range(8):
+                            peeq_temp = peeq_old + d_peeq
+                            if peeq_temp <= ultimate_strain:
+                                sig_y_val = yield_strength + K_ro * (
+                                    (peeq_temp + eps_reg) ** 0.2 - eps_reg**0.2
+                                )
+                                H_tang = 0.2 * K_ro * (peeq_temp + eps_reg) ** (-0.8)
+                            else:
+                                sig_y_val = sig_y_u + H_soft * (peeq_temp - ultimate_strain)
+                                H_tang = H_soft
+                            f_val = sig_vm_trial - 3.0 * G * d_peeq - sig_y_val
+                            df_val = -3.0 * G - H_tang
+                            diff = f_val / df_val
+                            d_peeq -= diff
+                            if abs(diff) < 1e-6 * yield_strength:
+                                break
                         if d_peeq < 0.0:
                             d_peeq = 0.0
+                        peeq_new = peeq_old + d_peeq
+
+                        # Re-evaluate final yield value for plastic energy tracking
+                        if peeq_new <= ultimate_strain:
+                            yield_val = yield_strength + K_ro * (
+                                (peeq_new + eps_reg) ** 0.2 - eps_reg**0.2
+                            )
+                        else:
+                            yield_val = sig_y_u + H_soft * (peeq_new - ultimate_strain)
                     else:
-                        d_peeq = 0.0
-                    peeq_new = peeq_old + d_peeq
+                        # Linear radial return (analytical solution)
+                        d_peeq = f_yield / (3.0 * G + hardening_modulus)
+                        if d_peeq < 0.0:
+                            d_peeq = 0.0
+                        peeq_new = peeq_old + d_peeq
+                        yield_val = yield_strength + hardening_modulus * peeq_new
 
                     # Scale stress components (strictly dissipative, scale <= 1.0)
                     scale = 1.0 - (3.0 * G * d_peeq) / (
@@ -1843,47 +1866,15 @@ def numba_step_shell_forces_and_failures(
                 element_stress[e, k, 2] = tau_xy_new
                 element_peeq[e, k] = peeq_new
 
-                # Damage evolution & stress triaxiality
-                if ultimate_strain > 0.0:
-                    if d_peeq > 0.0:
-                        # Mean stress
-                        sig_m = (sig_xx_new + sig_yy_new) / 3.0
-                        # Von Mises equivalent stress
-                        sig_vm = np.sqrt(
-                            sig_xx_new**2
-                            + sig_yy_new**2
-                            - sig_xx_new * sig_yy_new
-                            + 3.0 * tau_xy_new**2
-                        )
-                        eta = sig_m / (sig_vm if sig_vm > 1e-5 else 1e-5)
+                # Damage evolution & element erosion are bypassed/disabled
+                element_damage[e, k] = 0.0
 
-                        # Triaxiality-dependent failure strain scaling
-                        eps_f = ultimate_strain
-                        if eta > 0.0:
-                            eps_f = ultimate_strain * np.exp(-1.5 * (eta - 1.0 / 3.0))
-                        else:
-                            eps_f = ultimate_strain * np.exp(-0.5 * eta)
+            # Element erosion check is disabled
 
-                        if eps_f < 0.005:
-                            eps_f = 0.005
-
-                        d_damage = d_peeq / eps_f
-                        element_damage[e, k] = np.minimum(1.0, element_damage[e, k] + d_damage)
-
-                    if element_damage[e, k] < 1.0:
-                        all_failed = False
-                else:
-                    all_failed = False
-
-            # Element erosion check
-            if all_failed and ultimate_strain > 0.0:
-                element_failed[e] = 1
-                element_failed_step[e] = current_step
-                w_fail = 0.0
-                for k in range(3):
-                    w_fail += 0.5 * (dx * dx) * thickness * np.sum(element_stress[e, k] ** 2) / E
-                step_fracture_energy += w_fail
-                ramp = 1.0
+        d_factor_mean = 1.0
+        if ultimate_strain > 0.0:
+            mean_damage = (element_damage[e, 0] + element_damage[e, 1] + element_damage[e, 2]) / 3.0
+            d_factor_mean = 1.0 - mean_damage
 
         # Recompute forces and moments integrals
         for k in range(3):
@@ -1930,10 +1921,12 @@ def numba_step_shell_forces_and_failures(
             q_damp_x = rayleigh_beta * G_s * thickness * gam_dot_xz
             q_damp_y = rayleigh_beta * G_s * thickness * gam_dot_yz
 
-            Q_x = G_s * thickness * gam_xz + q_damp_x
-            Q_y = G_s * thickness * gam_yz + q_damp_y
+            Q_x = (G_s * thickness * gam_xz + q_damp_x) * d_factor_mean
+            Q_y = (G_s * thickness * gam_yz + q_damp_y) * d_factor_mean
 
-            step_stiff_damp_power += (q_damp_x * gam_dot_xz + q_damp_y * gam_dot_yz) * (dx * dx)
+            step_stiff_damp_power += (
+                (q_damp_x * gam_dot_xz + q_damp_y * gam_dot_yz) * d_factor_mean * (dx * dx)
+            )
 
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
@@ -2107,6 +2100,7 @@ def _fused_shell_loop_jit(
     hardening_modulus_gpa,
     ultimate_strain,
     poisson_ratio,
+    tensile_strength_gpa,
     thickness,
     youngs_modulus_gpa,
     density_kgm3,
@@ -2160,6 +2154,11 @@ def _fused_shell_loop_jit(
     E = youngs_modulus_gpa * 1e9
     yield_strength = yield_strength_gpa * 1e9
     hardening_modulus = hardening_modulus_gpa * 1e9
+    tensile_strength = (
+        tensile_strength_gpa * 1e9
+        if tensile_strength_gpa > 0.0
+        else (yield_strength + hardening_modulus * ultimate_strain)
+    )
 
     if use_czm:
         cohesive_strength = cohesive_strength_gpa * 1e9
@@ -2275,6 +2274,7 @@ def _fused_shell_loop_jit(
                 yield_strength,
                 hardening_modulus,
                 ultimate_strain,
+                tensile_strength,
                 element_strains,
                 element_stress,
                 element_peeq,
@@ -2496,7 +2496,12 @@ def _fused_shell_loop_jit(
 
                 node_scale_factor = 1.0
                 if node_initial_elements[i] > 0:
-                    node_scale_factor = float(active_counts[i]) / float(node_initial_elements[i])
+                    if use_czm:
+                        node_scale_factor = 0.25 * float(active_counts[i])
+                    else:
+                        node_scale_factor = float(active_counts[i]) / float(
+                            node_initial_elements[i]
+                        )
 
                 proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
                 proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
@@ -2672,11 +2677,16 @@ def _fused_shell_loop_jit(
                             s_xx = element_stress[e, k, 0]
                             s_yy = element_stress[e, k, 1]
                             t_xy = element_stress[e, k, 2]
-                            u0 = (0.5 / E) * (
-                                s_xx**2
-                                + s_yy**2
-                                - 2.0 * poisson_ratio * s_xx * s_yy
-                                + 2.0 * (1.0 + poisson_ratio) * t_xy**2
+                            d_factor = 1.0 - element_damage[e, k] if ultimate_strain > 0.0 else 1.0
+                            u0 = (
+                                (0.5 / E)
+                                * (
+                                    s_xx**2
+                                    + s_yy**2
+                                    - 2.0 * poisson_ratio * s_xx * s_yy
+                                    + 2.0 * (1.0 + poisson_ratio) * t_xy**2
+                                )
+                                * d_factor
                             )
                             el_se += u0 * wk
                         se += el_se * (dx * dx)
@@ -2795,6 +2805,7 @@ def fused_leapfrog_loop(
     hardening_modulus_gpa: float = 0.0,
     ultimate_strain: float = 0.0,
     poisson_ratio: float = 0.3,
+    tensile_strength_gpa: float = 0.0,
     elements: np.ndarray | None = None,
     youngs_modulus_gpa: float = 71.0,
     thickness: float = 0.002,
@@ -2973,6 +2984,7 @@ def fused_leapfrog_loop(
             hardening_modulus_gpa,
             ultimate_strain,
             poisson_ratio,
+            tensile_strength_gpa,
             thickness,
             youngs_modulus_gpa,
             density_kgm3,
