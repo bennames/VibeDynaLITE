@@ -1966,25 +1966,70 @@ def numba_step_shell_forces_and_failures(
         torques[n3, 0] += M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n3, 1] += M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
 
-        # Hourglass stabilization damping on nodal velocities
-        # Correct dimensional mismatch using wave impedance
+        # Flanagan-Belytschko hourglass stabilization for 4-node quadrilateral shell element
+        # 1. Project nodal velocities onto the zero-energy hourglass mode (gamma = [1, -1, 1, -1])
+        q_vx = velocities[n0, 0] - velocities[n1, 0] + velocities[n2, 0] - velocities[n3, 0]
+        q_vy = velocities[n0, 1] - velocities[n1, 1] + velocities[n2, 1] - velocities[n3, 1]
+        q_vz = velocities[n0, 2] - velocities[n1, 2] + velocities[n2, 2] - velocities[n3, 2]
+
+        q_wx = (
+            ang_velocities[n0, 0]
+            - ang_velocities[n1, 0]
+            + ang_velocities[n2, 0]
+            - ang_velocities[n3, 0]
+        )
+        q_wy = (
+            ang_velocities[n0, 1]
+            - ang_velocities[n1, 1]
+            + ang_velocities[n2, 1]
+            - ang_velocities[n3, 1]
+        )
+        q_wz = (
+            ang_velocities[n0, 2]
+            - ang_velocities[n1, 2]
+            + ang_velocities[n2, 2]
+            - ang_velocities[n3, 2]
+        )
+
+        # 2. Compute physical stabilization damping coefficients using wave-impedance
         C_damp = 0.015 * sqrt(E * density_kgm3) * thickness * dx * ramp
         C_rot_damp = 0.015 * sqrt(E * density_kgm3) * (thickness**3) * dx * ramp
         shear_damping = 0.015 * sqrt(G * density_kgm3) * thickness * (dx * dx * dx) * ramp
-        for n_idx in (n0, n1, n2, n3):
-            forces[n_idx, 0] -= C_damp * velocities[n_idx, 0]
-            forces[n_idx, 1] -= C_damp * velocities[n_idx, 1]
-            forces[n_idx, 2] -= C_damp * velocities[n_idx, 2]
+        C_rot_total = C_rot_damp + shear_damping
 
-            torques[n_idx, 0] -= (
-                C_rot_damp * ang_velocities[n_idx, 0] + shear_damping * ang_velocities[n_idx, 0]
-            )
-            torques[n_idx, 1] -= (
-                C_rot_damp * ang_velocities[n_idx, 1] + shear_damping * ang_velocities[n_idx, 1]
-            )
-            torques[n_idx, 2] -= (
-                C_rot_damp * ang_velocities[n_idx, 2] + shear_damping * ang_velocities[n_idx, 2]
-            )
+        # 3. Distribute viscous resisting forces/torques using orthogonalized operator (gamma_I)
+        # Scaling by 0.25 accounts for the inner product norm ||gamma||^2 = 4.
+        # Node 0 (gamma_0 = 1.0)
+        forces[n0, 0] -= 0.25 * C_damp * q_vx
+        forces[n0, 1] -= 0.25 * C_damp * q_vy
+        forces[n0, 2] -= 0.25 * C_damp * q_vz
+        torques[n0, 0] -= 0.25 * C_rot_total * q_wx
+        torques[n0, 1] -= 0.25 * C_rot_total * q_wy
+        torques[n0, 2] -= 0.25 * C_rot_total * q_wz
+
+        # Node 1 (gamma_1 = -1.0)
+        forces[n1, 0] += 0.25 * C_damp * q_vx
+        forces[n1, 1] += 0.25 * C_damp * q_vy
+        forces[n1, 2] += 0.25 * C_damp * q_vz
+        torques[n1, 0] += 0.25 * C_rot_total * q_wx
+        torques[n1, 1] += 0.25 * C_rot_total * q_wy
+        torques[n1, 2] += 0.25 * C_rot_total * q_wz
+
+        # Node 2 (gamma_2 = 1.0)
+        forces[n2, 0] -= 0.25 * C_damp * q_vx
+        forces[n2, 1] -= 0.25 * C_damp * q_vy
+        forces[n2, 2] -= 0.25 * C_damp * q_vz
+        torques[n2, 0] -= 0.25 * C_rot_total * q_wx
+        torques[n2, 1] -= 0.25 * C_rot_total * q_wy
+        torques[n2, 2] -= 0.25 * C_rot_total * q_wz
+
+        # Node 3 (gamma_3 = -1.0)
+        forces[n3, 0] += 0.25 * C_damp * q_vx
+        forces[n3, 1] += 0.25 * C_damp * q_vy
+        forces[n3, 2] += 0.25 * C_damp * q_vz
+        torques[n3, 0] += 0.25 * C_rot_total * q_wx
+        torques[n3, 1] += 0.25 * C_rot_total * q_wy
+        torques[n3, 2] += 0.25 * C_rot_total * q_wz
 
     return forces, torques, step_fracture_energy, step_stiff_damp_power
 
