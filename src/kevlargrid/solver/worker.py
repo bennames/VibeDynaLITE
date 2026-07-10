@@ -473,6 +473,19 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                         for n0, n1 in grid.springs:
                             shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
                             spring_elements.append(shared)
+
+                        failed_springs = grid.failed.copy()
+                        assert grid.element_failed is not None
+                        for s_idx, el_indices in enumerate(spring_elements):
+                            if len(el_indices) > 0:
+                                all_failed = True
+                                for e_idx in el_indices:
+                                    if not grid.element_failed[e_idx]:
+                                        all_failed = False
+                                        break
+                                if all_failed:
+                                    failed_springs[s_idx] = True
+                        grid.failed = failed_springs
                     else:
                         spring_elements = []
 
@@ -650,7 +663,6 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     + damp_dissipated
                     + failure_dissipated
                     + clamp_dissipated
-                    + contact_energy
                     + friction_dissipated
                 )
                 drift_pct = (

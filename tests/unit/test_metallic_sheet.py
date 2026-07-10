@@ -899,3 +899,222 @@ def test_czm_spring_softening_equations():
     d_cand = (delta_c * (delta - delta_0)) / (delta * (delta_c - delta_0))
     d = min(1.0, d_cand)
     assert np.isclose(d, 1.0)
+
+
+def test_czm_dynamic_simulation_stability():
+    """Verify that dynamic CZM simulations are stable, conserve energy, and fail correctly."""
+    material = {
+        "name": "Steel",
+        "tensile_modulus_gpa": 200.0,
+        "failure_strain": 0.20,
+        "tensile_strength_gpa": 0.45,
+        "fiber_density_gcc": 7.8,
+        "areal_density_kgm2": 7.8,
+        "shear_ratio": 0.38,
+        "material_model": "j2_plasticity",
+        "yield_strength_gpa": 0.25,
+        "hardening_modulus_gpa": 1.0,
+        "ultimate_strain": 0.15,
+        "poisson_ratio": 0.3,
+        "cohesive_strength_gpa": 0.485,
+        "fracture_energy_jm2": 1000.0,
+    }
+
+    grid = generate_rectangular_grid(
+        nx=5,
+        ny=5,
+        dx=0.01,
+        material=material,
+        use_czm=True,
+    )
+
+    proj = Projectile(
+        mass=0.1,
+        velocity=[0.0, 0.0, -500.0],
+        position=[0.0, 0.0, 0.0052],
+        shape_type="box",
+        blade_width=0.02,
+        edge_thickness=0.002,
+    )
+
+    pos = grid.nodes.copy()
+    vel = np.zeros_like(pos)
+    boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
+    for idx, node in enumerate(grid.nodes):
+        if (
+            np.isclose(node[0], -0.02)
+            or np.isclose(node[0], 0.02)
+            or np.isclose(node[1], -0.02)
+            or np.isclose(node[1], 0.02)
+        ):
+            boundary_mask[idx] = 1
+
+    nodal_external_forces = np.zeros_like(pos)
+    thickness = 7.8 / (7.8 * 1000.0)
+
+    proj_pos = proj.position.copy()
+    proj_vel = proj.velocity.copy()
+    proj_quat = proj.quat.copy()
+    proj_omega = proj.omega.copy()
+
+    spring_failed = grid.failed.copy()
+    spring_damage = np.zeros(grid.n_springs, dtype=np.float64)
+    element_stress = np.zeros((len(grid.elements), 3, 3), dtype=np.float64)
+    element_peeq = np.zeros((len(grid.elements), 3), dtype=np.float64)
+    element_damage = np.zeros((len(grid.elements), 3), dtype=np.float64)
+    element_failed = np.zeros(len(grid.elements), dtype=np.int32)
+
+    dt = 1e-8
+    t_sim = 0.0
+    damp_diss = 0.0
+    fail_diss = 0.0
+    clamp_diss = 0.0
+    contact_energy = 0.0
+    friction_diss = 0.0
+
+    initial_energy = None
+
+    # Pre-build node_elements mapping to mirror worker.py
+    n_nodes = len(grid.nodes)
+    node_elements = [[] for _ in range(n_nodes)]
+    for e_idx, elem in enumerate(grid.elements):
+        for node in elem:
+            node_elements[node].append(e_idx)
+    spring_elements = []
+    for n0, n1 in grid.springs:
+        shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
+        spring_elements.append(shared)
+
+    for chunk in range(25):  # Run 500 steps (25 chunks of 20 steps)
+        res = fused_leapfrog_loop(
+            positions=pos,
+            velocities=vel,
+            grid_springs=grid.springs,
+            grid_stiffnesses=grid.stiffnesses,
+            grid_rest_lengths=grid.rest_lengths,
+            grid_failed=spring_failed,
+            grid_masses=grid.masses,
+            grid_tension_only=grid.tension_only,
+            boundary_mask=boundary_mask,
+            nodal_external_forces=nodal_external_forces,
+            proj_position=proj_pos,
+            proj_velocity=proj_vel,
+            proj_mass=proj.mass,
+            proj_blade_width=proj.blade_width,
+            proj_edge_thickness=proj.edge_thickness,
+            n_plies=1,
+            n_nodes_per_layer=len(pos),
+            t_ply=0.002,
+            dx=0.01,
+            k_penalty=1.0e6,
+            rayleigh_alpha=0.0,
+            rayleigh_beta=1e-9,
+            failure_strain=0.20,
+            damage_onset_strain=0.15,
+            fracture_energy_multiplier=1.0,
+            dt=dt,
+            n_steps=20,
+            save_interval=20,
+            damp_dissipated_init=damp_diss,
+            failure_dissipated_init=fail_diss,
+            clamp_dissipated_init=clamp_diss,
+            t_sim_init=t_sim,
+            strike_direction=-1.0,
+            node_initial_springs=grid.initial_spring_counts,
+            node_spring_offsets=grid.node_spring_offsets,
+            node_spring_ids=grid.node_spring_ids,
+            node_spring_signs=grid.node_spring_signs,
+            use_viscous=False,
+            cfl_factor=0.5,
+            proj_quat=proj_quat,
+            proj_omega=proj_omega,
+            proj_shape_type="box",
+            contact_energy_init=contact_energy,
+            mu_s=0.1,
+            friction_dissipated_init=friction_diss,
+            structure_type="metallic_sheet",
+            material_model="j2_plasticity",
+            yield_strength_gpa=0.25,
+            hardening_modulus_gpa=1.0,
+            ultimate_strain=0.15,
+            poisson_ratio=0.3,
+            elements=grid.elements,
+            youngs_modulus_gpa=200.0,
+            thickness=thickness,
+            density_kgm3=7800.0,
+            is_tiebreak=grid.is_tiebreak,
+            cohesive_strength_gpa=0.485,
+            fracture_energy_jm2=1000.0,
+            use_czm=True,
+            element_stress=element_stress,
+            element_peeq=element_peeq,
+            element_damage=element_damage,
+            element_failed=element_failed,
+            grid_damage=spring_damage,
+        )
+
+        (
+            pos,
+            vel,
+            returned_failed,
+            proj_pos,
+            proj_vel,
+            damp_diss,
+            fail_diss,
+            clamp_diss,
+            t_sim,
+            hist_pos,
+            hist_failed,
+            hist_proj_pos,
+            hist_time,
+            hist_ke,
+            hist_se,
+            hist_proj_ke,
+            contact_energy,
+            friction_diss,
+        ) = res
+
+        # Update element_failed and spring_failed arrays using the corrected logic
+        element_failed = returned_failed.astype(np.int32)
+
+        # In-place updates to spring_failed are preserved. We also update them from element failures:
+        failed_springs = spring_failed.copy()
+        for s_idx, el_indices in enumerate(spring_elements):
+            if len(el_indices) > 0:
+                all_failed = True
+                for e_idx in el_indices:
+                    if not element_failed[e_idx]:
+                        all_failed = False
+                        break
+                if all_failed:
+                    failed_springs[s_idx] = True
+        spring_failed = failed_springs
+
+        # Energy tracking
+        ke_nodes = 0.5 * np.sum(grid.masses * np.sum(vel**2, axis=1))
+        se_elems = 0.0
+        E_val = 200.0 * 1e9
+        for e in range(len(grid.elements)):
+            if element_failed[e] == 0:
+                se_elems += 0.5 * (0.01 * 0.01) * thickness * np.sum(element_stress[e] ** 2) / E_val
+        ke_proj = 0.5 * proj.mass * np.sum(proj_vel**2)
+
+        # Potential/strain energy including contact energy
+        se_total = se_elems + contact_energy
+        tot = ke_nodes + se_total + ke_proj + damp_diss + fail_diss + clamp_diss + friction_diss
+
+        if initial_energy is None:
+            initial_energy = tot
+
+        # Check for energy conservation / drift
+        drift = (tot - initial_energy) / initial_energy * 100
+        assert abs(drift) < 25.0, (
+            f"Energy exploded with drift {drift:.2f}% at step {(chunk + 1) * 20}"
+        )
+
+    # Verify that elements failed at the end of simulation under such high velocity impact
+    assert np.sum(element_failed) > 0, "No elements failed despite high-velocity impact"
+    # Verify that the final total energy did not double or blow up
+    assert tot < initial_energy * 1.5, (
+        f"Energy grew excessively: initial={initial_energy:.2f}, final={tot:.2f}"
+    )

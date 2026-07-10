@@ -6,7 +6,7 @@ In an explicit dynamics simulation, total energy should be approximately conserv
 
 ## The Energy Balance Equation
 
-$$KE_{fabric} + SE + KE_{projectile} + E_{damped} + E_{fracture} + E_{clamped} \approx KE_{initial}$$
+$$KE_{structure} + SE_{elastic} + E_{contact} + KE_{projectile} + E_{damped} + E_{fracture} + E_{clamped} + E_{friction} \approx KE_{initial}$$
 
 The left side should remain approximately equal to the initial projectile kinetic energy throughout the simulation. A small downward drift (energy loss) is acceptable — it means damping is doing its job. Any **upward** drift signals a bug.
 
@@ -22,13 +22,23 @@ $$KE_{fabric} = \sum_i \frac{1}{2} m_i \|v_i\|^2$$
 
 Computed by `compute_kinetic_energy()` in `energy.py`. This is typically near zero at time $t = 0$ (fabric starts at rest) and grows rapidly as the transverse wave propagates, then decreases as the projectile decelerates.
 
-### $SE$ — Elastic Strain Energy
+### $SE_{elastic}$ — Elastic Strain Energy
 
-The potential energy stored in all active (non-failed) springs:
+Computed by `compute_strain_energy()` in `energy.py`:
+- **Fabric Mode**: The potential energy stored in all active (non-failed) springs:
+  $$SE = \sum_j \frac{1}{2} k_j (\varepsilon_j \cdot L_{0,j})^2$$
+  Only tensile strains are counted (compressive strain energy is zeroed via `maximum(0.0, strains)`). Failed springs contribute zero strain energy.
+- **Shell Element Mode**: The strain energy of the shell elements computed from active element stresses integrated over the element volume:
+  $$SE = \sum_e \frac{1}{2} dx^2 h \frac{\sum_{k=1}^3 \left(\sigma_{xx, k}^2 + \sigma_{yy, k}^2 + 3\tau_{xy, k}^2\right)}{E}$$
+  where $h$ is thickness, $dx$ is element size, and $k$ represents the through-thickness integration points. Eroded elements contribute zero strain energy.
 
-$$SE = \sum_j \frac{1}{2} k_j (\varepsilon_j \cdot L_{0,j})^2$$
+### $E_{contact}$ — Contact Potential Energy
 
-Computed by `compute_strain_energy()` in `energy.py`. Only tensile strains are counted (compressive strain energy is zeroed via `maximum(0.0, strains)`). Failed springs contribute zero strain energy.
+The elastic potential energy stored in penalty contact springs:
+
+$$E_{contact} = \sum_c \frac{1}{2} k_{penalty} \delta_c^2$$
+
+where $\delta_c$ is the penetration depth at contacting nodes. This term is added to the elastic strain energy in the solver telemetry (`hist_se`) and is key to preserving overall energy balance during active impact.
 
 ### $KE_{projectile}$ — Projectile Kinetic Energy
 
@@ -46,17 +56,28 @@ $$E_{damped} = \int_0^t -F_{damp} \cdot v \, dt' \approx \sum_{n} (-P_{damp}^n) 
 
 Tracked as a running sum (`damp_dissipated`) in the fused loop. This should grow monotonically — if it ever decreases, the damping model has a sign error.
 
-### $E_{fracture}$ — Fracture Dissipation
+### $E_{fracture}$ — Fracture & Plastic Dissipation
 
-Energy dissipated when springs break. See [[Spring Failure Mechanics]] for details. When a spring fails, the elastic strain energy it was storing is booked as dissipated fracture energy (multiplied by the configured `fracture_energy_multiplier` to account for sub-grid friction, fibrillation, and yarn pull-out).
+Energy dissipated during material failure and inelastic flow:
+- **Fabric Mode**: When a spring fails, the elastic strain energy it was storing is booked as dissipated fracture energy (multiplied by the configured `fracture_energy_multiplier` to account for sub-grid friction, fibrillation, and yarn pull-out). See [[Spring Failure Mechanics]] for details.
+- **J2 Plasticity Mode**: For shells, plastic work is accumulated across all thickness points of active elements:
+  $$\Delta W_{\text{plastic}} = \sigma_y \Delta e_{\text{peeq}} \cdot w_k \cdot dx^2$$
+  where $w_k$ are the Simpson rule weights.
+- **Cohesive Zone Model (CZM) Mode**: The cohesive work dissipated by tearing of tiebreak springs:
+  $$\Delta W_{\text{cohesive}} = \mathbf{F}_{\text{cohesive}} \cdot \Delta \mathbf{v}_{\text{half}} \cdot dt$$
+All three contributions are summed dynamically into the `failure_dissipated` term in the solver loop.
 
 ### $E_{clamped}$ — Velocity Clamp Dissipation
 
 Energy removed by the CFL velocity clamp (see [[CFL Stability Condition]]). When a node exceeds the maximum physical wave speed velocity $v_{max} = dx / dt$, its velocity is scaled down, and the excess kinetic energy is stored in a tracking buffer to preserve the energy balance.
 
----
+### $E_{friction}$ — Friction Dissipation
 
-## Current Implementation
+The energy dissipated by Coulomb contact sliding between the projectile and the sheet/fabric:
+$$E_{friction} = \int_0^t -\mathbf{F}_{friction} \cdot \mathbf{v}_{tang} \, dt'$$
+This is tracked as `friction_dissipated` in the solver.
+
+---
 
 The `compute_energy_balance()` function in `energy.py` returns a dictionary including all terms:
 
@@ -67,8 +88,9 @@ The `compute_energy_balance()` function in `energy.py` returns a dictionary incl
     "damped": damped,
     "failure_dissipated": failure_dissipated,
     "clamp_dissipated": clamp_dissipated,
+    "friction_dissipated": friction_dissipated,
     "projectile_kinetic": proj_ke,
-    "total": ke + se + damped + failure_dissipated + clamp_dissipated + proj_ke
+    "total": ke + se + damped + failure_dissipated + clamp_dissipated + friction_dissipated + proj_ke
 }
 ```
 

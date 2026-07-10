@@ -17,6 +17,8 @@ All notable changes to this project are documented in this file.
 - **State Persistence Across Solver Chunks**: Preserved `element_stress`, `element_peeq`, `element_damage`, and `element_failed` states across time-integration chunks, resolving a major issue where the material would reset to a stress-free state at each chunk.
 
 ### Fixed
+- **Resurrection of Cohesive Tiebreak Springs**: Corrected spring failure propagation logic in `worker.py` in `metallic_sheet` mode to prevent JIT-solver-failed cohesive zone tiebreak springs from being resurrected as active on the Python side between time integration chunks, resolving unphysical force spikes (energy explosions) and premature solver termination (arrest).
+- **Double Counting of Contact Energy in Logging**: Removed the redundant contact potential energy term from the logged `total_energy` sum in `worker.py` since it is already integrated into the potential/strain energy `se` (`hist_se[-1]`), ensuring correct energy conservation logs and plots.
 - **Post-Processing Strain Zero-Division**: Masked out zero-length tiebreak springs and added protection against dividing by zero during post-processing peak strain analysis.
 - **Mypy Type Safety Checks**: Declared and initialized solver arrays on the `Grid` class, resolving type errors during lint runs.
 - **3D Signed Distance Fields for Box Shape**: Fixed the box projectile SDF to be mathematically exact and signed (allowing negative values inside the box) and bounded along the Z-axis.
