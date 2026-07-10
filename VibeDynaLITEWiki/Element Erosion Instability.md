@@ -68,3 +68,45 @@ During the softening phase:
    \]
 2. The remaining strain energy is incrementally dissipated as work of failure rather than being dumped into nodal kinetic energy.
 3. Once $t - t_{\text{fail}} \ge N_{\text{ramp}} \cdot dt$, the element is fully eroded, and $\mathcal{S} = 0.0$.
+
+---
+
+## 4. Solver Hardening Updates (July 2026)
+
+To resolve cascading failures and non-physical energy generation, the explicit solver was hardened with the following exact formulations:
+
+### 4.1 Contact Penetration Capping
+To prevent unphysical out-of-plane forces when projectile nodes tunnel deeply into the mesh boundaries, the penetration depth $\delta$ is capped at $20\%$ of the element size $dx$:
+\[
+\delta = \min(\delta, 0.2 \cdot dx)
+\]
+This prevents numerical force spikes while preserving the structural capacity limit $f_{\text{cap}} = \sigma_y \cdot dx \cdot t$.
+
+### 4.2 Exact Cohesive Zone Model (CZM) Analytical Energy
+Instead of adding approximate incremental work $F \cdot dv \cdot dt$ (which double-counts energy and is prone to quadratic overshoot errors if a node separates past $\delta_c$ in a single timestep), we integrate the analytical envelope of the bilinear Traction-Separation Law. The dissipated energy $E_{\text{diss}}$ as a function of damage $D \in [0, 1]$ is:
+\[
+E_{\text{diss}}(D) = \frac{1}{2} k_0 \delta_0^2 \frac{\delta_c D}{\delta_c - D(\delta_c - \delta_0)} \quad (D < 1.0)
+\]
+\[
+E_{\text{diss}}(1.0) = \frac{1}{2} k_0 \delta_0 \delta_c = G_c
+\]
+At each timestep, the change in energy $\Delta E_{\text{diss}} = E_{\text{diss}}(D_{\text{new}}) - E_{\text{diss}}(D_{\text{old}})$ is accumulated, preventing all energy ledger drift.
+
+### 4.3 Ghost Rotations & Transverse Shear Leakage
+* **Ghost Rotations**: When all elements sharing a node are deleted, the node's translational contact is bypassed, but its rotational degrees of freedom can continue spinning endlessly due to zero torque damping. The solver now explicitly zeros out angular velocities and accelerations for any nodes where `active_counts == 0`.
+* **Shear Leakage**: Previously, the transverse shear forces $Q_x, Q_y$ were computed unconditionally and bypassed the erosion `ramp`. These are now computed strictly inside the active (`else`) block of the element loop, preventing force leakage from failed shell elements.
+
+### 4.4 Softening Return Mapping Safeguards
+For J2 radial return plasticity with material softening ($H < 0$), the plastic multiplier increment $d\bar{\epsilon}^p$ is safeguarded against negative denominators:
+\[
+d\bar{\epsilon}^p = \begin{cases} 
+\frac{f_{\text{yield}}}{3G + H} & \text{if } 3G + H > 0 \\
+0 & \text{otherwise}
+\end{cases}
+\]
+Additionally, the stress scaling factor $\text{scale} = 1 - \frac{3G d\bar{\epsilon}^p}{\sigma_{\text{vm}}^{\text{trial}}}$ is strictly bounded:
+\[
+\text{scale} = \min(1.0, \max(0.0, \text{scale}))
+\]
+This guarantees that plastic return mapping can only decrease or keep stress constant, preventing spurious energy injection.
+
