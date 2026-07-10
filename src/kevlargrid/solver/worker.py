@@ -77,6 +77,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
         n_plies = grid_cfg["n_plies"]
         t_ply = grid_cfg["t_ply"]
+        n_nodes_per_layer = nx * ny
+        n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
 
         # Build grid
         use_czm = sim_cfg.get("structure_type", "fabric") == "metallic_sheet" and sim_cfg.get(
@@ -120,8 +122,6 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     ):
                         boundary_mask[idx] = val_to_set
             else:
-                n_nodes_per_layer = nx * ny
-                n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
                 for ply in range(n_layers):
                     offset = ply * n_nodes_per_layer
                     for i in range(nx):
