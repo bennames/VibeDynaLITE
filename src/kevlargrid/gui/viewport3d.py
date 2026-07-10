@@ -680,6 +680,8 @@ class Viewport3D:
                 strains = (lengths - self.grid.rest_lengths) / safe_rest_lengths
 
             fail_thresh = getattr(self, "fail_thresh", 0.036)
+            if fail_thresh <= 1e-8:
+                fail_thresh = 0.036
 
             # --- PyVista offscreen hardware rendering path ---
             if (

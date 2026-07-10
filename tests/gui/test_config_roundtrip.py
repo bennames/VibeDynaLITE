@@ -581,3 +581,52 @@ class TestVisualizationWidgets:
         dpg.set_value(view.slider_zoom, 0.5)
         view._on_slider_change(view.slider_zoom, 0.5)
         assert view.distance == pytest.approx(0.5)
+
+    def test_viewport_fabric_rendering_regression(self) -> None:
+        """Verify that Viewport3D doesn't crash during reset and redraw in fabric mode."""
+        view = Viewport3D()
+        view.build()
+
+        grid = generate_rectangular_grid(
+            5, 5, 0.01, VALID_CONFIG["material"], n_plies=2, t_ply=0.002, use_czm=False
+        )
+
+        # Test _get_fail_thresh helper directly
+        from kevlargrid.gui.app import _get_fail_thresh
+
+        # Test fabric mode config
+        fabric_cfg = {
+            "material": {
+                "failure_strain": 0.036,
+                "ultimate_strain": 0.0,
+            },
+            "simulation": {
+                "structure_type": "fabric",
+            },
+        }
+        assert _get_fail_thresh(fabric_cfg) == 0.036
+
+        # Test metallic_sheet mode config with ultimate_strain
+        metal_cfg = {
+            "material": {
+                "failure_strain": 0.036,
+                "ultimate_strain": 0.20,
+            },
+            "simulation": {
+                "structure_type": "metallic_sheet",
+            },
+        }
+        assert _get_fail_thresh(metal_cfg) == 0.20
+
+        # Reset viewport with fabric mode parameters and verify redraw doesn't raise error
+        view.reset(
+            grid=grid,
+            n_plies=2,
+            n_nodes_per_layer=25,
+            structure_type="fabric",
+            fail_thresh=_get_fail_thresh(fabric_cfg),
+        )
+        assert view.fail_thresh == 0.036
+
+        # Trigger redraw
+        view.redraw(force=True)
