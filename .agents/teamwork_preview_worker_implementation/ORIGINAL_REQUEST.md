@@ -1,14 +1,23 @@
-## 2026-06-27T03:44:00Z
-Please perform the following implementation, calibration, and reporting tasks for Benchmark 8:
+## 2026-07-10T03:00:46Z
+You are teamwork_preview_worker. Your working directory is `/Users/bennames/Developer/VibeDynaLITE/.agents/teamwork_preview_worker_implementation/`.
+Your mission is to implement the following changes in VibeDynaLITE:
+1. Fix the configuration lookup mismatch in `src/kevlargrid/gui/app.py`:
+   Line 945: Change `cfg["material"].get("material_name", "")` to `cfg["material"].get("name", "")`.
+2. Fix `src/kevlargrid/gui/viewport3d.py` reset method:
+   Ensure that if `structure_type == "metallic_sheet"`, `self.n_nodes_per_layer` is set to `len(grid.nodes) // n_plies` (to prevent invalid layer visibility check/culling).
+3. Fix the stable timestep (CFL) overestimation in `src/kevlargrid/solver/fused.py`:
+   Line 2028: Change `omega_spring = sqrt(2.0 * k_0 / mass_min)` to `omega_spring = sqrt(4.0 * k_0 / mass_min)`.
+4. Fix the crossover and energy bookkeeping issues in `src/kevlargrid/solver/fused.py` cohesive forces loop:
+   - For each tiebreak spring, compute the relative centroid direction `dx_c = C1[0] - C0[0]`, etc. (where `e0 = n0 // 4`, `e1 = n1 // 4`, and `C0`, `C1` are centroids of the elements computed from the current node `positions`).
+   - Check if they are separating: `is_tension = (dx_s * dx_c + dy_s * dy_c + dz_s * dz_c) >= 0.0`.
+   - If `is_tension`, execute the damage updating logic. Force magnitude is `(1.0 - d) * k_0 * delta`.
+   - If not `is_tension` (compression/penetration), bypass damage accumulation (do not update damage), and apply penalty force with undamaged stiffness: `f_mag = k_0 * delta`.
+   - If a spring fails in this step (`d >= 1.0`), set `spring_failed[i] = 1`, and add the remaining energy `0.5 * (1.0 - d_old) * k_0 * delta * delta` to `failure_dissipated` (to avoid energy drop).
+5. Run local tests to verify your implementation:
+   - Run `pytest tests/unit/test_metallic_sheet.py` and `pytest tests/gui/test_config_roundtrip.py`.
+   - Run `python scratch/test_czm_simulation.py` and verify that the simulation runs to completion (100 steps) and energy drift is small (<2.0%).
 
-1. **Solver Code Improvements**:
-   Modify the solver files (under `src/kevlargrid/solver/` and `src/kevlargrid/io/` if needed) to:
-   - Implement velocity-regularized Coulomb friction for inter-ply and projectile contact. Friction coefficient must be tunable ($\mu_s \ge 0.18$). Track and accumulate frictional energy dissipation and include it in the total energy balance.
-   - Fix energy conservation gaps: track stiffness damping dissipation energy, allow compressive strain energy for non-tension-only diagonal springs, align JIT damage energy formulations, and add failure energy tracking to the Python fallback.
-   - Correct the Taichi backend wrapper to apply Bazant strain regularization just like Numba.
+MANDATORY INTEGRITY WARNING: DO NOT CHEAT. All implementations must be genuine. DO NOT hardcode test results, create dummy/facade implementations, or circumvent the intended task. A Forensic Auditor will independently verify your work. Integrity violations WILL be detected and your work WILL be rejected.
 
-2. **Benchmark 8 Setup & Runner**:
-   Create `benchmarks/benchmark_8/run_benchmark_8.py` to set up 13-ply dry Kevlar 29 Style 713 with clamped boundaries, rigid 17-grain FSP (5.46mm, 1.10g cylinder), layer gaps (0.1mm), and resolution ($dx \approx 1.82\text{ mm}$).
-   - Execute Cases A (450 m/s), B (503 m/s), C (550 m/s).
-   - Calibrate parameters ($\mu_s \ge 0.18$, penalty stiffness, CFL factor) to meet residual velocity exit bounds (Case A stops, Case B barely perforates $<25$ m/s, Case C exits at $220 \pm 20$ m/s, energy drift $\le 2\%$).
-   - Save validation data in `results.json`, plot residual velocity curve (with Lambert-Jonas fit) to `validation_plot.png`, and compile validation report `validation_report.pdf` at `benchmarks/benchmark_8/`.
+Please document your code changes in `/Users/bennames/Developer/VibeDynaLITE/.agents/teamwork_preview_worker_implementation/changes.md` and write a final handoff report to `/Users/bennames/Developer/VibeDynaLITE/.agents/teamwork_preview_worker_implementation/handoff.md` detailing the test/command output and verifying that everything builds and passes.
+After you finish, send a message to recipient "parent" (conversation ID: 26d6399a-b329-4b4e-a3c5-c12ca7308bc3) summarizing your work.

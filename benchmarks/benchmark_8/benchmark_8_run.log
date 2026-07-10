@@ -164,3 +164,210 @@
 [2026-07-07 09:55:37] [INFO]: Step 900: t=6.1 us, z=-1.864 mm, v=388.91 m/s, failed=122, drift=0.92%
 [2026-07-07 09:55:48] [INFO]: Step 920: t=6.2 us, z=-1.804 mm, v=383.35 m/s, failed=138, drift=0.92%
 [2026-07-07 09:55:59] [INFO]: Step 940: t=6.3 us, z=-1.744 mm, v=377.86 m/s, failed=170, drift=0.90%
+[2026-07-09 19:42:13] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-09 19:42:13] [INFO]: ============================================================
+[2026-07-09 19:42:13] [INFO]: KevlarGrid Benchmark 8 - Case A Started
+[2026-07-09 19:42:13] [INFO]: Active Backend: taichi | Threads: N/A
+[2026-07-09 19:42:13] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-09 19:42:13] [INFO]: ============================================================
+[2026-07-09 19:42:37] [INFO]: Step 20: t=0.1 us, z=-4.931 mm, v=428.46 m/s, failed=0, drift=31.49%
+[2026-07-09 19:42:49] [INFO]: Step 40: t=0.3 us, z=-4.865 mm, v=406.19 m/s, failed=0, drift=32.37%
+[2026-07-09 19:43:00] [INFO]: Step 60: t=0.4 us, z=-4.802 mm, v=382.29 m/s, failed=0, drift=32.72%
+[2026-07-09 19:43:11] [INFO]: Step 80: t=0.5 us, z=-4.744 mm, v=358.07 m/s, failed=0, drift=32.44%
+[2026-07-09 19:44:17] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-09 19:44:17] [INFO]: ============================================================
+[2026-07-09 19:44:17] [INFO]: KevlarGrid Benchmark 8 - Case A Started
+[2026-07-09 19:44:17] [INFO]: Active Backend: taichi | Threads: N/A
+[2026-07-09 19:44:17] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-09 19:44:17] [INFO]: ============================================================
+[2026-07-09 19:44:42] [INFO]: Step 20: t=0.1 us, z=-4.931 mm, v=428.46 m/s, failed=0, drift=31.49%
+[2026-07-09 19:44:54] [INFO]: Step 40: t=0.3 us, z=-4.865 mm, v=406.19 m/s, failed=0, drift=32.37%
+[2026-07-09 19:45:05] [INFO]: Step 60: t=0.4 us, z=-4.802 mm, v=382.29 m/s, failed=0, drift=32.72%
+[2026-07-09 19:45:16] [INFO]: Step 80: t=0.5 us, z=-4.744 mm, v=358.07 m/s, failed=0, drift=32.44%
+[2026-07-09 19:45:28] [INFO]: Step 100: t=0.7 us, z=-4.689 mm, v=334.56 m/s, failed=0, drift=31.53%
+[2026-07-09 19:45:39] [INFO]: Step 120: t=0.8 us, z=-4.638 mm, v=312.48 m/s, failed=0, drift=30.20%
+[2026-07-09 19:45:51] [INFO]: Step 140: t=0.9 us, z=-4.590 mm, v=292.81 m/s, failed=12, drift=28.49%
+[2026-07-09 19:46:03] [INFO]: Step 160: t=1.1 us, z=-4.545 mm, v=276.71 m/s, failed=92, drift=26.42%
+[2026-07-09 19:46:14] [INFO]: Step 180: t=1.2 us, z=-4.502 mm, v=264.63 m/s, failed=172, drift=25.34%
+[2026-07-09 19:46:26] [INFO]: Step 200: t=1.4 us, z=-4.461 mm, v=255.30 m/s, failed=248, drift=24.83%
+[2026-07-09 19:46:38] [INFO]: Step 220: t=1.5 us, z=-4.421 mm, v=247.60 m/s, failed=354, drift=24.56%
+[2026-07-09 19:46:49] [INFO]: Step 240: t=1.6 us, z=-4.383 mm, v=240.92 m/s, failed=412, drift=24.46%
+[2026-07-09 19:47:01] [INFO]: Step 260: t=1.8 us, z=-4.345 mm, v=235.02 m/s, failed=463, drift=24.39%
+[2026-07-09 19:47:13] [INFO]: Step 280: t=1.9 us, z=-4.308 mm, v=229.81 m/s, failed=522, drift=24.35%
+[2026-07-09 19:47:25] [INFO]: Step 300: t=2.0 us, z=-4.272 mm, v=225.24 m/s, failed=556, drift=24.28%
+[2026-07-09 19:47:37] [INFO]: Step 320: t=2.2 us, z=-4.237 mm, v=221.33 m/s, failed=588, drift=24.22%
+[2026-07-09 19:47:49] [INFO]: Step 340: t=2.3 us, z=-4.203 mm, v=218.04 m/s, failed=615, drift=24.18%
+[2026-07-09 19:48:00] [INFO]: Step 360: t=2.4 us, z=-4.168 mm, v=215.27 m/s, failed=648, drift=24.14%
+[2026-07-09 19:48:12] [INFO]: Step 380: t=2.6 us, z=-4.135 mm, v=213.03 m/s, failed=696, drift=24.13%
+[2026-07-09 19:48:24] [INFO]: Step 400: t=2.7 us, z=-4.101 mm, v=211.23 m/s, failed=744, drift=24.11%
+[2026-07-09 19:48:36] [INFO]: Step 420: t=2.8 us, z=-4.068 mm, v=209.82 m/s, failed=796, drift=24.10%
+[2026-07-09 19:48:48] [INFO]: Step 440: t=3.0 us, z=-4.035 mm, v=208.77 m/s, failed=840, drift=24.09%
+[2026-07-09 19:49:00] [INFO]: Step 460: t=3.1 us, z=-4.002 mm, v=208.03 m/s, failed=882, drift=24.10%
+[2026-07-09 19:49:12] [INFO]: Step 480: t=3.2 us, z=-3.969 mm, v=207.47 m/s, failed=928, drift=24.11%
+[2026-07-09 19:49:23] [INFO]: Step 500: t=3.4 us, z=-3.937 mm, v=207.05 m/s, failed=1000, drift=24.12%
+[2026-07-09 19:49:36] [INFO]: Step 520: t=3.5 us, z=-3.904 mm, v=206.78 m/s, failed=1046, drift=24.13%
+[2026-07-09 19:49:48] [INFO]: Step 540: t=3.6 us, z=-3.872 mm, v=206.63 m/s, failed=1102, drift=24.13%
+[2026-07-09 19:50:00] [INFO]: Step 560: t=3.8 us, z=-3.839 mm, v=206.51 m/s, failed=1162, drift=24.14%
+[2026-07-09 19:50:12] [INFO]: Step 580: t=3.9 us, z=-3.807 mm, v=206.37 m/s, failed=1238, drift=24.16%
+[2026-07-09 19:50:24] [INFO]: Step 600: t=4.1 us, z=-3.774 mm, v=206.21 m/s, failed=1334, drift=24.17%
+[2026-07-09 19:50:37] [INFO]: Step 620: t=4.2 us, z=-3.742 mm, v=206.03 m/s, failed=1402, drift=24.19%
+[2026-07-09 19:50:49] [INFO]: Step 640: t=4.3 us, z=-3.709 mm, v=205.79 m/s, failed=1445, drift=24.19%
+[2026-07-09 19:51:01] [INFO]: Step 660: t=4.5 us, z=-3.677 mm, v=205.52 m/s, failed=1501, drift=24.20%
+[2026-07-09 19:51:13] [INFO]: Step 680: t=4.6 us, z=-3.644 mm, v=205.22 m/s, failed=1570, drift=24.22%
+[2026-07-09 19:51:26] [INFO]: Step 700: t=4.7 us, z=-3.612 mm, v=204.89 m/s, failed=1645, drift=24.23%
+[2026-07-09 19:51:38] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-09 19:51:38] [INFO]: ============================================================
+[2026-07-09 19:51:38] [INFO]: KevlarGrid Benchmark 8 - Case A Started
+[2026-07-09 19:51:38] [INFO]: Active Backend: taichi | Threads: N/A
+[2026-07-09 19:51:38] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-09 19:51:38] [INFO]: ============================================================
+[2026-07-09 19:51:39] [INFO]: Step 720: t=4.9 us, z=-3.580 mm, v=204.52 m/s, failed=1701, drift=24.25%
+[2026-07-09 19:52:01] [INFO]: Step 740: t=5.0 us, z=-3.548 mm, v=204.12 m/s, failed=1793, drift=24.27%
+[2026-07-09 19:52:05] [INFO]: Step 20: t=0.1 us, z=-4.931 mm, v=428.46 m/s, failed=0, drift=31.49%
+[2026-07-09 19:52:15] [INFO]: Step 760: t=5.1 us, z=-3.516 mm, v=203.70 m/s, failed=1841, drift=24.29%
+[2026-07-09 19:52:18] [INFO]: Step 40: t=0.3 us, z=-4.865 mm, v=406.19 m/s, failed=0, drift=32.37%
+[2026-07-09 19:52:29] [INFO]: Step 780: t=5.3 us, z=-3.484 mm, v=203.25 m/s, failed=1945, drift=24.31%
+[2026-07-09 19:52:31] [INFO]: Step 60: t=0.4 us, z=-4.802 mm, v=382.29 m/s, failed=0, drift=32.72%
+[2026-07-09 19:52:43] [INFO]: Step 800: t=5.4 us, z=-3.452 mm, v=202.80 m/s, failed=2033, drift=24.33%
+[2026-07-09 19:52:44] [INFO]: Step 80: t=0.5 us, z=-4.744 mm, v=358.07 m/s, failed=0, drift=32.44%
+[2026-07-09 19:52:58] [INFO]: Step 820: t=5.5 us, z=-3.420 mm, v=202.35 m/s, failed=2109, drift=24.35%
+[2026-07-09 19:52:58] [INFO]: Step 100: t=0.7 us, z=-4.689 mm, v=334.56 m/s, failed=0, drift=31.53%
+[2026-07-09 19:53:12] [INFO]: Step 120: t=0.8 us, z=-4.638 mm, v=312.48 m/s, failed=0, drift=30.20%
+[2026-07-09 19:53:13] [INFO]: Step 840: t=5.7 us, z=-3.388 mm, v=201.92 m/s, failed=2201, drift=24.37%
+[2026-07-09 19:53:26] [INFO]: Step 140: t=0.9 us, z=-4.590 mm, v=292.81 m/s, failed=12, drift=28.49%
+[2026-07-09 19:53:27] [INFO]: Step 860: t=5.8 us, z=-3.356 mm, v=201.51 m/s, failed=2321, drift=24.39%
+[2026-07-09 19:53:39] [INFO]: Step 160: t=1.1 us, z=-4.545 mm, v=276.71 m/s, failed=92, drift=26.42%
+[2026-07-09 19:53:41] [INFO]: Step 880: t=5.9 us, z=-3.324 mm, v=201.14 m/s, failed=2425, drift=24.39%
+[2026-07-09 19:53:53] [INFO]: Step 180: t=1.2 us, z=-4.502 mm, v=264.63 m/s, failed=172, drift=25.34%
+[2026-07-09 19:53:56] [INFO]: Step 900: t=6.1 us, z=-3.293 mm, v=200.81 m/s, failed=2525, drift=24.39%
+[2026-07-09 19:54:06] [INFO]: Step 200: t=1.4 us, z=-4.461 mm, v=255.30 m/s, failed=248, drift=24.83%
+[2026-07-09 19:54:11] [INFO]: Step 920: t=6.2 us, z=-3.261 mm, v=200.48 m/s, failed=2649, drift=24.37%
+[2026-07-09 19:54:20] [INFO]: Step 220: t=1.5 us, z=-4.421 mm, v=247.60 m/s, failed=354, drift=24.56%
+[2026-07-09 19:54:26] [INFO]: Step 940: t=6.3 us, z=-3.229 mm, v=200.14 m/s, failed=2769, drift=24.35%
+[2026-07-09 19:54:34] [INFO]: Step 240: t=1.6 us, z=-4.383 mm, v=240.92 m/s, failed=412, drift=24.46%
+[2026-07-09 19:54:41] [INFO]: Step 960: t=6.5 us, z=-3.198 mm, v=199.77 m/s, failed=2873, drift=24.34%
+[2026-07-09 19:54:47] [INFO]: Step 260: t=1.8 us, z=-4.345 mm, v=235.02 m/s, failed=461, drift=24.39%
+[2026-07-09 19:54:56] [INFO]: Step 980: t=6.6 us, z=-3.167 mm, v=199.37 m/s, failed=2985, drift=24.35%
+[2026-07-09 19:55:01] [INFO]: Step 280: t=1.9 us, z=-4.308 mm, v=229.81 m/s, failed=522, drift=24.35%
+[2026-07-09 19:55:11] [INFO]: Step 1000: t=6.8 us, z=-3.135 mm, v=198.97 m/s, failed=3097, drift=24.36%
+[2026-07-09 19:55:15] [INFO]: Step 300: t=2.0 us, z=-4.272 mm, v=225.24 m/s, failed=556, drift=24.28%
+[2026-07-09 19:55:26] [INFO]: Step 1020: t=6.9 us, z=-3.104 mm, v=198.56 m/s, failed=3229, drift=24.37%
+[2026-07-09 19:55:29] [INFO]: Step 320: t=2.2 us, z=-4.237 mm, v=221.33 m/s, failed=588, drift=24.22%
+[2026-07-09 19:55:42] [INFO]: Step 1040: t=7.0 us, z=-3.073 mm, v=198.16 m/s, failed=3285, drift=24.39%
+[2026-07-09 19:55:43] [INFO]: Step 340: t=2.3 us, z=-4.203 mm, v=218.04 m/s, failed=615, drift=24.18%
+[2026-07-09 19:55:57] [INFO]: Step 1060: t=7.2 us, z=-3.041 mm, v=197.76 m/s, failed=3405, drift=24.40%
+[2026-07-09 19:55:58] [INFO]: Step 360: t=2.4 us, z=-4.168 mm, v=215.27 m/s, failed=648, drift=24.14%
+[2026-07-09 19:56:13] [INFO]: Step 380: t=2.6 us, z=-4.135 mm, v=213.03 m/s, failed=696, drift=24.13%
+[2026-07-09 19:56:14] [INFO]: Step 1080: t=7.3 us, z=-3.010 mm, v=197.35 m/s, failed=3525, drift=24.41%
+[2026-07-09 19:56:28] [INFO]: Step 400: t=2.7 us, z=-4.101 mm, v=211.23 m/s, failed=744, drift=24.11%
+[2026-07-09 19:56:30] [INFO]: Step 1100: t=7.4 us, z=-2.979 mm, v=196.91 m/s, failed=3617, drift=24.42%
+[2026-07-09 19:56:42] [INFO]: Step 420: t=2.8 us, z=-4.068 mm, v=209.82 m/s, failed=796, drift=24.10%
+[2026-07-09 19:56:47] [INFO]: Step 1120: t=7.6 us, z=-2.948 mm, v=196.48 m/s, failed=3685, drift=24.43%
+[2026-07-09 19:56:57] [INFO]: Step 440: t=3.0 us, z=-4.035 mm, v=208.77 m/s, failed=840, drift=24.09%
+[2026-07-09 19:57:05] [INFO]: Step 1140: t=7.7 us, z=-2.917 mm, v=196.04 m/s, failed=3793, drift=24.46%
+[2026-07-09 19:57:12] [INFO]: Step 460: t=3.1 us, z=-4.002 mm, v=208.03 m/s, failed=882, drift=24.10%
+[2026-07-09 19:57:22] [INFO]: Step 1160: t=7.8 us, z=-2.886 mm, v=195.55 m/s, failed=3921, drift=24.48%
+[2026-07-09 19:57:27] [INFO]: Step 480: t=3.2 us, z=-3.969 mm, v=207.47 m/s, failed=928, drift=24.11%
+[2026-07-09 19:57:43] [INFO]: Step 1180: t=8.0 us, z=-2.856 mm, v=195.00 m/s, failed=3997, drift=24.51%
+[2026-07-09 19:57:45] [INFO]: Step 500: t=3.4 us, z=-3.937 mm, v=207.05 m/s, failed=1000, drift=24.12%
+[2026-07-09 19:58:01] [INFO]: Step 1200: t=8.1 us, z=-2.825 mm, v=194.36 m/s, failed=4101, drift=24.51%
+[2026-07-09 19:58:01] [INFO]: Step 520: t=3.5 us, z=-3.904 mm, v=206.78 m/s, failed=1046, drift=24.13%
+[2026-07-09 19:58:19] [INFO]: Step 540: t=3.6 us, z=-3.872 mm, v=206.63 m/s, failed=1102, drift=24.13%
+[2026-07-09 19:58:25] [INFO]: Step 1220: t=8.2 us, z=-2.794 mm, v=193.64 m/s, failed=4238, drift=24.51%
+[2026-07-09 19:58:38] [INFO]: Step 560: t=3.8 us, z=-3.839 mm, v=206.51 m/s, failed=1162, drift=24.14%
+[2026-07-09 19:58:51] [INFO]: Step 1240: t=8.4 us, z=-2.764 mm, v=192.86 m/s, failed=4349, drift=24.50%
+[2026-07-09 19:58:57] [INFO]: Step 580: t=3.9 us, z=-3.807 mm, v=206.37 m/s, failed=1238, drift=24.16%
+[2026-07-09 19:59:16] [INFO]: Step 600: t=4.1 us, z=-3.774 mm, v=206.21 m/s, failed=1333, drift=24.17%
+[2026-07-09 19:59:17] [INFO]: Step 1260: t=8.5 us, z=-2.734 mm, v=192.03 m/s, failed=4441, drift=24.49%
+[2026-07-09 19:59:40] [INFO]: Step 620: t=4.2 us, z=-3.742 mm, v=206.03 m/s, failed=1403, drift=24.19%
+[2026-07-09 19:59:44] [INFO]: Step 1280: t=8.6 us, z=-2.703 mm, v=191.14 m/s, failed=4573, drift=24.47%
+[2026-07-09 19:59:55] [INFO]: Step 640: t=4.3 us, z=-3.709 mm, v=205.79 m/s, failed=1446, drift=24.19%
+[2026-07-09 20:00:03] [INFO]: Step 1300: t=8.8 us, z=-2.673 mm, v=190.20 m/s, failed=4646, drift=24.46%
+[2026-07-09 20:00:12] [INFO]: Step 660: t=4.5 us, z=-3.677 mm, v=205.52 m/s, failed=1502, drift=24.20%
+[2026-07-09 20:00:21] [INFO]: Step 1320: t=8.9 us, z=-2.644 mm, v=189.22 m/s, failed=4737, drift=24.44%
+[2026-07-09 20:00:27] [INFO]: Step 680: t=4.6 us, z=-3.644 mm, v=205.22 m/s, failed=1570, drift=24.21%
+[2026-07-09 20:00:40] [INFO]: Step 1340: t=9.0 us, z=-2.614 mm, v=188.20 m/s, failed=4841, drift=24.42%
+[2026-07-09 20:00:44] [INFO]: Step 700: t=4.7 us, z=-3.612 mm, v=204.89 m/s, failed=1646, drift=24.23%
+[2026-07-09 20:00:59] [INFO]: Step 1360: t=9.2 us, z=-2.584 mm, v=187.14 m/s, failed=4937, drift=24.40%
+[2026-07-09 20:01:00] [INFO]: Step 720: t=4.9 us, z=-3.580 mm, v=204.52 m/s, failed=1702, drift=24.25%
+[2026-07-09 20:01:18] [INFO]: Step 1380: t=9.3 us, z=-2.555 mm, v=185.98 m/s, failed=5053, drift=24.38%
+[2026-07-09 20:01:18] [INFO]: Step 740: t=5.0 us, z=-3.548 mm, v=204.12 m/s, failed=1794, drift=24.27%
+[2026-07-09 20:01:35] [INFO]: Step 760: t=5.1 us, z=-3.516 mm, v=203.70 m/s, failed=1842, drift=24.29%
+[2026-07-09 20:01:37] [INFO]: Step 1400: t=9.5 us, z=-2.526 mm, v=184.74 m/s, failed=5193, drift=24.36%
+[2026-07-09 20:01:52] [INFO]: Step 780: t=5.3 us, z=-3.484 mm, v=203.25 m/s, failed=1946, drift=24.31%
+[2026-07-09 20:01:56] [INFO]: Step 1420: t=9.6 us, z=-2.497 mm, v=183.46 m/s, failed=5299, drift=24.34%
+[2026-07-09 20:02:08] [INFO]: Step 800: t=5.4 us, z=-3.452 mm, v=202.80 m/s, failed=2034, drift=24.33%
+[2026-07-09 20:02:15] [INFO]: Step 1440: t=9.7 us, z=-2.468 mm, v=182.16 m/s, failed=5401, drift=24.32%
+[2026-07-09 20:02:25] [INFO]: Step 820: t=5.5 us, z=-3.420 mm, v=202.35 m/s, failed=2110, drift=24.35%
+[2026-07-09 20:02:34] [INFO]: Step 1460: t=9.9 us, z=-2.439 mm, v=180.86 m/s, failed=5532, drift=24.30%
+[2026-07-09 20:02:42] [INFO]: Step 840: t=5.7 us, z=-3.388 mm, v=201.92 m/s, failed=2202, drift=24.37%
+[2026-07-09 20:02:53] [INFO]: Step 1480: t=10.0 us, z=-2.411 mm, v=179.56 m/s, failed=5672, drift=24.29%
+[2026-07-09 20:02:59] [INFO]: Step 860: t=5.8 us, z=-3.356 mm, v=201.51 m/s, failed=2322, drift=24.39%
+[2026-07-09 20:03:13] [INFO]: Step 1500: t=10.1 us, z=-2.383 mm, v=178.30 m/s, failed=5721, drift=24.26%
+[2026-07-09 20:03:16] [INFO]: Step 880: t=5.9 us, z=-3.324 mm, v=201.14 m/s, failed=2426, drift=24.39%
+[2026-07-09 20:03:33] [INFO]: Step 1520: t=10.3 us, z=-2.355 mm, v=177.08 m/s, failed=5834, drift=24.23%
+[2026-07-09 20:03:50] [INFO]: Step 1540: t=10.4 us, z=-2.327 mm, v=175.90 m/s, failed=5961, drift=24.20%
+[2026-07-09 20:04:07] [INFO]: Step 1560: t=10.5 us, z=-2.299 mm, v=174.75 m/s, failed=6049, drift=24.16%
+[2026-07-09 20:04:24] [INFO]: Step 1580: t=10.7 us, z=-2.272 mm, v=173.57 m/s, failed=6193, drift=24.12%
+[2026-07-09 20:04:42] [INFO]: Step 1600: t=10.8 us, z=-2.244 mm, v=172.38 m/s, failed=6325, drift=24.07%
+[2026-07-09 20:04:59] [INFO]: Step 1620: t=10.9 us, z=-2.217 mm, v=171.18 m/s, failed=6457, drift=24.04%
+[2026-07-09 20:05:17] [INFO]: Step 1640: t=11.1 us, z=-2.190 mm, v=169.98 m/s, failed=6633, drift=24.00%
+[2026-07-09 20:05:34] [INFO]: Step 1660: t=11.2 us, z=-2.164 mm, v=168.77 m/s, failed=6761, drift=23.97%
+[2026-07-09 20:05:52] [INFO]: Step 1680: t=11.3 us, z=-2.137 mm, v=167.56 m/s, failed=6933, drift=23.95%
+[2026-07-09 20:06:10] [INFO]: Step 1700: t=11.5 us, z=-2.111 mm, v=166.38 m/s, failed=7062, drift=23.92%
+[2026-07-09 20:06:28] [INFO]: Step 1720: t=11.6 us, z=-2.085 mm, v=165.22 m/s, failed=7206, drift=23.90%
+[2026-07-09 20:06:46] [INFO]: Step 1740: t=11.7 us, z=-2.059 mm, v=164.09 m/s, failed=7357, drift=23.87%
+[2026-07-09 20:07:04] [INFO]: Step 1760: t=11.9 us, z=-2.033 mm, v=162.97 m/s, failed=7521, drift=23.84%
+[2026-07-09 20:07:23] [INFO]: Step 1780: t=12.0 us, z=-2.007 mm, v=161.84 m/s, failed=7669, drift=23.82%
+[2026-07-09 20:07:41] [INFO]: Step 1800: t=12.2 us, z=-1.982 mm, v=160.69 m/s, failed=7821, drift=23.80%
+[2026-07-09 20:08:00] [INFO]: Step 1820: t=12.3 us, z=-1.957 mm, v=159.56 m/s, failed=7957, drift=23.78%
+[2026-07-09 20:08:00] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-09 20:08:00] [INFO]: ============================================================
+[2026-07-09 20:08:00] [INFO]: KevlarGrid Benchmark 8 - Case A Started
+[2026-07-09 20:08:00] [INFO]: Active Backend: taichi | Threads: N/A
+[2026-07-09 20:08:00] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-09 20:08:00] [INFO]: ============================================================
+[2026-07-09 20:08:28] [INFO]: Step 1840: t=12.4 us, z=-1.932 mm, v=158.42 m/s, failed=8085, drift=23.76%
+[2026-07-09 20:08:32] [INFO]: Step 20: t=0.1 us, z=-4.931 mm, v=428.46 m/s, failed=0, drift=31.49%
+[2026-07-09 20:08:49] [INFO]: Step 1860: t=12.6 us, z=-1.907 mm, v=157.24 m/s, failed=8222, drift=23.74%
+[2026-07-09 20:08:49] [INFO]: Step 40: t=0.3 us, z=-4.865 mm, v=406.19 m/s, failed=0, drift=32.37%
+[2026-07-09 20:09:06] [INFO]: Step 60: t=0.4 us, z=-4.802 mm, v=382.29 m/s, failed=0, drift=32.72%
+[2026-07-09 20:09:10] [INFO]: Step 1880: t=12.7 us, z=-1.882 mm, v=156.02 m/s, failed=8375, drift=23.71%
+[2026-07-10 07:32:50] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-10 07:32:50] [INFO]: ============================================================
+[2026-07-10 07:32:50] [INFO]: KevlarGrid Benchmark 8 - Case A Started
+[2026-07-10 07:32:50] [INFO]: Active Backend: taichi | Threads: N/A
+[2026-07-10 07:32:50] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-10 07:32:50] [INFO]: ============================================================
+[2026-07-10 07:33:13] [INFO]: Step 20: t=0.1 us, z=-4.931 mm, v=428.46 m/s, failed=0, drift=31.49%
+[2026-07-10 07:33:24] [INFO]: Step 40: t=0.3 us, z=-4.865 mm, v=406.19 m/s, failed=0, drift=32.37%
+[2026-07-10 07:33:35] [INFO]: Step 60: t=0.4 us, z=-4.802 mm, v=382.29 m/s, failed=0, drift=32.72%
+[2026-07-10 07:33:46] [INFO]: Step 80: t=0.5 us, z=-4.744 mm, v=358.07 m/s, failed=0, drift=32.44%
+[2026-07-10 07:33:57] [INFO]: Step 100: t=0.7 us, z=-4.689 mm, v=334.56 m/s, failed=0, drift=31.53%
+[2026-07-10 07:34:08] [INFO]: Step 120: t=0.8 us, z=-4.638 mm, v=312.48 m/s, failed=0, drift=30.20%
+[2026-07-10 07:34:19] [INFO]: Step 140: t=0.9 us, z=-4.590 mm, v=292.81 m/s, failed=12, drift=28.49%
+[2026-07-10 07:34:30] [INFO]: Step 160: t=1.1 us, z=-4.545 mm, v=276.71 m/s, failed=92, drift=26.42%
+[2026-07-10 07:34:41] [INFO]: Step 180: t=1.2 us, z=-4.502 mm, v=264.63 m/s, failed=172, drift=25.34%
+[2026-07-10 07:34:52] [INFO]: Step 200: t=1.4 us, z=-4.461 mm, v=255.30 m/s, failed=248, drift=24.83%
+[2026-07-10 07:35:03] [INFO]: Step 220: t=1.5 us, z=-4.421 mm, v=247.60 m/s, failed=354, drift=24.56%
+[2026-07-10 07:35:14] [INFO]: Step 240: t=1.6 us, z=-4.383 mm, v=240.93 m/s, failed=412, drift=24.46%
+[2026-07-10 07:35:25] [INFO]: Step 260: t=1.8 us, z=-4.345 mm, v=235.02 m/s, failed=462, drift=24.39%
+[2026-07-10 07:35:36] [INFO]: Step 280: t=1.9 us, z=-4.308 mm, v=229.81 m/s, failed=522, drift=24.35%
+[2026-07-10 07:35:47] [INFO]: Step 300: t=2.0 us, z=-4.272 mm, v=225.24 m/s, failed=556, drift=24.28%
+[2026-07-10 07:35:58] [INFO]: Step 320: t=2.2 us, z=-4.237 mm, v=221.34 m/s, failed=588, drift=24.22%
+[2026-07-10 07:36:09] [INFO]: Step 340: t=2.3 us, z=-4.203 mm, v=218.04 m/s, failed=615, drift=24.18%
+[2026-07-10 07:36:20] [INFO]: Step 360: t=2.4 us, z=-4.168 mm, v=215.27 m/s, failed=648, drift=24.14%
+[2026-07-10 07:36:32] [INFO]: Step 380: t=2.6 us, z=-4.135 mm, v=213.03 m/s, failed=696, drift=24.13%
+[2026-07-10 07:36:43] [INFO]: Step 400: t=2.7 us, z=-4.101 mm, v=211.23 m/s, failed=744, drift=24.11%
+[2026-07-10 07:36:54] [INFO]: Step 420: t=2.8 us, z=-4.068 mm, v=209.82 m/s, failed=796, drift=24.10%
+[2026-07-10 07:37:05] [INFO]: Step 440: t=3.0 us, z=-4.035 mm, v=208.77 m/s, failed=840, drift=24.09%
+[2026-07-10 07:37:16] [INFO]: Step 460: t=3.1 us, z=-4.002 mm, v=208.03 m/s, failed=882, drift=24.10%
+[2026-07-10 07:37:28] [INFO]: Step 480: t=3.2 us, z=-3.969 mm, v=207.47 m/s, failed=928, drift=24.11%
+[2026-07-10 07:37:39] [INFO]: Step 500: t=3.4 us, z=-3.937 mm, v=207.05 m/s, failed=1000, drift=24.12%
+[2026-07-10 07:37:51] [INFO]: Step 520: t=3.5 us, z=-3.904 mm, v=206.78 m/s, failed=1046, drift=24.13%
+[2026-07-10 07:38:02] [INFO]: Step 540: t=3.6 us, z=-3.872 mm, v=206.63 m/s, failed=1102, drift=24.13%
+[2026-07-10 07:38:14] [INFO]: Step 560: t=3.8 us, z=-3.839 mm, v=206.51 m/s, failed=1162, drift=24.14%
+[2026-07-10 07:38:25] [INFO]: Step 580: t=3.9 us, z=-3.807 mm, v=206.37 m/s, failed=1238, drift=24.16%
+[2026-07-10 07:38:37] [INFO]: Step 600: t=4.1 us, z=-3.774 mm, v=206.21 m/s, failed=1334, drift=24.17%
+[2026-07-10 07:38:48] [INFO]: Step 620: t=4.2 us, z=-3.742 mm, v=206.03 m/s, failed=1402, drift=24.19%
+[2026-07-10 07:39:00] [INFO]: Step 640: t=4.3 us, z=-3.709 mm, v=205.79 m/s, failed=1445, drift=24.19%

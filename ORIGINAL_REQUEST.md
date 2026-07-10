@@ -50,3 +50,29 @@ The server has restarted, and I am reviving this subagent to continue working.
 Please note:
 - I have updated the project-scoped rules in GEMINI.md to add Rule 4: "Wait for Explicit Approval Before Executing Plans". All subagents must adhere to this rule when operating in planning mode.
 - Please check on the status of your tasks (specifically the Benchmark 8 implementation and validation runner) and restart/resume implementation as needed.
+
+## Follow-up — 2026-07-10T02:13:40Z
+
+Fix fabric rendering, resolve CZM energy/arrest physics issues, and update project documentation/wiki.
+
+Working directory: /Users/bennames/Developer/VibeDynaLITE
+Integrity mode: development
+
+## Requirements
+
+### R1. Restoring Woven Fabric Rendering
+Fix the regression in fabric structure mode rendering so that the woven mesh pattern is fully displayed in the viewport when selected.
+
+### R2. Solidifying CZM Physics and Energy Conservation
+Resolve the energy explosion and premature termination/arrest in the CZM explicit loop under projectile impact, ensuring correct physical behavior and energy balance.
+
+### R3. Updating Project Documentation
+Sync the repository wiki documentation with the recent Reissner-Mindlin shell and CZM implementations to maintain architectural and mathematical correctness.
+
+## Acceptance Criteria
+
+### Functional correctness
+- [ ] Switching between fabric and metallic sheet mode shows their respective structures correctly in both PyVista and DearPyGui modes.
+- [ ] Metallic sheet CZM simulation completes without numerical/energy explosion or premature arrest.
+- [ ] Automated tests verify the correctness of the CZM integrator and fabric integrator.
+- [ ] The wiki/documentation contains the current CZM formulation.
