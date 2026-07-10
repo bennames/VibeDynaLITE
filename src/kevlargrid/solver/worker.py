@@ -364,16 +364,6 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "cohesive_strength_gpa": mat.get("cohesive_strength_gpa", 0.485),
                 "fracture_energy_jm2": mat.get("fracture_energy_jm2", 50000.0),
                 "use_czm": use_czm,
-                "spring_failed_step": grid.spring_failed_step,
-                "element_failed_step": grid.element_failed_step,
-                "element_strains": grid.element_strains,
-                "ang_positions": grid.ang_positions,
-                "ang_velocities": grid.ang_velocities,
-                "ang_accel": grid.ang_accel,
-                "erosion_softening_steps": int(sim_cfg.get("erosion_softening_steps", 10)),
-                "velocity_clamping_multiplier": float(
-                    sim_cfg.get("velocity_clamping_multiplier", 2.0)
-                ),
             }
             if structure_type == "metallic_sheet":
                 extra_kwargs["element_stress"] = grid.element_stress
