@@ -294,8 +294,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             grid.element_stress = np.zeros((n_elems, 3, 3), dtype=np.float64)
             grid.element_peeq = np.zeros((n_elems, 3), dtype=np.float64)
             grid.element_damage = np.zeros((n_elems, 3), dtype=np.float64)
-            if grid.failed.shape[0] != n_elems:
-                grid.failed = np.zeros(n_elems, dtype=bool)
+            el_failed = grid.element_failed
+            if el_failed is None or el_failed.shape[0] != n_elems:
+                grid.element_failed = np.zeros(n_elems, dtype=bool)
 
         while t_sim < duration:
             # Check for control signals from GUI process
@@ -368,6 +369,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 extra_kwargs["element_stress"] = grid.element_stress
                 extra_kwargs["element_peeq"] = grid.element_peeq
                 extra_kwargs["element_damage"] = grid.element_damage
+                extra_kwargs["element_failed"] = grid.element_failed
 
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")
@@ -389,7 +391,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 (
                     positions,
                     velocities,
-                    grid.failed,
+                    returned_failed,
                     proj.position,
                     proj.velocity,
                     damp_dissipated,
@@ -449,8 +451,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     mu_s=mu_s,
                     friction_dissipated_init=friction_dissipated,
                     X_ref=X_ref,
-                    **extra_kwargs,
                 )
+                if structure_type == "metallic_sheet":
+                    grid.element_failed = returned_failed
+                else:
+                    grid.failed = returned_failed
                 hist_peak_strain = np.zeros(len(hist_time))
                 n_springs = len(grid.springs)
                 if n_springs > 0:

@@ -2543,6 +2543,7 @@ def fused_leapfrog_loop(
     element_stress: np.ndarray | None = None,
     element_peeq: np.ndarray | None = None,
     element_damage: np.ndarray | None = None,
+    element_failed: np.ndarray | None = None,
     is_tiebreak: np.ndarray | None = None,
     cohesive_strength_gpa: float = 0.485,
     fracture_energy_jm2: float = 50000.0,
@@ -2615,10 +2616,10 @@ def fused_leapfrog_loop(
             element_damage = np.zeros((n_elems, 3), dtype=positions.dtype)
 
         # Recover or allocate element_failed
-        if grid_failed.shape[0] == n_elems:
-            element_failed = grid_failed.astype(np.int32)
-        else:
+        if element_failed is None or element_failed.shape[0] != n_elems:
             element_failed = np.zeros(n_elems, dtype=np.int32)
+        else:
+            element_failed = element_failed.astype(np.int32)
 
         return _fused_shell_loop_jit(
             positions,

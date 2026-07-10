@@ -48,6 +48,7 @@ class Grid:
     element_stress: np.ndarray | None
     element_peeq: np.ndarray | None
     element_damage: np.ndarray | None
+    element_failed: np.ndarray | None
     is_tiebreak: np.ndarray
     n_nodes: int
     n_springs: int
@@ -81,6 +82,7 @@ class Grid:
         self.element_stress = None
         self.element_peeq = None
         self.element_damage = None
+        self.element_failed = None
         if is_tiebreak is None:
             self.is_tiebreak = np.zeros(len(springs), dtype=bool)
         else:

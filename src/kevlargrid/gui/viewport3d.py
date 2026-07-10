@@ -612,11 +612,16 @@ class Viewport3D:
                 getattr(self, "structure_type", "fabric") == "metallic_sheet"
                 and getattr(self, "spring_to_elements_map", None) is not None
             ):
-                failed_elements = self.grid.failed
-                failed_elements_padded = np.append(failed_elements, True)
-                el0 = self.spring_to_elements_map[:, 0]
-                el1 = self.spring_to_elements_map[:, 1]
-                failed = failed_elements_padded[el0] & failed_elements_padded[el1]
+                failed_elements = getattr(self.grid, "element_failed", None)
+                if failed_elements is not None:
+                    failed_elements_padded = np.append(failed_elements, True)
+                    el0 = self.spring_to_elements_map[:, 0]
+                    el1 = self.spring_to_elements_map[:, 1]
+                    failed = (
+                        failed_elements_padded[el0] & failed_elements_padded[el1]
+                    ) | self.grid.failed
+                else:
+                    failed = self.grid.failed
             else:
                 failed = self.grid.failed
 
