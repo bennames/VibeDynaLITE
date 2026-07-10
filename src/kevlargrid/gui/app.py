@@ -942,7 +942,7 @@ def launch() -> None:
                 cfg["grid"].get("corrugation_axis", "x"),
                 cfg.get("simulation", {}).get("structure_type", "fabric"),
                 cfg["material"].get("areal_density_kgm2", 0.0),
-                cfg["material"].get("material_name", ""),
+                cfg["material"].get("name", ""),
                 cfg["projectile"]["blade_width"],
                 cfg["projectile"]["edge_thickness"],
                 tuple(cfg["projectile"]["position"]),

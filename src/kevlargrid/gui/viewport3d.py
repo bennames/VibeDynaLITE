@@ -359,6 +359,8 @@ class Viewport3D:
             self.grid = grid
             self.n_plies = n_plies
             self.n_nodes_per_layer = n_nodes_per_layer
+            if structure_type == "metallic_sheet":
+                self.n_nodes_per_layer = len(grid.nodes) // n_plies
             self.layer_visibility = [True] * n_plies
             self.structure_type = structure_type
             self.fail_thresh = fail_thresh

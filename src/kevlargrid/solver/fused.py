@@ -2025,7 +2025,7 @@ def _fused_shell_loop_jit(
         c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
         omega_max = 2.0 * c_p / dx
         if use_czm:
-            omega_spring = sqrt(2.0 * k_0 / mass_min)
+            omega_spring = sqrt(4.0 * k_0 / mass_min)
             if omega_spring > omega_max:
                 omega_max = omega_spring
         dt_crit = sqrt(rayleigh_beta**2 + 4.0 / (omega_max**2)) - rayleigh_beta
@@ -2139,17 +2139,73 @@ def _fused_shell_loop_jit(
                     dz_s = positions[n1, 2] - positions[n0, 2]
                     delta = sqrt(dx_s * dx_s + dy_s * dy_s + dz_s * dz_s)
                     if delta > 0.0:
+                        e0 = n0 // 4
+                        e1 = n1 // 4
+
+                        c0_x = 0.25 * (
+                            positions[elements[e0, 0], 0]
+                            + positions[elements[e0, 1], 0]
+                            + positions[elements[e0, 2], 0]
+                            + positions[elements[e0, 3], 0]
+                        )
+                        c0_y = 0.25 * (
+                            positions[elements[e0, 0], 1]
+                            + positions[elements[e0, 1], 1]
+                            + positions[elements[e0, 2], 1]
+                            + positions[elements[e0, 3], 1]
+                        )
+                        c0_z = 0.25 * (
+                            positions[elements[e0, 0], 2]
+                            + positions[elements[e0, 1], 2]
+                            + positions[elements[e0, 2], 2]
+                            + positions[elements[e0, 3], 2]
+                        )
+
+                        c1_x = 0.25 * (
+                            positions[elements[e1, 0], 0]
+                            + positions[elements[e1, 1], 0]
+                            + positions[elements[e1, 2], 0]
+                            + positions[elements[e1, 3], 0]
+                        )
+                        c1_y = 0.25 * (
+                            positions[elements[e1, 0], 1]
+                            + positions[elements[e1, 1], 1]
+                            + positions[elements[e1, 2], 1]
+                            + positions[elements[e1, 3], 1]
+                        )
+                        c1_z = 0.25 * (
+                            positions[elements[e1, 0], 2]
+                            + positions[elements[e1, 1], 2]
+                            + positions[elements[e1, 2], 2]
+                            + positions[elements[e1, 3], 2]
+                        )
+
+                        dx_c = c1_x - c0_x
+                        dy_c = c1_y - c0_y
+                        dz_c = c1_z - c0_z
+
+                        is_tension = (dx_s * dx_c + dy_s * dy_c + dz_s * dz_c) >= 0.0
+
                         d = spring_damage[i]
-                        if delta > delta_0:
-                            d_cand = (delta_c * (delta - delta_0)) / (delta * (delta_c - delta_0))
-                            if d_cand > d:
-                                d = d_cand if d_cand < 1.0 else 1.0
-                                spring_damage[i] = d
+                        d_old = d
+
+                        if is_tension:
+                            if delta > delta_0:
+                                d_cand = (delta_c * (delta - delta_0)) / (
+                                    delta * (delta_c - delta_0)
+                                )
+                                if d_cand > d:
+                                    d = d_cand if d_cand < 1.0 else 1.0
+                                    spring_damage[i] = d
                             if d >= 1.0:
                                 spring_failed[i] = 1
+                                failure_dissipated += 0.5 * (1.0 - d_old) * k_0 * delta * delta
+                            else:
+                                f_mag = (1.0 - d) * k_0 * delta
+                        else:
+                            f_mag = k_0 * delta
 
                         if d < 1.0:
-                            f_mag = (1.0 - d) * k_0 * delta
                             fx = f_mag * (dx_s / delta)
                             fy = f_mag * (dy_s / delta)
                             fz = f_mag * (dz_s / delta)
