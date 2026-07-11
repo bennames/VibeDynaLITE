@@ -509,6 +509,10 @@ class Viewport3D:
                         n_display_springs = len(self.edge_nodes)
                     else:
                         springs = grid.springs
+                        if springs is not None:
+                            springs = np.asarray(springs).reshape(-1, 2)
+                        else:
+                            springs = np.zeros((0, 2), dtype=np.int32)
                         n_springs = len(springs)
                         lines = np.empty(n_springs * 3, dtype=np.int32)
                         lines[0::3] = 2
@@ -657,6 +661,10 @@ class Viewport3D:
                 and getattr(self, "edge_nodes", None) is not None
             ):
                 springs = self.edge_nodes
+                if springs is not None:
+                    springs = np.asarray(springs).reshape(-1, 2)
+                else:
+                    springs = np.zeros((0, 2), dtype=np.int32)
                 n_springs = len(springs)
                 failed_elements = getattr(self.grid, "element_failed", None)
                 if failed_elements is not None and len(failed_elements) * 4 == n_springs:
@@ -670,6 +678,10 @@ class Viewport3D:
                 strains = (lengths - self.edge_rest_lengths) / self.edge_rest_lengths
             else:
                 springs = self.grid.springs
+                if springs is not None:
+                    springs = np.asarray(springs).reshape(-1, 2)
+                else:
+                    springs = np.zeros((0, 2), dtype=np.int32)
                 n_springs = len(springs)
                 failed = getattr(self.grid, "failed", None)
                 if failed is None or len(failed) != n_springs:

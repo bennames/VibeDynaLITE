@@ -434,17 +434,83 @@ def enforce_projectile_tangency(config: dict, update_widget: bool = True) -> flo
     radius = proj_cfg.get("radius", 0.005)
     length = proj_cfg.get("length", 0.01)
     edge_thickness = proj_cfg.get("edge_thickness", 0.005)
+    quat = proj_cfg.get("quat", [1.0, 0.0, 0.0, 0.0])
 
-    # Calculate half-height along Z axis based on shape
     s_lower = shape_type.lower()
+
+    # Define helper to rotate vector by quaternion
+    def q_rotate_local(q, v):
+        qw, qx, qy, qz = q[0], q[1], q[2], q[3]
+        vx, vy, vz = v[0], v[1], v[2]
+        tx = 2.0 * (qy * vz - qz * vy)
+        ty = 2.0 * (qz * vx - qx * vz)
+        tz = 2.0 * (qx * vy - qy * vx)
+        return np.array(
+            [
+                vx + qw * tx + (qy * tz - qz * ty),
+                vy + qw * ty + (qz * tx - qx * tz),
+                vz + qw * tz + (qx * ty - qy * tx),
+            ]
+        )
+
+    local_pts = []
     if s_lower == "box":
-        h_half = edge_thickness / 2.0
+        w = proj_cfg.get("blade_width", 0.02)
+        t = edge_thickness
+        l = length
+        for dx in [-w / 2, w / 2]:
+            for dy in [-l / 2, l / 2]:
+                for dz in [-t / 2, t / 2]:
+                    local_pts.append(np.array([dx, dy, dz]))
     elif s_lower == "sphere":
         h_half = radius
-    elif s_lower == "cylinder" or s_lower == "bullet":
-        h_half = length / 2.0
+    elif s_lower == "cylinder":
+        r = radius
+        l = length
+        for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+            local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), l / 2]))
+            local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l / 2]))
+    elif s_lower == "bullet":
+        r = radius
+        l = length
+        for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+            local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l / 2]))
+        local_pts.append(np.array([0.0, 0.0, l / 2]))
+    elif s_lower == "propeller":
+        span = proj_cfg.get("span", 0.05)
+        c_r = proj_cfg.get("root_chord", 0.01)
+        c_t = proj_cfg.get("tip_chord", 0.005)
+        ys = np.linspace(0.0, span, 20)
+        dy = span / 20.0
+        dV_sum = 0.0
+        y_dV_sum = 0.0
+        tau = proj_cfg.get("thickness_ratio", 12.0) / 100.0
+        for y in ys:
+            c = c_r + (y / span) * (c_t - c_r)
+            area = 0.60 * (c**2) * tau
+            dV = area * dy
+            dV_sum += dV
+            y_dV_sum += y * dV
+        y_com = y_dV_sum / dV_sum if dV_sum > 0 else 0.0
+
+        for sign in [-1.0, 1.0]:
+            y_tip = sign * span - y_com
+            c = c_t
+            local_pts.append(np.array([c / 2, y_tip, 0.0]))
+            local_pts.append(np.array([-c / 2, y_tip, 0.0]))
+        local_pts.append(np.array([c_r / 2, -y_com, 0.0]))
+        local_pts.append(np.array([-c_r / 2, -y_com, 0.0]))
     else:
         h_half = radius
+
+    if len(local_pts) > 0:
+        max_z = 0.0
+        for pt in local_pts:
+            rot_pt = q_rotate_local(quat, pt)
+            z_val = np.abs(rot_pt[2])
+            if z_val > max_z:
+                max_z = z_val
+        h_half = max_z
 
     # Check for initial penetration Z-overlap
     z_pos = proj_cfg["position"][2]

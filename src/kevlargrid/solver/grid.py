@@ -268,7 +268,7 @@ def generate_rectangular_grid(
                 springs_list.append((idx, idx_diag2))
                 tension_only_list.append(False)
 
-    base_springs = np.array(springs_list, dtype=np.int32)
+    base_springs = np.array(springs_list, dtype=np.int32).reshape(-1, 2)
     base_tension_only = np.array(tension_only_list, dtype=bool)
 
     # 4. Generate 2D quadrilateral elements (Q4)
@@ -280,7 +280,7 @@ def generate_rectangular_grid(
             n2 = (i + 1) * ny + (j + 1)
             n3 = i * ny + (j + 1)
             elements_list.append((n0, n1, n2, n3))
-    base_elements = np.array(elements_list, dtype=np.int32)
+    base_elements = np.array(elements_list, dtype=np.int32).reshape(-1, 4)
 
     # 5. Calculate spring stiffnesses and rest lengths
     tensile_modulus_gpa = material.get("tensile_modulus_gpa", 71.0)
@@ -401,7 +401,7 @@ def generate_rectangular_grid(
                         springs_list.append((4 * e + 2, 4 * e_top + 1))
                         stiffness_list.append(k_cohesive)
 
-            springs = np.array(springs_list, dtype=np.int32)
+            springs = np.array(springs_list, dtype=np.int32).reshape(-1, 2)
             stiffnesses = np.array(stiffness_list, dtype=np.float64)
             rest_lengths = np.zeros(len(springs), dtype=np.float64)
             tension_only = np.zeros(len(springs), dtype=bool)
