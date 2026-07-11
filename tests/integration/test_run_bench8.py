@@ -1,10 +1,9 @@
+import json
 import sys
 from pathlib import Path
 
 import pytest
 
-
-import json
 
 @pytest.mark.slow
 def test_run_benchmark_8(monkeypatch):

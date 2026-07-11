@@ -371,3 +371,193 @@
 [2026-07-10 07:38:37] [INFO]: Step 600: t=4.1 us, z=-3.774 mm, v=206.21 m/s, failed=1334, drift=24.17%
 [2026-07-10 07:38:48] [INFO]: Step 620: t=4.2 us, z=-3.742 mm, v=206.03 m/s, failed=1402, drift=24.19%
 [2026-07-10 07:39:00] [INFO]: Step 640: t=4.3 us, z=-3.709 mm, v=205.79 m/s, failed=1445, drift=24.19%
+[2026-07-11 11:41:15] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:41:15] [INFO]: ============================================================
+[2026-07-11 11:41:15] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:41:15] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:41:15] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:41:15] [INFO]: ============================================================
+[2026-07-11 11:41:25] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:41:25] [INFO]: ============================================================
+[2026-07-11 11:41:25] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:41:25] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:41:25] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:41:25] [INFO]: ============================================================
+[2026-07-11 11:41:39] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:41:39] [INFO]: ============================================================
+[2026-07-11 11:41:39] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:41:39] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:41:39] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:41:39] [INFO]: ============================================================
+[2026-07-11 11:41:49] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:41:49] [INFO]: ============================================================
+[2026-07-11 11:41:49] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:41:49] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:41:49] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:41:49] [INFO]: ============================================================
+[2026-07-11 11:41:59] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:41:59] [INFO]: ============================================================
+[2026-07-11 11:41:59] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:41:59] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:41:59] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:41:59] [INFO]: ============================================================
+[2026-07-11 11:42:05] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:42:05] [INFO]: ============================================================
+[2026-07-11 11:42:05] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:42:05] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:42:05] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:42:05] [INFO]: ============================================================
+[2026-07-11 11:42:12] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:42:12] [INFO]: ============================================================
+[2026-07-11 11:42:12] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:42:12] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:42:12] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:42:12] [INFO]: ============================================================
+[2026-07-11 11:42:14] [INFO]: Step 100: t=3.2 us, z=-13.528 mm, v=450.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:42:16] [INFO]: Step 200: t=6.4 us, z=-12.056 mm, v=450.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:42:18] [INFO]: Step 300: t=9.6 us, z=-10.583 mm, v=450.00 m/s, failed=0, drift=-0.00%
+[2026-07-11 11:42:20] [INFO]: Step 400: t=12.8 us, z=-9.111 mm, v=449.97 m/s, failed=0, drift=-0.01%
+[2026-07-11 11:42:22] [INFO]: Step 500: t=16.1 us, z=-7.639 mm, v=449.80 m/s, failed=0, drift=-0.02%
+[2026-07-11 11:42:25] [INFO]: Step 600: t=19.3 us, z=-6.168 mm, v=449.55 m/s, failed=0, drift=-0.06%
+[2026-07-11 11:42:27] [INFO]: Step 700: t=22.5 us, z=-4.698 mm, v=449.22 m/s, failed=0, drift=-0.10%
+[2026-07-11 11:42:29] [INFO]: Step 800: t=25.7 us, z=-3.229 mm, v=448.80 m/s, failed=0, drift=-0.17%
+[2026-07-11 11:42:31] [INFO]: Step 900: t=28.9 us, z=-1.762 mm, v=448.32 m/s, failed=0, drift=-0.25%
+[2026-07-11 11:42:34] [INFO]: Step 1000: t=32.1 us, z=-0.296 mm, v=447.77 m/s, failed=0, drift=-0.33%
+[2026-07-11 11:42:36] [INFO]: Step 1100: t=35.3 us, z=1.168 mm, v=447.17 m/s, failed=0, drift=-0.40%
+[2026-07-11 11:42:38] [INFO]: Step 1200: t=38.5 us, z=2.630 mm, v=446.56 m/s, failed=0, drift=-0.46%
+[2026-07-11 11:42:41] [INFO]: Step 1300: t=41.7 us, z=4.090 mm, v=445.96 m/s, failed=0, drift=-0.51%
+[2026-07-11 11:42:43] [INFO]: Step 1400: t=44.9 us, z=5.548 mm, v=445.44 m/s, failed=0, drift=-0.54%
+[2026-07-11 11:42:45] [INFO]: Step 1500: t=48.2 us, z=7.005 mm, v=445.08 m/s, failed=0, drift=-0.54%
+[2026-07-11 11:42:45] [INFO]: Case A Finished in 33.32 s
+[2026-07-11 11:42:45] [INFO]:   Residual Velocity: 445.08 m/s
+[2026-07-11 11:42:45] [INFO]:   Energy Drift: 0.539%
+[2026-07-11 11:42:45] [INFO]:   Peak Deceleration: 6772.6 g
+[2026-07-11 11:42:45] [INFO]: ============================================================
+[2026-07-11 11:42:45] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case B Started
+[2026-07-11 11:42:45] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:42:45] [INFO]: Initial Strike Velocity: 503.0 m/s
+[2026-07-11 11:42:45] [INFO]: ============================================================
+[2026-07-11 11:42:47] [INFO]: Step 100: t=3.2 us, z=-13.354 mm, v=503.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:42:49] [INFO]: Step 200: t=6.4 us, z=-11.709 mm, v=503.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:42:51] [INFO]: Step 300: t=9.6 us, z=-10.063 mm, v=502.99 m/s, failed=0, drift=-0.00%
+[2026-07-11 11:42:53] [INFO]: Step 400: t=12.8 us, z=-8.418 mm, v=502.90 m/s, failed=0, drift=-0.01%
+[2026-07-11 11:42:56] [INFO]: Step 500: t=16.1 us, z=-6.773 mm, v=502.66 m/s, failed=0, drift=-0.04%
+[2026-07-11 11:42:58] [INFO]: Step 600: t=19.3 us, z=-5.129 mm, v=502.33 m/s, failed=0, drift=-0.08%
+[2026-07-11 11:43:00] [INFO]: Step 700: t=22.5 us, z=-3.486 mm, v=501.91 m/s, failed=0, drift=-0.13%
+[2026-07-11 11:43:03] [INFO]: Step 800: t=25.7 us, z=-1.845 mm, v=501.41 m/s, failed=0, drift=-0.20%
+[2026-07-11 11:43:05] [INFO]: Step 900: t=28.9 us, z=-0.205 mm, v=500.83 m/s, failed=0, drift=-0.28%
+[2026-07-11 11:43:08] [INFO]: Step 1000: t=32.1 us, z=1.432 mm, v=500.22 m/s, failed=0, drift=-0.35%
+[2026-07-11 11:43:10] [INFO]: Step 1100: t=35.3 us, z=3.068 mm, v=499.60 m/s, failed=0, drift=-0.40%
+[2026-07-11 11:43:12] [INFO]: Step 1200: t=38.5 us, z=4.701 mm, v=499.04 m/s, failed=0, drift=-0.43%
+[2026-07-11 11:43:15] [INFO]: Step 1300: t=41.7 us, z=6.333 mm, v=498.64 m/s, failed=0, drift=-0.43%
+[2026-07-11 11:43:17] [INFO]: Step 1400: t=44.9 us, z=7.964 mm, v=498.38 m/s, failed=0, drift=-0.41%
+[2026-07-11 11:43:19] [INFO]: Step 1500: t=48.2 us, z=9.594 mm, v=498.18 m/s, failed=0, drift=-0.41%
+[2026-07-11 11:43:19] [INFO]: Case B Finished in 33.79 s
+[2026-07-11 11:43:19] [INFO]:   Residual Velocity: 498.18 m/s
+[2026-07-11 11:43:19] [INFO]:   Energy Drift: 0.431%
+[2026-07-11 11:43:19] [INFO]:   Peak Deceleration: 6796.6 g
+[2026-07-11 11:43:19] [INFO]: ============================================================
+[2026-07-11 11:43:19] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case C Started
+[2026-07-11 11:43:19] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:43:19] [INFO]: Initial Strike Velocity: 550.0 m/s
+[2026-07-11 11:43:19] [INFO]: ============================================================
+[2026-07-11 11:43:21] [INFO]: Step 100: t=3.2 us, z=-13.201 mm, v=550.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:43:24] [INFO]: Step 200: t=6.4 us, z=-11.401 mm, v=550.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:43:27] [INFO]: Step 300: t=9.6 us, z=-9.602 mm, v=549.98 m/s, failed=0, drift=-0.00%
+[2026-07-11 11:43:29] [INFO]: Step 400: t=12.8 us, z=-7.803 mm, v=549.82 m/s, failed=0, drift=-0.02%
+[2026-07-11 11:43:31] [INFO]: Step 500: t=16.1 us, z=-6.005 mm, v=549.53 m/s, failed=0, drift=-0.05%
+[2026-07-11 11:43:33] [INFO]: Step 600: t=19.3 us, z=-4.207 mm, v=549.13 m/s, failed=0, drift=-0.10%
+[2026-07-11 11:43:36] [INFO]: Step 700: t=22.5 us, z=-2.412 mm, v=548.63 m/s, failed=0, drift=-0.16%
+[2026-07-11 11:43:39] [INFO]: Step 800: t=25.7 us, z=-0.618 mm, v=548.05 m/s, failed=0, drift=-0.23%
+[2026-07-11 11:43:41] [INFO]: Step 900: t=28.9 us, z=1.174 mm, v=547.43 m/s, failed=0, drift=-0.30%
+[2026-07-11 11:43:44] [INFO]: Step 1000: t=32.1 us, z=2.964 mm, v=546.81 m/s, failed=0, drift=-0.35%
+[2026-07-11 11:43:46] [INFO]: Step 1100: t=35.3 us, z=4.752 mm, v=546.26 m/s, failed=0, drift=-0.37%
+[2026-07-11 11:43:49] [INFO]: Step 1200: t=38.5 us, z=6.539 mm, v=545.91 m/s, failed=0, drift=-0.36%
+[2026-07-11 11:43:51] [INFO]: Step 1300: t=41.7 us, z=8.324 mm, v=545.66 m/s, failed=0, drift=-0.34%
+[2026-07-11 11:43:54] [INFO]: Step 1400: t=44.9 us, z=10.109 mm, v=545.56 m/s, failed=0, drift=-0.38%
+[2026-07-11 11:43:56] [INFO]: Step 1500: t=48.2 us, z=11.894 mm, v=545.56 m/s, failed=0, drift=-0.57%
+[2026-07-11 11:43:56] [INFO]: Case C Finished in 36.70 s
+[2026-07-11 11:43:56] [INFO]:   Residual Velocity: 545.56 m/s
+[2026-07-11 11:43:56] [INFO]:   Energy Drift: 0.575%
+[2026-07-11 11:43:56] [INFO]:   Peak Deceleration: 6817.4 g
+[2026-07-11 11:43:56] [INFO]: Saved results to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/results.json
+[2026-07-11 11:43:56] [INFO]: Saved validation plot to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/validation_plot.png
+[2026-07-11 11:43:56] [INFO]: HTML report saved to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/validation_report.html
+[2026-07-11 11:43:56] [INFO]: PDF report successfully compiled via built-in pure-Python compiler to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/validation_report.pdf
+[2026-07-11 11:44:32] [INFO]: Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...
+[2026-07-11 11:44:32] [INFO]: ============================================================
+[2026-07-11 11:44:32] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case A Started
+[2026-07-11 11:44:32] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:44:32] [INFO]: Initial Strike Velocity: 450.0 m/s
+[2026-07-11 11:44:32] [INFO]: ============================================================
+[2026-07-11 11:44:34] [INFO]: Step 100: t=3.2 us, z=-13.528 mm, v=450.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:44:36] [INFO]: Step 200: t=6.4 us, z=-12.056 mm, v=450.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:44:38] [INFO]: Step 300: t=9.6 us, z=-10.583 mm, v=450.00 m/s, failed=0, drift=-0.00%
+[2026-07-11 11:44:41] [INFO]: Step 400: t=12.8 us, z=-9.111 mm, v=449.97 m/s, failed=0, drift=-0.01%
+[2026-07-11 11:44:43] [INFO]: Step 500: t=16.1 us, z=-7.639 mm, v=449.80 m/s, failed=0, drift=-0.02%
+[2026-07-11 11:44:45] [INFO]: Step 600: t=19.3 us, z=-6.168 mm, v=449.55 m/s, failed=0, drift=-0.06%
+[2026-07-11 11:44:47] [INFO]: Step 700: t=22.5 us, z=-4.698 mm, v=449.22 m/s, failed=0, drift=-0.10%
+[2026-07-11 11:44:50] [INFO]: Step 800: t=25.7 us, z=-3.229 mm, v=448.80 m/s, failed=0, drift=-0.17%
+[2026-07-11 11:44:52] [INFO]: Step 900: t=28.9 us, z=-1.762 mm, v=448.32 m/s, failed=0, drift=-0.25%
+[2026-07-11 11:44:55] [INFO]: Step 1000: t=32.1 us, z=-0.296 mm, v=447.77 m/s, failed=0, drift=-0.33%
+[2026-07-11 11:44:57] [INFO]: Step 1100: t=35.3 us, z=1.168 mm, v=447.17 m/s, failed=0, drift=-0.40%
+[2026-07-11 11:45:00] [INFO]: Step 1200: t=38.5 us, z=2.630 mm, v=446.56 m/s, failed=0, drift=-0.46%
+[2026-07-11 11:45:02] [INFO]: Step 1300: t=41.7 us, z=4.090 mm, v=445.96 m/s, failed=0, drift=-0.51%
+[2026-07-11 11:45:05] [INFO]: Step 1400: t=44.9 us, z=5.548 mm, v=445.44 m/s, failed=0, drift=-0.54%
+[2026-07-11 11:45:07] [INFO]: Step 1500: t=48.2 us, z=7.005 mm, v=445.08 m/s, failed=0, drift=-0.54%
+[2026-07-11 11:45:07] [INFO]: Case A Finished in 34.89 s
+[2026-07-11 11:45:07] [INFO]:   Residual Velocity: 445.08 m/s
+[2026-07-11 11:45:07] [INFO]:   Energy Drift: 0.539%
+[2026-07-11 11:45:07] [INFO]:   Peak Deceleration: 6772.6 g
+[2026-07-11 11:45:07] [INFO]: ============================================================
+[2026-07-11 11:45:07] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case B Started
+[2026-07-11 11:45:07] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:45:07] [INFO]: Initial Strike Velocity: 503.0 m/s
+[2026-07-11 11:45:07] [INFO]: ============================================================
+[2026-07-11 11:45:09] [INFO]: Step 100: t=3.2 us, z=-13.354 mm, v=503.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:45:11] [INFO]: Step 200: t=6.4 us, z=-11.709 mm, v=503.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:45:13] [INFO]: Step 300: t=9.6 us, z=-10.063 mm, v=502.99 m/s, failed=0, drift=-0.00%
+[2026-07-11 11:45:16] [INFO]: Step 400: t=12.8 us, z=-8.418 mm, v=502.90 m/s, failed=0, drift=-0.01%
+[2026-07-11 11:45:18] [INFO]: Step 500: t=16.1 us, z=-6.773 mm, v=502.66 m/s, failed=0, drift=-0.04%
+[2026-07-11 11:45:20] [INFO]: Step 600: t=19.3 us, z=-5.129 mm, v=502.33 m/s, failed=0, drift=-0.08%
+[2026-07-11 11:45:23] [INFO]: Step 700: t=22.5 us, z=-3.486 mm, v=501.91 m/s, failed=0, drift=-0.13%
+[2026-07-11 11:45:25] [INFO]: Step 800: t=25.7 us, z=-1.845 mm, v=501.41 m/s, failed=0, drift=-0.20%
+[2026-07-11 11:45:28] [INFO]: Step 900: t=28.9 us, z=-0.205 mm, v=500.83 m/s, failed=0, drift=-0.28%
+[2026-07-11 11:45:30] [INFO]: Step 1000: t=32.1 us, z=1.432 mm, v=500.22 m/s, failed=0, drift=-0.35%
+[2026-07-11 11:45:33] [INFO]: Step 1100: t=35.3 us, z=3.068 mm, v=499.60 m/s, failed=0, drift=-0.40%
+[2026-07-11 11:45:35] [INFO]: Step 1200: t=38.5 us, z=4.701 mm, v=499.04 m/s, failed=0, drift=-0.43%
+[2026-07-11 11:45:38] [INFO]: Step 1300: t=41.7 us, z=6.333 mm, v=498.64 m/s, failed=0, drift=-0.43%
+[2026-07-11 11:45:40] [INFO]: Step 1400: t=44.9 us, z=7.964 mm, v=498.38 m/s, failed=0, drift=-0.41%
+[2026-07-11 11:45:42] [INFO]: Step 1500: t=48.2 us, z=9.594 mm, v=498.18 m/s, failed=0, drift=-0.41%
+[2026-07-11 11:45:42] [INFO]: Case B Finished in 34.99 s
+[2026-07-11 11:45:42] [INFO]:   Residual Velocity: 498.18 m/s
+[2026-07-11 11:45:42] [INFO]:   Energy Drift: 0.431%
+[2026-07-11 11:45:42] [INFO]:   Peak Deceleration: 6796.6 g
+[2026-07-11 11:45:42] [INFO]: ============================================================
+[2026-07-11 11:45:42] [INFO]: Steel Plate Bullet Impact Benchmark 8 - Case C Started
+[2026-07-11 11:45:42] [INFO]: Active Backend: numba | Threads: 10
+[2026-07-11 11:45:42] [INFO]: Initial Strike Velocity: 550.0 m/s
+[2026-07-11 11:45:42] [INFO]: ============================================================
+[2026-07-11 11:45:44] [INFO]: Step 100: t=3.2 us, z=-13.201 mm, v=550.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:45:46] [INFO]: Step 200: t=6.4 us, z=-11.401 mm, v=550.00 m/s, failed=0, drift=0.00%
+[2026-07-11 11:45:49] [INFO]: Step 300: t=9.6 us, z=-9.602 mm, v=549.98 m/s, failed=0, drift=-0.00%
+[2026-07-11 11:45:51] [INFO]: Step 400: t=12.8 us, z=-7.803 mm, v=549.82 m/s, failed=0, drift=-0.02%
+[2026-07-11 11:45:53] [INFO]: Step 500: t=16.1 us, z=-6.005 mm, v=549.53 m/s, failed=0, drift=-0.05%
+[2026-07-11 11:45:56] [INFO]: Step 600: t=19.3 us, z=-4.207 mm, v=549.13 m/s, failed=0, drift=-0.10%
+[2026-07-11 11:45:58] [INFO]: Step 700: t=22.5 us, z=-2.412 mm, v=548.63 m/s, failed=0, drift=-0.16%
+[2026-07-11 11:46:00] [INFO]: Step 800: t=25.7 us, z=-0.618 mm, v=548.05 m/s, failed=0, drift=-0.23%
+[2026-07-11 11:46:03] [INFO]: Step 900: t=28.9 us, z=1.174 mm, v=547.43 m/s, failed=0, drift=-0.30%
+[2026-07-11 11:46:05] [INFO]: Step 1000: t=32.1 us, z=2.964 mm, v=546.81 m/s, failed=0, drift=-0.35%
+[2026-07-11 11:46:08] [INFO]: Step 1100: t=35.3 us, z=4.752 mm, v=546.26 m/s, failed=0, drift=-0.37%
+[2026-07-11 11:46:10] [INFO]: Step 1200: t=38.5 us, z=6.539 mm, v=545.91 m/s, failed=0, drift=-0.36%
+[2026-07-11 11:46:12] [INFO]: Step 1300: t=41.7 us, z=8.324 mm, v=545.66 m/s, failed=0, drift=-0.34%
+[2026-07-11 11:46:15] [INFO]: Step 1400: t=44.9 us, z=10.109 mm, v=545.56 m/s, failed=0, drift=-0.38%
+[2026-07-11 11:46:17] [INFO]: Step 1500: t=48.2 us, z=11.894 mm, v=545.56 m/s, failed=0, drift=-0.57%
+[2026-07-11 11:46:17] [INFO]: Case C Finished in 34.73 s
+[2026-07-11 11:46:17] [INFO]:   Residual Velocity: 545.56 m/s
+[2026-07-11 11:46:17] [INFO]:   Energy Drift: 0.575%
+[2026-07-11 11:46:17] [INFO]:   Peak Deceleration: 6817.4 g
+[2026-07-11 11:46:17] [INFO]: Saved results to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/results.json
+[2026-07-11 11:46:17] [INFO]: Saved validation plot to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/validation_plot.png
+[2026-07-11 11:46:17] [INFO]: HTML report saved to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/validation_report.html
+[2026-07-11 11:46:17] [INFO]: PDF report successfully compiled via built-in pure-Python compiler to /Users/bennames/Developer/VibeDynaLITE/benchmarks/benchmark_8/validation_report.pdf

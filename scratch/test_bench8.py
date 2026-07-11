@@ -1,8 +1,10 @@
-import numpy as np
 import time
+
+import numpy as np
 import taichi as ti
-from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
+
 from kevlargrid.solver.grid import generate_rectangular_grid
+from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
 from kevlargrid.solver.timestep import compute_cfl_timestep
 
 # Initialize Taichi
@@ -13,7 +15,7 @@ def main():
     nx, ny = 138, 138
     dx = 0.00182
     n_nodes = nx * ny
-    
+
     material_kev29 = {
         "tensile_modulus_gpa": 70.5,
         "areal_density_kgm2": 0.475,
@@ -21,10 +23,10 @@ def main():
         "failure_strain": 0.038,
         "shear_ratio": 0.0004,
     }
-    
+
     grid = generate_rectangular_grid(nx, ny, dx, material_kev29, n_plies=13, t_ply=0.0001)
     print(f"Total nodes: {grid.n_nodes}, Total springs: {grid.n_springs}")
-    
+
     boundary_mask = np.zeros(grid.n_nodes, dtype=bool)
     n_nodes_per_layer = nx * ny
     for ply in range(13):
@@ -33,29 +35,29 @@ def main():
             for j in range(ny):
                 if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
                     boundary_mask[offset + i * ny + j] = True
-                    
+
     proj_mass = 0.0011
     R = 0.00273
     L = 0.006
     I_zz = 0.5 * proj_mass * R**2
     I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
     proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
-    
+
     proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
     proj_vel = np.array([0.0, 0.0, 503.0], dtype=np.float64)
     proj_omega = np.zeros(3, dtype=np.float64)
     proj_quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
-    
+
     k_penalty = 1.5e6
     mu_s = 0.20
     dt = compute_cfl_timestep(grid.stiffnesses, grid.masses, dx, 0.1)
     print(f"Computed timestep: {dt} s")
-    
+
     node_initial_springs = grid.initial_spring_counts
     node_spring_offsets = grid.node_spring_offsets
     node_spring_ids = grid.node_spring_ids
     node_spring_signs = grid.node_spring_signs
-    
+
     t0 = time.perf_counter()
     print("Running simulation step...")
     res = taichi_leapfrog_loop(

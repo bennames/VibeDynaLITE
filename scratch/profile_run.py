@@ -1,16 +1,17 @@
 import sys
 import time
 from pathlib import Path
+
 import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.timestep import compute_cfl_timestep
-from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
 from kevlargrid.solver.fused import fused_leapfrog_loop
+from kevlargrid.solver.grid import generate_rectangular_grid
+from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop
+from kevlargrid.solver.timestep import compute_cfl_timestep
 
 print("Initializing grid...")
 sys.stdout.flush()

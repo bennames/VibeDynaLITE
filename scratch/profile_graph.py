@@ -1,16 +1,18 @@
 import sys
 import time
 from pathlib import Path
+
 import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.timestep import compute_cfl_timestep
-from kevlargrid.solver.taichi_solver import taichi_leapfrog_loop, TaichiSolver
 import taichi as ti
+
+from kevlargrid.solver.grid import generate_rectangular_grid
+from kevlargrid.solver.taichi_solver import TaichiSolver
+from kevlargrid.solver.timestep import compute_cfl_timestep
 
 nx, ny = 184, 184
 dx = 0.001365
@@ -96,7 +98,7 @@ for size in [1, 2, 5, 10]:
         g = solver.get_or_compile_graph(size, True, True, 20)
         t_compile = time.time() - t0
         print(f"Compilation took {t_compile:.2f} seconds.")
-        
+
         t0 = time.time()
         for _ in range(100 // size):
             g.run({})

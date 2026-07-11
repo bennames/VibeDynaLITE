@@ -18,7 +18,6 @@ from kevlargrid.solver.grid import generate_rectangular_grid
 
 # Import solver components
 from kevlargrid.solver.projectile import Projectile
-from kevlargrid.solver.timestep import compute_cfl_timestep
 
 # WeasyPrint PDF compiler
 try:
@@ -197,9 +196,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     proj_ogive_multiplier = 2.0
     proj_z_com = proj.z_com  # should be -0.00328 m
 
-    # Rotate Inertia
     proj_inertia_inv = proj.inertia_inv
-    proj_inertia_inv_diag = np.diag(proj_inertia_inv)
 
     proj_pos = np.array([0.0, 0.0, -0.015], dtype=np.float64)  # Starts at Z = -15 mm
     proj_vel = np.array([0.0, 0.0, v_strike], dtype=np.float64)
@@ -240,7 +237,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
     pos = grid.nodes.copy()
     vel = np.zeros_like(pos)
-    
+
     # Initialize J2 variables
     thickness = 0.002
     n_elements = len(grid.elements)
@@ -346,7 +343,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             rate_parameter_p=mat["rate_parameter_p"],
         )
 
-        pos, vel, element_failed_out, proj_pos, proj_vel_new, damp_diss, fail_diss, clamp_diss, t_sim, _, _, _, _, _, _, _, contact_energy, friction_diss = res
+        pos, vel, _, proj_pos, proj_vel_new, damp_diss, fail_diss, clamp_diss, t_sim, _, _, _, _, _, _, _, contact_energy, friction_diss = res
 
         # Track deceleration of the projectile
         accel_z = (proj_vel_new[2] - proj_vel[2]) / (save_interval * dt)
@@ -359,7 +356,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
         # Calculate current telemetry energies on host
         ke_nodes = 0.5 * np.sum(grid.masses * np.sum(vel**2, axis=1))
-        
+
         # Calculate strain energy from element J2 stress
         se_elems = 0.0
         w_pts_se = np.array([thickness/12.0, 4.0*thickness/12.0, 2.0*thickness/12.0, 4.0*thickness/12.0, thickness/12.0])

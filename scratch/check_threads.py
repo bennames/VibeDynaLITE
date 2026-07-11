@@ -1,7 +1,8 @@
 import os
+import time
+
 import numba
 import numpy as np
-import time
 
 print("Numba Version:", numba.__version__)
 print("NUMBA_THREADING_LAYER Env:", os.environ.get("NUMBA_THREADING_LAYER"))

@@ -1,16 +1,17 @@
 import sys
-import time
 from pathlib import Path
+
 import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from kevlargrid.solver.grid import generate_rectangular_grid
-from kevlargrid.solver.timestep import compute_cfl_timestep
-from kevlargrid.solver.taichi_solver import TaichiSolver
 import taichi as ti
+
+from kevlargrid.solver.grid import generate_rectangular_grid
+from kevlargrid.solver.taichi_solver import TaichiSolver
+from kevlargrid.solver.timestep import compute_cfl_timestep
 
 print("Initializing grid...")
 sys.stdout.flush()
@@ -127,15 +128,15 @@ for chunk in range(10):
         mu_s=mu_s,
         cfl_recompute_interval=20
     )
-    
+
     # Get telemetry
     telem = solver.get_telemetry()
     proj_v = solver.proj_velocity[None]
     proj_v_z = proj_v.z
-    
+
     # Calculate energy drift
     total_energy = telem["ke"] + telem["se"] + telem["proj_ke"]
     drift = (total_energy - initial_energy) / initial_energy
-    
+
     print(f"Step {(chunk+1)*100:4d}: Proj Vel Z = {proj_v_z:6.2f} m/s, KE = {telem['proj_ke']:6.2f} J, Grid KE = {telem['ke']:6.2f} J, Grid SE = {telem['se']:6.2f} J, Drift = {drift*100:6.3f}%")
     sys.stdout.flush()

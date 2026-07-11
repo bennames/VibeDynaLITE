@@ -1,15 +1,16 @@
 import sys
 import time
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from kevlargrid.solver.fused import fused_leapfrog_loop
 from kevlargrid.solver.grid import generate_rectangular_grid
 from kevlargrid.solver.timestep import compute_cfl_timestep
-from kevlargrid.solver.fused import fused_leapfrog_loop
 
 print("Initializing grid...")
 nx, ny = 184, 184
@@ -141,7 +142,7 @@ for step_chunk in range(10):
         contact_energy_init=contact_energy,
         friction_dissipated_init=friction_dissipated,
     )
-    
+
     ke_nodes = 0.5 * np.sum(grid.masses * np.sum(vel**2, axis=1))
     p1 = pos[grid.springs[:, 0]]
     p2 = pos[grid.springs[:, 1]]
@@ -151,10 +152,10 @@ for step_chunk in range(10):
     se_springs_array = 0.5 * grid.stiffnesses * (1.0 - grid_damage) * (strains_eff * grid.rest_lengths)**2
     se_springs = float(np.sum(np.where(failed, 0.0, se_springs_array)))
     ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
-    
+
     total_energy = ke_nodes + se_springs + ke_proj + damp_dissipated + failure_dissipated + clamp_dissipated + contact_energy + friction_dissipated
     drift = (total_energy - initial_energy) / initial_energy
-    
+
     print(f"Step {(step_chunk+1)*100:4d}: Proj Vel Z = {proj_vel[2]:6.2f} m/s | Proj Pos Z = {proj_pos[2]*1000:6.3f} mm | Drift = {drift*100:6.3f}%")
     sys.stdout.flush()
 
