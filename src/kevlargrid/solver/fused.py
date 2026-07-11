@@ -122,11 +122,11 @@ def numba_q_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 def numba_q_rotate(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     qw, qx, qy, qz = q[0], q[1], q[2], q[3]
     vx, vy, vz = v[0], v[1], v[2]
-    
+
     tx = 2.0 * (qy * vz - qz * vy)
     ty = 2.0 * (qz * vx - qx * vz)
     tz = 2.0 * (qx * vy - qy * vx)
-    
+
     res = np.zeros(3, dtype=v.dtype)
     res[0] = vx + qw * tx + (qy * tz - qz * ty)
     res[1] = vy + qw * ty + (qz * tx - qx * tz)
@@ -138,11 +138,11 @@ def numba_q_rotate(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 def numba_q_rotate_inplace(q: np.ndarray, v: np.ndarray, out: np.ndarray) -> None:
     qw, qx, qy, qz = q[0], q[1], q[2], q[3]
     vx, vy, vz = v[0], v[1], v[2]
-    
+
     tx = 2.0 * (qy * vz - qz * vy)
     ty = 2.0 * (qz * vx - qx * vz)
     tz = 2.0 * (qx * vy - qy * vx)
-    
+
     out[0] = vx + qw * tx + (qy * tz - qz * ty)
     out[1] = vy + qw * ty + (qz * tx - qx * tz)
     out[2] = vz + qw * tz + (qx * ty - qy * tx)
@@ -875,7 +875,7 @@ def numba_compute_cfl_contact_distances(
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
     P_loc = np.zeros(3, dtype=positions.dtype)
-    
+
     for i in range(n_nodes):
         dx_p = positions[i, 0] - proj_position[0]
         dy_p = positions[i, 1] - proj_position[1]
@@ -943,7 +943,7 @@ def numba_compute_cfl_contact_stiffness(
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
     P_loc_cfl = np.zeros(3, dtype=positions.dtype)
-    
+
     for i in range(n_nodes):
         dx_p = positions[i, 0] - proj_position[0]
         dy_p = positions[i, 1] - proj_position[1]
@@ -979,7 +979,7 @@ def numba_compute_cfl_contact_stiffness(
             else:
                 s_factor = 1.0
             nodal_k_contact[i] = k_penalty * s_factor
-            
+
     return nodal_k_contact
 
 
@@ -1024,7 +1024,7 @@ def numba_compute_projectile_contact_forces(
     proj_torque = np.zeros(3, dtype=np.float64)
     friction_dissipated = 0.0
     proj_contact_e_step = 0.0
-    
+
     q_conj = np.array(
         [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
     )
@@ -1035,7 +1035,7 @@ def numba_compute_projectile_contact_forces(
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
     P_loc_force = np.zeros(3, dtype=positions.dtype)
-    
+
     for i in range(n_nodes):
         dx_p = positions[i, 0] - proj_position[0]
         dy_p = positions[i, 1] - proj_position[1]
@@ -2064,7 +2064,7 @@ def numba_step_shell_forces_and_failures(
                         else:
                             sig_y_val = sig_y_u + H_soft * (peeq_temp - ultimate_strain)
                             H_tang = H_soft
-                        
+
                         f_val = sig_vm_trial - 3.0 * G * d_peeq - sig_y_val * beta
                         df_val = -3.0 * G - H_tang * beta
                         diff = f_val / df_val
