@@ -148,7 +148,7 @@ def numba_q_rotate_inplace(q: np.ndarray, v: np.ndarray, out: np.ndarray) -> Non
     out[2] = vz + qw * tz + (qx * ty - qy * tx)
 
 
-@backend.jit(fastmath=True, parallel=False, inline='never')
+@backend.jit(fastmath=True, parallel=False, inline="never")
 def numba_eval_sdf(
     p: np.ndarray,
     shape_code: int,
@@ -273,7 +273,7 @@ def numba_eval_sdf(
     return val
 
 
-@backend.jit(fastmath=True, parallel=False, inline='never')
+@backend.jit(fastmath=True, parallel=False, inline="never")
 def numba_eval_sdf_normal(
     p: np.ndarray,
     shape_code: int,
@@ -868,9 +868,7 @@ def numba_compute_cfl_contact_distances(
     n_nodes = len(positions)
     dists = np.zeros(n_nodes, dtype=positions.dtype)
     dists[:] = 999.0
-    q_conj = np.array(
-        [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
-    )
+    q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
     max_R = max(proj_radius, max(proj_length, proj_span))
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
@@ -936,9 +934,7 @@ def numba_compute_cfl_contact_stiffness(
 ):
     n_nodes = len(positions)
     nodal_k_contact = np.zeros(n_nodes, dtype=positions.dtype)
-    q_conj = np.array(
-        [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
-    )
+    q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
     max_R = max(proj_radius, max(proj_length, proj_span))
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
@@ -1025,9 +1021,7 @@ def numba_compute_projectile_contact_forces(
     friction_dissipated = 0.0
     proj_contact_e_step = 0.0
 
-    q_conj = np.array(
-        [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
-    )
+    q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
     if shape_code == 0:
         max_R = max(w_h, max(t_h, proj_length / 2.0))
     else:
@@ -1127,21 +1121,19 @@ def numba_compute_projectile_contact_forces(
 
             # Surface projection for torque moment arm
             P_contact = P_rel - delta * n_world
-            proj_torque[0] += P_contact[1] * (
-                -f_mag * n_world[2] * node_scale_factor
-            ) - P_contact[2] * (-f_mag * n_world[1] * node_scale_factor)
-            proj_torque[1] += P_contact[2] * (
-                -f_mag * n_world[0] * node_scale_factor
-            ) - P_contact[0] * (-f_mag * n_world[2] * node_scale_factor)
-            proj_torque[2] += P_contact[0] * (
-                -f_mag * n_world[1] * node_scale_factor
-            ) - P_contact[1] * (-f_mag * n_world[0] * node_scale_factor)
+            proj_torque[0] += P_contact[1] * (-f_mag * n_world[2] * node_scale_factor) - P_contact[
+                2
+            ] * (-f_mag * n_world[1] * node_scale_factor)
+            proj_torque[1] += P_contact[2] * (-f_mag * n_world[0] * node_scale_factor) - P_contact[
+                0
+            ] * (-f_mag * n_world[2] * node_scale_factor)
+            proj_torque[2] += P_contact[0] * (-f_mag * n_world[1] * node_scale_factor) - P_contact[
+                1
+            ] * (-f_mag * n_world[0] * node_scale_factor)
 
             # Projectile 6-DOF contact friction
             if mu_s > 0.0:
-                v_rel_dot_n = (
-                    v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
-                )
+                v_rel_dot_n = v_rel[0] * n_world[0] + v_rel[1] * n_world[1] + v_rel[2] * n_world[2]
                 v_tang = np.array(
                     [
                         v_rel[0] - v_rel_dot_n * n_world[0],
@@ -1166,15 +1158,9 @@ def numba_compute_projectile_contact_forces(
                 proj_reaction_force[1] -= F_friction[1]
                 proj_reaction_force[2] -= F_friction[2]
 
-                proj_torque[0] += P_contact[1] * (-F_friction[2]) - P_contact[2] * (
-                    -F_friction[1]
-                )
-                proj_torque[1] += P_contact[2] * (-F_friction[0]) - P_contact[0] * (
-                    -F_friction[2]
-                )
-                proj_torque[2] += P_contact[0] * (-F_friction[1]) - P_contact[1] * (
-                    -F_friction[0]
-                )
+                proj_torque[0] += P_contact[1] * (-F_friction[2]) - P_contact[2] * (-F_friction[1])
+                proj_torque[1] += P_contact[2] * (-F_friction[0]) - P_contact[0] * (-F_friction[2])
+                proj_torque[2] += P_contact[0] * (-F_friction[1]) - P_contact[1] * (-F_friction[0])
 
                 friction_dissipated += f_fric_mag * (v_rel_sq / denom) * dt
 
@@ -1602,39 +1588,41 @@ def _fused_leapfrog_loop_jit(
                 damp_dissipated += np.sum(f_damp_mags * v_rel_proj) * dt
 
         cap_stiffness = grid_stiffnesses[0] if len(grid_stiffnesses) > 0 else 0.0
-        proj_forces, proj_reaction_force, proj_torque, proj_contact_e_step, friction_diss_step = numba_compute_projectile_contact_forces(
-            positions,
-            v_half,
-            active_counts,
-            node_initial_springs,
-            proj_position,
-            proj_quat,
-            proj_v_half,
-            proj_omega_half,
-            shape_code,
-            proj_radius,
-            proj_length,
-            proj_edge_radius,
-            R_og_val,
-            L_body_val,
-            L_nose_val,
-            proj_z_com,
-            proj_span,
-            proj_root_chord,
-            proj_tip_chord,
-            proj_twist,
-            proj_thickness_ratio,
-            proj_tip_radius,
-            proj_y_com,
-            w_h,
-            t_h,
-            proximity_threshold,
-            k_penalty,
-            proj_c_damping,
-            dx,
-            cap_stiffness,
-            mu_s,
-            dt,
+        proj_forces, proj_reaction_force, proj_torque, proj_contact_e_step, friction_diss_step = (
+            numba_compute_projectile_contact_forces(
+                positions,
+                v_half,
+                active_counts,
+                node_initial_springs,
+                proj_position,
+                proj_quat,
+                proj_v_half,
+                proj_omega_half,
+                shape_code,
+                proj_radius,
+                proj_length,
+                proj_edge_radius,
+                R_og_val,
+                L_body_val,
+                L_nose_val,
+                proj_z_com,
+                proj_span,
+                proj_root_chord,
+                proj_tip_chord,
+                proj_twist,
+                proj_thickness_ratio,
+                proj_tip_radius,
+                proj_y_com,
+                w_h,
+                t_h,
+                proximity_threshold,
+                k_penalty,
+                proj_c_damping,
+                dx,
+                cap_stiffness,
+                mu_s,
+                dt,
+            )
         )
         friction_dissipated += friction_diss_step
 
@@ -2027,15 +2015,15 @@ def numba_step_shell_forces_and_failures(
 
             # Cowper-Symonds rate scaling factor (constant during iteration)
             if rate_parameter_c > 0.0 and rate_parameter_p > 0.0:
-                beta = 1.0 + (max(0.0, peeq_rate_old) / rate_parameter_c) ** (1.0 / rate_parameter_p)
+                beta = 1.0 + (max(0.0, peeq_rate_old) / rate_parameter_c) ** (
+                    1.0 / rate_parameter_p
+                )
             else:
                 beta = 1.0
 
             if ultimate_strain > 0.0 and tensile_strength > yield_strength:
                 if peeq_old <= ultimate_strain:
-                    yield_val = yield_strength + K_ro * (
-                        (peeq_old + eps_reg) ** 0.2 - eps_reg**0.2
-                    )
+                    yield_val = yield_strength + K_ro * ((peeq_old + eps_reg) ** 0.2 - eps_reg**0.2)
                 else:
                     yield_val = sig_y_u + H_soft * (peeq_old - ultimate_strain)
             else:
@@ -2091,9 +2079,7 @@ def numba_step_shell_forces_and_failures(
                     yield_val = yield_strength + hardening_modulus * peeq_new
 
                 # Scale stress components (strictly dissipative, scale <= 1.0)
-                scale = 1.0 - (3.0 * G * d_peeq) / (
-                    sig_vm_trial if sig_vm_trial != 0.0 else 1.0
-                )
+                scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
                 if scale > 1.0:
                     scale = 1.0
                 elif scale < 0.0:
@@ -2111,10 +2097,7 @@ def numba_step_shell_forces_and_failures(
             # Stress Triaxiality & Continuous Damage Mechanics
             sig_mean = (sig_xx_new + sig_yy_new) / 3.0
             sig_vm_new = np.sqrt(
-                sig_xx_new**2
-                + sig_yy_new**2
-                - sig_xx_new * sig_yy_new
-                + 3.0 * tau_xy_new**2
+                sig_xx_new**2 + sig_yy_new**2 - sig_xx_new * sig_yy_new + 3.0 * tau_xy_new**2
             )
             eta = sig_mean / sig_vm_new if sig_vm_new > 0.0 else 0.0
 
@@ -2830,9 +2813,15 @@ def _fused_shell_loop_jit(
 
                 # Torque update
                 P_contact = P_rel
-                proj_torque[0] += P_contact[1] * (-f_mag_scaled * n_world[2]) - P_contact[2] * (-f_mag_scaled * n_world[1])
-                proj_torque[1] += P_contact[2] * (-f_mag_scaled * n_world[0]) - P_contact[0] * (-f_mag_scaled * n_world[2])
-                proj_torque[2] += P_contact[0] * (-f_mag_scaled * n_world[1]) - P_contact[1] * (-f_mag_scaled * n_world[0])
+                proj_torque[0] += P_contact[1] * (-f_mag_scaled * n_world[2]) - P_contact[2] * (
+                    -f_mag_scaled * n_world[1]
+                )
+                proj_torque[1] += P_contact[2] * (-f_mag_scaled * n_world[0]) - P_contact[0] * (
+                    -f_mag_scaled * n_world[2]
+                )
+                proj_torque[2] += P_contact[0] * (-f_mag_scaled * n_world[1]) - P_contact[1] * (
+                    -f_mag_scaled * n_world[0]
+                )
 
                 # Projectile 6-DOF contact friction
                 if mu_s > 0.0:
