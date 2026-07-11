@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 12: Cohesive Zone Model Physics Reformulation & Contact Kinematics Coupling
+
+### Added
+- **Decoupled Mode I/II Damage Model**: Reformulated the Traction-Separation Law (TSL) by projecting node separations to local normal and tangential coordinate axes. Compression is handled purely elastically, while tension and shear are coupled through a mixed-mode displacement driver.
+- **Dynamic Contact Kinematics Coupling**: Implemented a local BFS-based coincident node clustering mechanism. Coincident nodes are grouped into active kinematics clusters during contact force evaluation, calculating contact forces based on cluster-average kinematics and distributing them in proportion to element active counts. This completely resolves contact-induced artificial unzipping.
+- **Rayleigh Cohesive Damping**: Introduced stiffness-proportional damping ($\beta k_0$) to CZM springs, scaled by the damage state $(1 - d)$, to dissipate high-frequency dynamic fracture waves and avoid stress concentration spikes.
+- **Cohesive Damping Energy Integration**: Tracked and accumulated the work dissipated by cohesive damping into the global `damp_dissipated` energy variable, ensuring robust thermodynamic energy conservation checks.
+
+### Fixed
+- **Unbound coincident_nodes in Grid Stacking**: Resolved an `UnboundLocalError` when generating multi-ply grids in Mode B by properly initializing the new coincident variables.
+
+---
+
 ## [Unreleased] — Sprint 11: Ramberg-Osgood Nonlinear Hardening & Stable Plastic Saturation
 
 ### Added

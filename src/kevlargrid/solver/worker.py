@@ -428,6 +428,8 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "thickness": thickness,
                 "density_kgm3": float(mat.get("fiber_density_gcc", 1.44) * 1000.0),
                 "is_tiebreak": grid.is_tiebreak,
+                "coincident_nodes": grid.coincident_nodes,
+                "node_czm_spring_ids": grid.node_czm_spring_ids,
                 "cohesive_strength_gpa": mat.get("cohesive_strength_gpa", 0.485),
                 "fracture_energy_jm2": mat.get("fracture_energy_jm2", 50000.0),
                 "use_czm": use_czm,

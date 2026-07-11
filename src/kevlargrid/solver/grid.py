@@ -63,6 +63,8 @@ class Grid:
     node_spring_offsets: np.ndarray
     node_spring_ids: np.ndarray
     node_spring_signs: np.ndarray
+    coincident_nodes: np.ndarray
+    node_czm_spring_ids: np.ndarray
 
     def __init__(
         self,
@@ -77,6 +79,8 @@ class Grid:
         damage: np.ndarray | None = None,
         elements: np.ndarray | None = None,
         is_tiebreak: np.ndarray | None = None,
+        coincident_nodes: np.ndarray | None = None,
+        node_czm_spring_ids: np.ndarray | None = None,
     ) -> None:
         self.nodes = nodes
         self.springs = springs
@@ -112,6 +116,17 @@ class Grid:
             self.damage = damage
         self.n_nodes = len(nodes)
         self.n_springs = len(springs)
+
+        if coincident_nodes is None:
+            self.coincident_nodes = np.zeros((self.n_nodes, 4), dtype=np.int32) - 1
+            self.coincident_nodes[:, 0] = np.arange(self.n_nodes, dtype=np.int32)
+        else:
+            self.coincident_nodes = coincident_nodes
+
+        if node_czm_spring_ids is None:
+            self.node_czm_spring_ids = np.zeros((self.n_nodes, 2), dtype=np.int32) - 1
+        else:
+            self.node_czm_spring_ids = node_czm_spring_ids
 
         # Count how many springs connect to each node
         node_counts = np.zeros(self.n_nodes, dtype=np.int32)
@@ -195,6 +210,8 @@ def generate_rectangular_grid(
         A fully initialised :class:`Grid` instance.
     """
     is_tiebreak = None
+    coincident_nodes = None
+    node_czm_spring_ids = None
 
     # 1. Base properties (single layer)
     x = np.arange(nx) * dx
@@ -363,6 +380,23 @@ def generate_rectangular_grid(
             # Masses are distributed equally to element corners
             masses = np.ones(4 * N_el, dtype=np.float64) * (0.25 * m_cell)
 
+            # Build coincident_nodes mapping
+            base_node_to_shell_nodes: list[list[int]] = [[] for _ in range(nx * ny)]
+            for i in range(nx - 1):
+                for j in range(ny - 1):
+                    e = i * (ny - 1) + j
+                    base_node_to_shell_nodes[i * ny + j].append(4 * e + 0)
+                    base_node_to_shell_nodes[(i + 1) * ny + j].append(4 * e + 1)
+                    base_node_to_shell_nodes[(i + 1) * ny + (j + 1)].append(4 * e + 2)
+                    base_node_to_shell_nodes[i * ny + (j + 1)].append(4 * e + 3)
+
+            coincident_nodes = np.zeros((4 * N_el, 4), dtype=np.int32) - 1
+            for g_idx in range(nx * ny):
+                shell_list = base_node_to_shell_nodes[g_idx]
+                for u in shell_list:
+                    for idx, v in enumerate(shell_list):
+                        coincident_nodes[u, idx] = v
+
             # Build tiebreak springs
             springs_list = []
             stiffness_list = []
@@ -377,6 +411,16 @@ def generate_rectangular_grid(
             # cohesive stiffness
             k_cohesive = (sig_max**2 * dx * t) / (0.04 * g_c)
 
+            node_czm_spring_ids = np.zeros((4 * N_el, 2), dtype=np.int32) - 1
+
+            def add_czm_spring_to_node(node_id: int, s_id: int) -> None:
+                assert node_czm_spring_ids is not None
+                if node_czm_spring_ids[node_id, 0] == -1:
+                    node_czm_spring_ids[node_id, 0] = s_id
+                elif node_czm_spring_ids[node_id, 1] == -1:
+                    node_czm_spring_ids[node_id, 1] = s_id
+
+            spring_idx = 0
             for i in range(nx - 1):
                 for j in range(ny - 1):
                     e = i * (ny - 1) + j
@@ -387,9 +431,16 @@ def generate_rectangular_grid(
                         # Corner 1 of e connected to Corner 0 of e_right
                         springs_list.append((4 * e + 1, 4 * e_right + 0))
                         stiffness_list.append(k_cohesive)
+                        add_czm_spring_to_node(4 * e + 1, spring_idx)
+                        add_czm_spring_to_node(4 * e_right + 0, spring_idx)
+                        spring_idx += 1
+
                         # Corner 2 of e connected to Corner 3 of e_right
                         springs_list.append((4 * e + 2, 4 * e_right + 3))
                         stiffness_list.append(k_cohesive)
+                        add_czm_spring_to_node(4 * e + 2, spring_idx)
+                        add_czm_spring_to_node(4 * e_right + 3, spring_idx)
+                        spring_idx += 1
 
                     # Check top neighbor
                     if j < ny - 2:
@@ -397,9 +448,16 @@ def generate_rectangular_grid(
                         # Corner 3 of e connected to Corner 0 of e_top
                         springs_list.append((4 * e + 3, 4 * e_top + 0))
                         stiffness_list.append(k_cohesive)
+                        add_czm_spring_to_node(4 * e + 3, spring_idx)
+                        add_czm_spring_to_node(4 * e_top + 0, spring_idx)
+                        spring_idx += 1
+
                         # Corner 2 of e connected to Corner 1 of e_top
                         springs_list.append((4 * e + 2, 4 * e_top + 1))
                         stiffness_list.append(k_cohesive)
+                        add_czm_spring_to_node(4 * e + 2, spring_idx)
+                        add_czm_spring_to_node(4 * e_top + 1, spring_idx)
+                        spring_idx += 1
 
             springs = np.array(springs_list, dtype=np.int32).reshape(-1, 2)
             stiffnesses = np.array(stiffness_list, dtype=np.float64)
@@ -415,6 +473,8 @@ def generate_rectangular_grid(
             tension_only = base_tension_only
             elements = base_elements
             is_tiebreak = None
+            coincident_nodes = None
+            node_czm_spring_ids = None
 
     failed = np.zeros(len(springs), dtype=bool)
 
@@ -428,4 +488,6 @@ def generate_rectangular_grid(
         tension_only=tension_only,
         elements=elements,
         is_tiebreak=is_tiebreak,
+        coincident_nodes=coincident_nodes,
+        node_czm_spring_ids=node_czm_spring_ids,
     )

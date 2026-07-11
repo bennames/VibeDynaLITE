@@ -71,14 +71,23 @@ To model progressive failure and ductile tearing when activated, VibeDynaLITE in
 
 ## Cohesive Zone Model (CZM) & Tiebreak Springs
 
-> [!WARNING]
-> **Status: Deactivated / Scrapped**
-> Cohesive inter-element tiebreak springs and duplicate node generation are currently bypassed (`use_czm = False`) to prevent artificial energy injection and study the pure shell continuum formulation.
+VibeDynaLITE includes a reactivated and physically robust **Cohesive Zone Model (CZM)** for simulating progressive crack propagation, tearing, and petaling in thin shell structures. Coincident duplicate nodes are generated along element boundaries and bonded by zero-length cohesive springs governing a decoupled mixed-mode bilinear Traction-Separation Law (TSL):
 
-When active, inter-element boundaries are bonded by zero-length cohesive springs governing a bilinear Traction-Separation Law (TSL):
-- **Initial Cohesive Stiffness**: $k_0 = \frac{\sigma_{\text{cohesive}}^2 dx \cdot h}{0.04 G_c}$
-- **Damage & Softening**: Softened force is $F_{\text{cohesive}} = (1 - d) k_0 \delta$.
-- **Rupture**: Permanent spring failure occurs when damage $d \ge 1.0$, allowing elements to separate.
+1. **Initial Cohesive Stiffness**: $k_0 = \frac{\sigma_{\text{cohesive}}^2 dx \cdot h}{0.04 G_c}$
+2. **Local Coordinate Projection**: The node separation vector $\mathbf{s} = \mathbf{x}_{n1} - \mathbf{x}_{n0}$ is projected onto the normal vector $\mathbf{n}_c$ connecting adjacent element centers:
+   $$\delta_n = \mathbf{s} \cdot \mathbf{n}_c$$
+   $$\mathbf{s}_t = \mathbf{s} - \delta_n \mathbf{n}_c, \quad \delta_t = \|\mathbf{s}_t\|$$
+3. **Decoupled Mixed-Mode Damage Driver**: The damage variable $d \in [0, 1]$ accumulates based on a positive equivalent displacement driver:
+   $$\delta_{mix} = \sqrt{\langle\delta_n\rangle^2 + \delta_t^2}$$
+   where $\langle\delta_n\rangle = \max(0, \delta_n)$. When $\delta_{mix} > \delta_0$, damage softens the interface:
+   $$d = \frac{\delta_c (\delta_{mix} - \delta_0)}{\delta_{mix} (\delta_c - \delta_0)}$$
+4. **Thermodynamic Contact Constraints**: Under compression ($\delta_n < 0$), the normal contact stiffness remains fully undamaged ($k_{normal} = k_0$), while shear stiffness softens with damage:
+   $$f_n = k_0 \delta_n \quad (\text{if } \delta_n < 0)$$
+   $$f_n = (1 - d) k_0 \delta_n \quad (\text{if } \delta_n \ge 0)$$
+   $$f_t = (1 - d) k_0 \delta_t$$
+5. **Rayleigh Cohesive Damping**: To suppress dynamic stress wave oscillations, stiffness-proportional damping is added to the cohesive force, scaled by the remaining damage factor:
+   $$\mathbf{f}_{\text{damp}} = \beta k_0 (1 - d) \mathbf{v}_{\text{rel}}$$
+6. **Dynamic Contact Kinematics Coupling**: When a projectile strikes duplicate nodes, a local Breadth-First Search (BFS) is run along active cohesive springs to construct connected tied node clusters. The penalty contact force is evaluated on the cluster-average kinematics and distributed back to the active nodes based on active-element weight metrics. This eliminates artificial unzipping and spurious shear tearing.
 
 ---
 
