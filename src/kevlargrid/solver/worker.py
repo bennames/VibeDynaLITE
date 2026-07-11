@@ -213,11 +213,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 y_dV_sum += y * dV
             y_com = y_dV_sum / dV_sum if dV_sum > 0 else 0.0
 
-            for sign in [-1.0, 1.0]:
-                y_tip = sign * span - y_com
-                c = c_t
-                local_pts.append(np.array([c / 2, y_tip, 0.0]))
-                local_pts.append(np.array([-c / 2, y_tip, 0.0]))
+            # Single-bladed propeller extends only in the positive Y direction (from local Y = -y_com to span - y_com)
+            y_tip = span - y_com
+            c = c_t
+            local_pts.append(np.array([c / 2, y_tip, 0.0]))
+            local_pts.append(np.array([-c / 2, y_tip, 0.0]))
             local_pts.append(np.array([c_r / 2, -y_com, 0.0]))
             local_pts.append(np.array([-c_r / 2, -y_com, 0.0]))
         else:
