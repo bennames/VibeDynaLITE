@@ -181,6 +181,12 @@ def normalize_config_units(config: dict) -> None:
             mat["cohesive_strength_gpa"] = parse_unit_value(mat["cohesive_strength_gpa"], "gpa")
         if "fracture_energy_jm2" in mat:
             mat["fracture_energy_jm2"] = parse_unit_value(mat["fracture_energy_jm2"], "jm2")
+        if "rate_parameter_c" in mat:
+            mat["rate_parameter_c"] = float(mat["rate_parameter_c"])
+        if "rate_parameter_p" in mat:
+            mat["rate_parameter_p"] = float(mat["rate_parameter_p"])
+        if "softening_steps" in mat:
+            mat["softening_steps"] = int(mat["softening_steps"])
 
     if "grid" in config and isinstance(config["grid"], dict):
         grid = config["grid"]
@@ -441,6 +447,25 @@ def validate_config(config: dict) -> bool:
             pr = mat["poisson_ratio"]
             if not isinstance(pr, (int, float)) or pr < 0.0 or pr >= 0.5:
                 raise ValidationError(f"poisson_ratio must be in range [0.0, 0.5) (got {pr}).")
+
+        if "rate_parameter_c" not in mat:
+            mat["rate_parameter_c"] = 40.0
+        else:
+            c_val = mat["rate_parameter_c"]
+            if not isinstance(c_val, (int, float)) or c_val <= 0.0:
+                raise ValidationError(f"rate_parameter_c must be a positive number (got {c_val}).")
+        if "rate_parameter_p" not in mat:
+            mat["rate_parameter_p"] = 5.0
+        else:
+            p_val = mat["rate_parameter_p"]
+            if not isinstance(p_val, (int, float)) or p_val <= 0.0:
+                raise ValidationError(f"rate_parameter_p must be a positive number (got {p_val}).")
+        if "softening_steps" not in mat:
+            mat["softening_steps"] = 10
+        else:
+            s_val = mat["softening_steps"]
+            if not isinstance(s_val, int) or s_val <= 0:
+                raise ValidationError(f"softening_steps must be a positive integer (got {s_val}).")
 
     # 3. Grid validation
     grid = config["grid"]

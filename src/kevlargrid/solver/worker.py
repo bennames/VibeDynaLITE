@@ -293,6 +293,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             n_elems = len(grid.elements)
             grid.element_stress = np.zeros((n_elems, 3, 3), dtype=np.float64)
             grid.element_peeq = np.zeros((n_elems, 3), dtype=np.float64)
+            grid.element_peeq_rate = np.zeros((n_elems, 3), dtype=np.float64)
             grid.element_damage = np.zeros((n_elems, 3), dtype=np.float64)
             el_failed = grid.element_failed
             if el_failed is None or el_failed.shape[0] != n_elems:
@@ -365,10 +366,14 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "fracture_energy_jm2": mat.get("fracture_energy_jm2", 50000.0),
                 "use_czm": use_czm,
                 "tensile_strength_gpa": mat.get("tensile_strength_gpa", 0.0),
+                "rate_parameter_c": mat.get("rate_parameter_c", 40.0),
+                "rate_parameter_p": mat.get("rate_parameter_p", 5.0),
+                "softening_steps": mat.get("softening_steps", 10),
             }
             if structure_type == "metallic_sheet":
                 extra_kwargs["element_stress"] = grid.element_stress
                 extra_kwargs["element_peeq"] = grid.element_peeq
+                extra_kwargs["element_peeq_rate"] = grid.element_peeq_rate
                 extra_kwargs["element_damage"] = grid.element_damage
                 extra_kwargs["element_failed"] = grid.element_failed
 

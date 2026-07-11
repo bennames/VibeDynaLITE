@@ -29,6 +29,7 @@ PLOT_FILE = Path(__file__).parent / "performance_comparison.png"
 def run_benchmark(arch_name: str, size: int, mode: str, n_steps: int = 50) -> float:
     """Run simulation with specific arch, grid size, and mode, returning average time per step in ms."""
     if arch_name == "numba":
+        os.environ["KEVLARGRID_BACKEND"] = "numba"
         from kevlargrid.solver.fused import fused_leapfrog_loop as solver_loop
     else:
         import taichi as ti
@@ -207,6 +208,8 @@ def run_all() -> None:
                 try:
                     # Launch a separate process to avoid import-time JIT caching
                     env = os.environ.copy()
+                    if arch == "numba":
+                        env["KEVLARGRID_BACKEND"] = "numba"
                     cmd = [
                         sys.executable,
                         __file__,

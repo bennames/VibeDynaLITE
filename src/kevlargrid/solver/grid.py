@@ -47,6 +47,7 @@ class Grid:
     elements: np.ndarray
     element_stress: np.ndarray | None
     element_peeq: np.ndarray | None
+    element_peeq_rate: np.ndarray | None
     element_damage: np.ndarray | None
     element_failed: np.ndarray | None
     is_tiebreak: np.ndarray
@@ -87,6 +88,7 @@ class Grid:
         self.elements = elements if elements is not None else np.zeros((0, 4), dtype=np.int32)
         self.element_stress = None
         self.element_peeq = None
+        self.element_peeq_rate = None
         self.element_damage = None
         if elements is not None and len(elements) > 0:
             self.element_failed = np.zeros(len(elements), dtype=bool)

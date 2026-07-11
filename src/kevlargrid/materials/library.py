@@ -61,6 +61,9 @@ MATERIALS: dict[str, dict[str, str | float | tuple[int, int]]] = {
         "poisson_ratio": 0.30,
         "cohesive_strength_gpa": 0.485,
         "fracture_energy_jm2": 50000.0,
+        "rate_parameter_c": 40.0,
+        "rate_parameter_p": 5.0,
+        "softening_steps": 10,
     },
 }
 

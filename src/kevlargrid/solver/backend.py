@@ -134,8 +134,11 @@ def _compile_func(func: Callable[..., Any], backend_name: str, **kwargs: Any) ->
         numba_kwargs = {
             k: v for k, v in kwargs.items() if k not in ("static_argnums", "static_argnames")
         }
-        if "parallel" not in numba_kwargs:
-            numba_kwargs["parallel"] = True
+        if sys.platform == "darwin":
+            numba_kwargs["parallel"] = False
+        else:
+            if "parallel" not in numba_kwargs:
+                numba_kwargs["parallel"] = True
         if "fastmath" not in numba_kwargs:
             numba_kwargs["fastmath"] = True
         return numba.jit(nopython=True, cache=NUMBA_CACHE, **numba_kwargs)(func)  # type: ignore[no-any-return]

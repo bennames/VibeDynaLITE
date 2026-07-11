@@ -1156,6 +1156,7 @@ def test_ramberg_osgood_nonlinear_hardening():
     element_strains = np.zeros((1, 8), dtype=np.float64)
     element_stress = np.zeros((1, 3, 3), dtype=np.float64)
     element_peeq = np.zeros((1, 3), dtype=np.float64)
+    element_peeq_rate = np.zeros((1, 3), dtype=np.float64)
     element_damage = np.zeros((1, 3), dtype=np.float64)
     element_failed = np.array([0], dtype=np.int32)
     element_failed_step = np.array([-1], dtype=np.int32)
@@ -1189,6 +1190,9 @@ def test_ramberg_osgood_nonlinear_hardening():
         element_failed_step=element_failed_step,
         current_step=1,
         erosion_softening_steps=10,
+        element_peeq_rate=element_peeq_rate,
+        rate_parameter_c=0.0,
+        rate_parameter_p=5.0,
     )
 
     # Check von Mises stress at point 0
@@ -1232,6 +1236,9 @@ def test_ramberg_osgood_nonlinear_hardening():
         element_failed_step=element_failed_step,
         current_step=2,
         erosion_softening_steps=10,
+        element_peeq_rate=element_peeq_rate,
+        rate_parameter_c=0.0,
+        rate_parameter_p=5.0,
     )
 
     peeq2 = element_peeq[0, 0]

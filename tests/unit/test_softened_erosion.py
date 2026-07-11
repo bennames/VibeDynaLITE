@@ -38,17 +38,18 @@ def test_softened_force_decay():
         stiffnesses,
         rest_lengths,
         failed,
-        damage_onset_strain=0.1,
-        failure_strain=0.2,
+        damage_onset_strain=0.4,
+        failure_strain=0.4,
         grid_damage=grid_damage,
         spring_failed_step=spring_failed_step,
         current_step=100,
         fracture_energy_multiplier=1.0,
+        erosion_softening_steps=10,
     )
 
     assert failed[0]
     assert spring_failed_step[0] == 100
-    assert eff_k[0] == 0.0
+    assert np.isclose(eff_k[0], stiffnesses[0] * 0.9)
     assert step_fe > 0.0
 
     # 2. Check forces during softening phase (steps 100 to 110)
@@ -74,11 +75,25 @@ def test_softened_force_decay():
     assert force_mag_100 > 0.0
 
     # At step 105, age = 5, ramp = 0.5, force is exactly halved
+    eff_k_105, _ = numba_compute_effective_k(
+        positions,
+        springs,
+        stiffnesses,
+        rest_lengths,
+        failed,
+        damage_onset_strain=0.4,
+        failure_strain=0.4,
+        grid_damage=grid_damage,
+        spring_failed_step=spring_failed_step,
+        current_step=105,
+        fracture_energy_multiplier=1.0,
+        erosion_softening_steps=10,
+    )
     forces_105, _ = numba_parallel_compute_spring_forces(
         positions,
         velocities,
         springs,
-        eff_k,
+        eff_k_105,
         stiffnesses,
         rest_lengths,
         tension_only,
@@ -95,11 +110,25 @@ def test_softened_force_decay():
     assert np.isclose(force_mag_105, 0.5 * force_mag_100)
 
     # At step 110, age = 10, ramp = 0.0, force is exactly 0.0
+    eff_k_110, _ = numba_compute_effective_k(
+        positions,
+        springs,
+        stiffnesses,
+        rest_lengths,
+        failed,
+        damage_onset_strain=0.4,
+        failure_strain=0.4,
+        grid_damage=grid_damage,
+        spring_failed_step=spring_failed_step,
+        current_step=110,
+        fracture_energy_multiplier=1.0,
+        erosion_softening_steps=10,
+    )
     forces_110, _ = numba_parallel_compute_spring_forces(
         positions,
         velocities,
         springs,
-        eff_k,
+        eff_k_110,
         stiffnesses,
         rest_lengths,
         tension_only,
