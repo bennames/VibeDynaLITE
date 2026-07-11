@@ -622,9 +622,9 @@ def numba_compute_effective_k(
         length = np.sqrt(dx * dx + dy * dy + dz * dz)
         strain = (length - rest_lengths[i]) / rest_lengths[i]
 
-        denom = failure_strain - damage_onset_strain
-        denom_safe = denom if denom != 0.0 else 1.0
-        val = (strain - damage_onset_strain) / denom_safe
+        denom_strain = failure_strain - damage_onset_strain
+        denom_strain_safe = denom_strain if denom_strain != 0.0 else 1.0
+        val = (strain - damage_onset_strain) / denom_strain_safe
         damage = 0.0
         if val > 0.0:
             damage = val if val < 1.0 else 1.0
