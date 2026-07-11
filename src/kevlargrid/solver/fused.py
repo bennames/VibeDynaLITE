@@ -620,7 +620,10 @@ def numba_compute_effective_k(
         dy = positions[n1, 1] - positions[n0, 1]
         dz = positions[n1, 2] - positions[n0, 2]
         length = np.sqrt(dx * dx + dy * dy + dz * dz)
-        strain = (length - rest_lengths[i]) / rest_lengths[i]
+        if rest_lengths[i] > 0.0:
+            strain = (length - rest_lengths[i]) / rest_lengths[i]
+        else:
+            strain = length
 
         denom_strain = failure_strain - damage_onset_strain
         denom_strain_safe = denom_strain if denom_strain != 0.0 else 1.0
@@ -2460,16 +2463,14 @@ def _fused_shell_loop_jit(
 
     if cfl_factor > 0.0:
         c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
-        omega_max = 2.0 * c_p / dx
+        omega_shell = 2.0 * c_p / dx
+        k_total = mass_min * (omega_shell**2)
         if use_czm:
-            omega_spring = sqrt(4.0 * k_0 / mass_min)
-            if omega_spring > omega_max:
-                omega_max = omega_spring
-        dt_crit = sqrt(rayleigh_beta**2 + 4.0 / (omega_max**2)) - rayleigh_beta
+            k_total += 4.0 * k_0
         if k_penalty > 0.0:
-            dt_contact = 2.0 * sqrt(mass_min / k_penalty)
-            if dt_contact < dt_crit:
-                dt_crit = dt_contact
+            k_total += 4.0 * k_penalty
+        omega_max = sqrt(k_total / mass_min)
+        dt_crit = sqrt(rayleigh_beta**2 + 4.0 / (omega_max**2)) - rayleigh_beta
         dt = cfl_factor * dt_crit
 
     accel = zeros((n_nodes, 3), dtype=positions.dtype)

@@ -1252,3 +1252,40 @@ def test_ramberg_osgood_nonlinear_hardening():
     assert peeq2 > ultimate_strain
     assert sig_vm2 >= tensile_strength
     assert sig_vm2 < tensile_strength + 1e7
+
+
+def test_summed_stiffness_and_zero_rest_length_cohesive():
+    """Verify that summed-stiffness CFL limit and zero rest-length cohesive springs are handled stably."""
+    from kevlargrid.solver.fused import numba_compute_effective_k
+    import numpy as np
+
+    # 1. Zero rest-length cohesive spring check
+    positions = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.001]], dtype=np.float64)
+    springs = np.array([[0, 1]], dtype=np.int32)
+    stiffnesses = np.array([1000.0], dtype=np.float64)
+    rest_lengths = np.array([0.0], dtype=np.float64)  # Zero rest length
+    failed = np.array([False], dtype=np.bool_)
+    grid_damage = np.array([0.0], dtype=np.float64)
+    spring_failed_step = np.array([-1], dtype=np.int32)
+
+    # Calling compute_effective_k should run without division by zero
+    eff_k, step_fe = numba_compute_effective_k(
+        positions=positions,
+        springs=springs,
+        stiffnesses=stiffnesses,
+        rest_lengths=rest_lengths,
+        failed=failed,
+        damage_onset_strain=0.0005,
+        failure_strain=0.002,
+        grid_damage=grid_damage,
+        spring_failed_step=spring_failed_step,
+        current_step=0,
+        fracture_energy_multiplier=1.0,
+        erosion_softening_steps=10,
+    )
+    # Since Rest Length is 0, separation distance (0.001) > damage_onset_strain (0.0005)
+    # This should yield non-zero damage and stable effective stiffness
+    assert grid_damage[0] > 0.0
+    assert grid_damage[0] < 1.0
+    assert eff_k[0] < 1000.0
+    assert eff_k[0] > 0.0
