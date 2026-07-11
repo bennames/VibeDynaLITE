@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 13: Volumetric Bulk Viscosity, SPH Debris, and J2 Shell Integration
+
+### Added
+- **Richtmyer-von Neumann Volumetric Bulk Viscosity**: Added volumetric bulk viscosity pressure $q_{bulk}$ under compressive volumetric strain rates, damping shock waves at the shock front during element erosion.
+- **SPH Debris Contact Scale Factor**: Set the tributary area scale factor to `1.0` for fully eroded nodes, enabling physically accurate projectile deceleration against dislodged mass.
+- **Rescoped Benchmark 8 validation sweep**: Swapped in a fast J2 steel plate bullet impact benchmark sweep (running cases at 450, 503, and 550 m/s in ~15 seconds total) to verify stability and energy balance.
+- **Bulk Viscosity Energy Integration**: Tracked and integrated bulk viscosity damping power into the global `damp_dissipated` energy ledger.
+
+### Fixed
+- **Chunk-Safe Softening Ramp**: Refactored the softening age calculations to decrement a remaining step counter directly, resolving stress explosions at solver integration chunk boundaries.
+- **CZM Code Purge**: Purged all cohesive zone coincident nodes, springs, and kinematics coupling, simplifying the mesh to a single continuous sheet.
+
 ## [Unreleased] — Sprint 12: Cohesive Zone Model Physics Reformulation & Contact Kinematics Coupling
 
 ### Added

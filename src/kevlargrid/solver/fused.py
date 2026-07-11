@@ -1115,7 +1115,7 @@ def numba_compute_projectile_contact_forces(
                 if active_counts[i] > 0.0:
                     node_scale_factor = float(active_counts[i]) / float(node_initial_springs[i])
                 else:
-                    node_scale_factor = 1.0 / float(node_initial_springs[i])
+                    node_scale_factor = 1.0
 
             proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
             proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
@@ -1898,9 +1898,9 @@ def numba_step_shell_forces_and_failures(
             continue
 
         if is_softening:
-            age = current_step - element_failed_step[e]
-            ramp = 1.0 - float(age) / float(erosion_softening_steps)
-            if ramp <= 0.0:
+            element_failed_step[e] -= 1
+            ramp = float(element_failed_step[e]) / float(erosion_softening_steps)
+            if element_failed_step[e] <= 0:
                 element_failed[e] = 1
                 continue
 
@@ -2134,7 +2134,7 @@ def numba_step_shell_forces_and_failures(
             # Damage evolution
             if ultimate_strain > 0.0 and peeq_new > ultimate_strain:
                 if fracture_energy_jm2 > 0.0:
-                    d_dmg = (yield_val * dx * d_peeq) / fracture_energy_jm2
+                    d_dmg = (yield_val * dx * d_peeq) / (2.0 * fracture_energy_jm2)
                 else:
                     d_dmg = d_peeq / eps_f
                 dmg_val = element_damage[e, k] + d_dmg
@@ -2170,7 +2170,7 @@ def numba_step_shell_forces_and_failures(
                 or (element_damage[e, 0] >= 0.95 and element_damage[e, 4] >= 0.95)
             ):
                 element_failed[e] = 2  # softening
-                element_failed_step[e] = current_step
+                element_failed_step[e] = erosion_softening_steps
                 ramp = 1.0
 
         # Calculate average damage factor for transverse shear scaling
@@ -2214,10 +2214,17 @@ def numba_step_shell_forces_and_failures(
             sig_yy_damp = rayleigh_beta * C_mat * (e_dot_yy_k + nu * e_dot_xx_k)
             tau_xy_damp = rayleigh_beta * G * g_dot_xy_k
 
+            # Volumetric Bulk Viscosity
+            eps_vol_dot = e_dot_xx_k + e_dot_yy_k
+            q_bulk = 0.0
+            if eps_vol_dot < 0.0:
+                c_sound = sqrt(E / density_kgm3)
+                q_bulk = density_kgm3 * dx * (0.06 * c_sound * abs(eps_vol_dot) + 1.5 * dx * (eps_vol_dot**2))
+
             d_factor = 1.0 - element_damage[e, k] if ultimate_strain > 0.0 else 1.0
 
-            sig_xx_total = (sig_xx + sig_xx_damp) * d_factor
-            sig_yy_total = (sig_yy + sig_yy_damp) * d_factor
+            sig_xx_total = (sig_xx + sig_xx_damp - q_bulk) * d_factor
+            sig_yy_total = (sig_yy + sig_yy_damp - q_bulk) * d_factor
             tau_xy_total = (tau_xy + tau_xy_damp) * d_factor
 
             N_xx += wk * sig_xx_total
@@ -2229,7 +2236,7 @@ def numba_step_shell_forces_and_failures(
             M_xy += wk * tau_xy_total * zk
 
             step_stiff_damp_power += (
-                (sig_xx_damp * e_dot_xx_k + sig_yy_damp * e_dot_yy_k + tau_xy_damp * g_dot_xy_k)
+                ((sig_xx_damp - q_bulk) * e_dot_xx_k + (sig_yy_damp - q_bulk) * e_dot_yy_k + tau_xy_damp * g_dot_xy_k)
                 * wk
                 * (dx * dx)
             )
