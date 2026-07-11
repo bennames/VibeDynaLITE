@@ -1256,8 +1256,9 @@ def test_ramberg_osgood_nonlinear_hardening():
 
 def test_summed_stiffness_and_zero_rest_length_cohesive():
     """Verify that summed-stiffness CFL limit and zero rest-length cohesive springs are handled stably."""
-    from kevlargrid.solver.fused import numba_compute_effective_k
     import numpy as np
+
+    from kevlargrid.solver.fused import numba_compute_effective_k
 
     # 1. Zero rest-length cohesive spring check
     positions = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.001]], dtype=np.float64)
