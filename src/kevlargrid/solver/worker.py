@@ -177,25 +177,25 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         if s_lower == "box":
             w = proj_cfg.get("blade_width", 0.02)
             t = edge_thickness
-            l = length
+            l_val = length
             for dx in [-w / 2, w / 2]:
-                for dy in [-l / 2, l / 2]:
+                for dy in [-l_val / 2, l_val / 2]:
                     for dz in [-t / 2, t / 2]:
                         local_pts.append(np.array([dx, dy, dz]))
         elif s_lower == "sphere":
             h_half = radius
         elif s_lower == "cylinder":
             r = radius
-            l = length
+            l_val = length
             for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
-                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), l / 2]))
-                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l / 2]))
+                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), l_val / 2]))
+                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l_val / 2]))
         elif s_lower == "bullet":
             r = radius
-            l = length
+            l_val = length
             for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
-                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l / 2]))
-            local_pts.append(np.array([0.0, 0.0, l / 2]))
+                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l_val / 2]))
+            local_pts.append(np.array([0.0, 0.0, l_val / 2]))
         elif s_lower == "propeller":
             span = proj_cfg.get("span", 0.05)
             c_r = proj_cfg.get("root_chord", 0.01)
