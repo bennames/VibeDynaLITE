@@ -357,10 +357,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         structure_type = sim_cfg.get("structure_type", "fabric")
         if structure_type == "metallic_sheet":
             n_elems = len(grid.elements)
-            grid.element_stress = np.zeros((n_elems, 3, 3), dtype=np.float64)
-            grid.element_peeq = np.zeros((n_elems, 3), dtype=np.float64)
-            grid.element_peeq_rate = np.zeros((n_elems, 3), dtype=np.float64)
-            grid.element_damage = np.zeros((n_elems, 3), dtype=np.float64)
+            grid.element_stress = np.zeros((n_elems, 5, 3), dtype=np.float64)
+            grid.element_peeq = np.zeros((n_elems, 5), dtype=np.float64)
+            grid.element_peeq_rate = np.zeros((n_elems, 5), dtype=np.float64)
+            grid.element_damage = np.zeros((n_elems, 5), dtype=np.float64)
             el_failed = grid.element_failed
             if el_failed is None or el_failed.shape[0] != n_elems:
                 grid.element_failed = np.zeros(n_elems, dtype=bool)

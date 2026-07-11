@@ -629,31 +629,42 @@ def validate_config(config: dict) -> bool:
 
     if sim["structure_type"] == "metallic_sheet":
         if "use_czm" not in sim:
-            sim["use_czm"] = True
+            sim["use_czm"] = False
         if not isinstance(sim["use_czm"], bool):
             raise ValidationError(
                 f"Simulation parameter 'use_czm' must be a boolean (got {type(sim['use_czm']).__name__})."
             )
-        if sim["use_czm"]:
-            from kevlargrid.materials.library import MATERIALS
+        from kevlargrid.materials.library import MATERIALS
 
-            mat_name = mat.get("name", "")
+        mat_name = mat.get("name", "")
+        if "fracture_energy_jm2" not in mat:
+            if mat_name in MATERIALS and "fracture_energy_jm2" in MATERIALS[mat_name]:
+                mat["fracture_energy_jm2"] = MATERIALS[mat_name]["fracture_energy_jm2"]
+            else:
+                mat["fracture_energy_jm2"] = 50000.0
+
+        if (
+            not isinstance(mat["fracture_energy_jm2"], (int, float))
+            or mat["fracture_energy_jm2"] <= 0.0
+        ):
+            raise ValidationError(
+                f"Material property 'fracture_energy_jm2' must be a positive number (got {mat['fracture_energy_jm2']})."
+            )
+
+        if sim["use_czm"]:
             if "cohesive_strength_gpa" not in mat:
                 if mat_name in MATERIALS and "cohesive_strength_gpa" in MATERIALS[mat_name]:
                     mat["cohesive_strength_gpa"] = MATERIALS[mat_name]["cohesive_strength_gpa"]
                 else:
                     mat["cohesive_strength_gpa"] = mat.get("tensile_strength_gpa", 0.485)
-            if "fracture_energy_jm2" not in mat:
-                if mat_name in MATERIALS and "fracture_energy_jm2" in MATERIALS[mat_name]:
-                    mat["fracture_energy_jm2"] = MATERIALS[mat_name]["fracture_energy_jm2"]
-                else:
-                    mat["fracture_energy_jm2"] = 50000.0
 
-            for key in ["cohesive_strength_gpa", "fracture_energy_jm2"]:
-                if not isinstance(mat[key], (int, float)) or mat[key] <= 0.0:
-                    raise ValidationError(
-                        f"Material cohesive property '{key}' must be a positive number (got {mat[key]})."
-                    )
+            if (
+                not isinstance(mat["cohesive_strength_gpa"], (int, float))
+                or mat["cohesive_strength_gpa"] <= 0.0
+            ):
+                raise ValidationError(
+                    f"Material cohesive property 'cohesive_strength_gpa' must be a positive number (got {mat['cohesive_strength_gpa']})."
+                )
 
     model = sim.get("damping_model")
     if model is None:

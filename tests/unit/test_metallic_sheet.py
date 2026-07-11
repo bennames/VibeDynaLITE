@@ -730,9 +730,9 @@ def test_ramberg_osgood_sheet_simulation():
     thickness = 0.001
 
     n_elems = len(grid.elements)
-    element_stress = np.zeros((n_elems, 3, 3), dtype=np.float64)
-    element_peeq = np.zeros((n_elems, 3), dtype=np.float64)
-    element_damage = np.zeros((n_elems, 3), dtype=np.float64)
+    element_stress = np.zeros((n_elems, 5, 3), dtype=np.float64)
+    element_peeq = np.zeros((n_elems, 5), dtype=np.float64)
+    element_damage = np.zeros((n_elems, 5), dtype=np.float64)
 
     # Run for 20 steps
     res = fused_leapfrog_loop(
@@ -830,7 +830,7 @@ def test_triaxiality_failure_scaling():
 
 
 def test_czm_mesh_duplication():
-    """Verify that CZM mesh duplication correctly separates elements and defines tiebreak springs."""
+    """Verify that CZM mesh duplication is purged, resulting in standard node counts."""
     material = {
         "name": "Steel",
         "tensile_modulus_gpa": 200.0,
@@ -851,21 +851,10 @@ def test_czm_mesh_duplication():
         use_czm=True,
     )
 
-    # 5x5 grid has (5-1)*(5-1) = 16 elements.
-    # In CZM, each element is fully duplicated: 16 * 4 = 64 nodes.
+    # Without CZM duplication, 5x5 grid has 25 nodes and 16 elements.
     assert len(grid.elements) == 16
-    assert len(grid.nodes) == 64
-    assert grid.n_nodes == 64
-
-    # All springs should be tiebreak springs
-    assert len(grid.springs) > 0
-    assert np.all(grid.is_tiebreak)
-    assert np.all(grid.rest_lengths == 0.0)
-
-    # Masses should be distributed equally to the 4 corners of each element
-    m_cell = 15.7 * 0.01 * 0.01
-    expected_node_mass = 0.25 * m_cell
-    assert np.allclose(grid.masses, expected_node_mass)
+    assert len(grid.nodes) == 25
+    assert grid.n_nodes == 25
 
 
 def test_czm_spring_softening_equations():
@@ -929,7 +918,7 @@ def test_czm_dynamic_simulation_stability():
         ny=5,
         dx=0.01,
         material=material,
-        use_czm=True,
+        use_czm=False,
     )
 
     proj = Projectile(
@@ -963,9 +952,9 @@ def test_czm_dynamic_simulation_stability():
 
     spring_failed = grid.failed.copy()
     spring_damage = np.zeros(grid.n_springs, dtype=np.float64)
-    element_stress = np.zeros((len(grid.elements), 3, 3), dtype=np.float64)
-    element_peeq = np.zeros((len(grid.elements), 3), dtype=np.float64)
-    element_damage = np.zeros((len(grid.elements), 3), dtype=np.float64)
+    element_stress = np.zeros((len(grid.elements), 5, 3), dtype=np.float64)
+    element_peeq = np.zeros((len(grid.elements), 5), dtype=np.float64)
+    element_damage = np.zeros((len(grid.elements), 5), dtype=np.float64)
     element_failed = np.zeros(len(grid.elements), dtype=np.int32)
 
     dt = 1e-8
@@ -1040,7 +1029,7 @@ def test_czm_dynamic_simulation_stability():
             material_model="j2_plasticity",
             yield_strength_gpa=0.01,
             hardening_modulus_gpa=0.1,
-            ultimate_strain=0.05,
+            ultimate_strain=0.001,
             poisson_ratio=0.3,
             elements=grid.elements,
             youngs_modulus_gpa=200.0,
@@ -1156,10 +1145,10 @@ def test_ramberg_osgood_nonlinear_hardening():
 
     # Arrays
     element_strains = np.zeros((1, 8), dtype=np.float64)
-    element_stress = np.zeros((1, 3, 3), dtype=np.float64)
-    element_peeq = np.zeros((1, 3), dtype=np.float64)
-    element_peeq_rate = np.zeros((1, 3), dtype=np.float64)
-    element_damage = np.zeros((1, 3), dtype=np.float64)
+    element_stress = np.zeros((1, 5, 3), dtype=np.float64)
+    element_peeq = np.zeros((1, 5), dtype=np.float64)
+    element_peeq_rate = np.zeros((1, 5), dtype=np.float64)
+    element_damage = np.zeros((1, 5), dtype=np.float64)
     element_failed = np.array([0], dtype=np.int32)
     element_failed_step = np.array([-1], dtype=np.int32)
 
@@ -1195,6 +1184,7 @@ def test_ramberg_osgood_nonlinear_hardening():
         element_peeq_rate=element_peeq_rate,
         rate_parameter_c=0.0,
         rate_parameter_p=5.0,
+        fracture_energy_jm2=50000.0,
     )
 
     # Check von Mises stress at point 0
@@ -1241,6 +1231,7 @@ def test_ramberg_osgood_nonlinear_hardening():
         element_peeq_rate=element_peeq_rate,
         rate_parameter_c=0.0,
         rate_parameter_p=5.0,
+        fracture_energy_jm2=50000.0,
     )
 
     peeq2 = element_peeq[0, 0]

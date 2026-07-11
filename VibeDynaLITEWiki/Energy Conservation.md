@@ -28,17 +28,17 @@ Computed by `compute_strain_energy()` in `energy.py`:
 - **Fabric Mode**: The potential energy stored in all active (non-failed) springs:
   $$SE = \sum_j \frac{1}{2} k_j (\varepsilon_j \cdot L_{0,j})^2$$
   Only tensile strains are counted (compressive strain energy is zeroed via `maximum(0.0, strains)`). Failed springs contribute zero strain energy.
-- **Shell Element Mode**: The strain energy of the shell elements computed from active element stresses integrated over the element volume:
-  $$SE = \sum_e \frac{1}{2} dx^2 h \frac{\sum_{k=1}^3 \left(\sigma_{xx, k}^2 + \sigma_{yy, k}^2 + 3\tau_{xy, k}^2\right)}{E}$$
-  where $h$ is thickness, $dx$ is element size, and $k$ represents the through-thickness integration points. Eroded elements contribute zero strain energy.
+- **Shell Element Mode**: The strain energy of the shell elements computed from active element stresses integrated over the element volume using Simpson's 5-Point Rule:
+  $$SE = \sum_e \frac{1}{2} dx^2 \sum_{k=1}^5 w_k \frac{\sigma_{xx, k}^2 + \sigma_{yy, k}^2 - 2\nu\sigma_{xx, k}\sigma_{yy, k} + 2(1+\nu)\tau_{xy, k}^2}{E} (1 - d_k)$$
+  where $dx$ is element size, $k$ represents the 5 Simpson thickness integration points, $w_k \in \{h/12, 4h/12, 2h/12, 4h/12, h/12\}$ are the thickness integration weights, $\nu$ is Poisson's ratio, and $d_k$ is the local damage at integration point $k$. Eroded elements contribute zero strain energy.
 
 ### $E_{contact}$ — Contact Potential Energy
 
-The elastic potential energy stored in penalty contact springs:
+The elastic potential energy stored in penalty contact springs. When contact forces are capped to structural shear capacity $f_{\text{cap}}$, the elastic potential energy stored in contact is:
 
-$$E_{contact} = \sum_c \frac{1}{2} k_{penalty} \delta_c^2$$
+$$E_{contact} = \sum_i 0.5 \frac{F_{elastic, capped}^2}{k_{penalty}} \cdot \text{scale\_factor}_i$$
 
-where $\delta_c$ is the penetration depth at contacting nodes. This term is added to the elastic strain energy in the solver telemetry (`hist_se`) and is key to preserving overall energy balance during active impact.
+where $F_{elastic, capped} = \min(k_{penalty} \cdot \delta_i, f_{\text{cap}})$, and $\delta_i$ is the penetration depth. This capped formulation ensures contact energy calculations remain perfectly consistent with the actual forces applied to the nodes, eliminating artificial energy growth.
 
 ### $KE_{projectile}$ — Projectile Kinetic Energy
 

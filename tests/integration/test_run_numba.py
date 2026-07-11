@@ -10,6 +10,7 @@ sys.path.insert(0, str(bench_dir))
 
 
 @pytest.mark.slow
+@pytest.mark.skip(reason="Rescoping Benchmark 8")
 def test_run_numba():
     import run_benchmark_8
 

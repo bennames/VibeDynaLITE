@@ -112,7 +112,29 @@ This guarantees that plastic return mapping can only decrease or keep stress con
 
 ---
 
-## 5. Deactivation of Erosion in favor of Plastic Saturation (Current Stage)
+## 5. Reactivation and Upgrade of Shell Element Erosion (Current Stage)
 
-To completely eliminate numerical instabilities and energy spikes associated with element deletion, element erosion is currently deactivated. Instead, the solver utilizes a **nonlinear Ramberg-Osgood plasticity curve** that transitions to an extremely soft tangent modulus ($H_{\text{soft}} = 10$ MPa) past the material's `ultimate_strain` limit. This allows stresses to saturate near the tensile strength and the elements to deform plastically indefinitely without creating force discontinuities or contact spikes.
+To accurately capture high-velocity perforation, plugging, and fragmentation, shell element erosion has been reactivated and significantly upgraded:
+
+### 5.1 Damage Evolution Onset Threshold
+To prevent premature cascading damage across the plastic zone, ductile J2 damage now strictly evolves only when the local equivalent plastic strain $PEEQ$ exceeds the damage onset strain ($ultimate\_strain$):
+* **Hardening Phase ($PEEQ \le ultimate\_strain$)**: No damage accumulates, and the material retains its full carrying capacity.
+* **Softening Phase ($PEEQ > ultimate\_strain$)**: Damage evolves incrementally based on the plastic strain increment $d\_peeq$ and fracture energy $G_f$.
+
+This prevents the initial plastic deformation wave from weakening the entire sheet and resolves the unzipping/cascading failure wave issue.
+
+### 5.2 Multi-Point Shell Failure Criterion
+In shell bending, the neutral axis (the center integration point, $k=2$) remains near zero strain, which previously caused the element to never fail despite full cracking of the outer layers (neutral-axis lock-up). We now employ a multi-point shell failure criterion:
+An element initiates softening and eventual erosion when:
+1. **Average Damage**: The mean damage across all 5 thickness points is $\ge 70\%$.
+2. **Neutral Axis Damage**: The damage at the center integration point $k=2$ is $\ge 90\%$.
+3. **Outer Surface Damage**: Both outer integration points (0 and 4) are $\ge 95\%$ damaged.
+
+This physically and numerically represents through-thickness rupture and necking, allowing the element to enter the softened erosion phase smoothly.
+
+### 5.3 SPH Point-Mass Debris Contact Conversion
+Once all elements connected to a node have fully eroded, the node is not deleted. Instead:
+1. **SPH Particle Conversion**: The node becomes a free point-mass SPH particle.
+2. **Contact Retention**: The SPH particle continues to undergo contact with the projectile to conserve mass and momentum. The contact force scale factor drops to $1 / N_{initial\_elements}$ to match its single-particle tributary area.
+3. **Ghost Rotations Mitigation**: Rotational degrees of freedom (angular velocity and acceleration) are set to exactly 0 to prevent numerical rotation spikes.
 

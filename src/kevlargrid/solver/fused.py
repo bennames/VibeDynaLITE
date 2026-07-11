@@ -1016,6 +1016,7 @@ def numba_compute_projectile_contact_forces(
     cap_stiffness,
     mu_s,
     dt,
+    allow_sph_debris,
 ):
     n_nodes = len(positions)
     proj_forces = np.zeros((n_nodes, 3), dtype=positions.dtype)
@@ -1063,10 +1064,9 @@ def numba_compute_projectile_contact_forces(
         )
         delta = proximity_threshold - dist
         if delta > 0.0:
-            if active_counts[i] == 0.0:
+            if not allow_sph_debris and active_counts[i] == 0.0:
                 continue
-            if delta > 0.2 * dx:
-                delta = 0.2 * dx
+
             # Cap the penalty contact force to yarn structural capacity
             f_cap = cap_stiffness * dx if cap_stiffness > 0.0 else 1.0e6
 
@@ -1112,7 +1112,10 @@ def numba_compute_projectile_contact_forces(
 
             node_scale_factor = 1.0
             if node_initial_springs[i] > 0:
-                node_scale_factor = float(active_counts[i]) / float(node_initial_springs[i])
+                if active_counts[i] > 0.0:
+                    node_scale_factor = float(active_counts[i]) / float(node_initial_springs[i])
+                else:
+                    node_scale_factor = 1.0 / float(node_initial_springs[i])
 
             proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
             proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
@@ -1167,7 +1170,10 @@ def numba_compute_projectile_contact_forces(
 
                 friction_dissipated += f_fric_mag * (v_rel_sq / denom) * dt
 
-            proj_contact_e_step += 0.5 * k_penalty * delta * delta * node_scale_factor
+            f_elastic = k_penalty * delta
+            if f_elastic > f_cap:
+                f_elastic = f_cap
+            proj_contact_e_step += 0.5 * (f_elastic ** 2) / k_penalty * node_scale_factor
 
     return proj_forces, proj_reaction_force, proj_torque, proj_contact_e_step, friction_dissipated
 
@@ -1625,6 +1631,7 @@ def _fused_leapfrog_loop_jit(
                 cap_stiffness,
                 mu_s,
                 dt,
+                False,  # allow_sph_debris
             )
         )
         friction_dissipated += friction_diss_step
@@ -1851,6 +1858,7 @@ def numba_step_shell_forces_and_failures(
     element_peeq_rate,
     rate_parameter_c,
     rate_parameter_p,
+    fracture_energy_jm2,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
@@ -1969,27 +1977,37 @@ def numba_step_shell_forces_and_failures(
         t_curr = thickness * lambda_z
 
         zk0 = -0.5 * t_curr
-        zk1 = 0.0
-        zk2 = 0.5 * t_curr
+        zk1 = -0.25 * t_curr
+        zk2 = 0.0
+        zk3 = 0.25 * t_curr
+        zk4 = 0.5 * t_curr
 
-        wk0 = t_curr / 6.0
-        wk1 = 4.0 * t_curr / 6.0
-        wk2 = t_curr / 6.0
+        wk0 = t_curr / 12.0
+        wk1 = 4.0 * t_curr / 12.0
+        wk2 = 2.0 * t_curr / 12.0
+        wk3 = 4.0 * t_curr / 12.0
+        wk4 = t_curr / 12.0
 
         N_xx, N_yy, N_xy = 0.0, 0.0, 0.0
         M_xx, M_yy, M_xy = 0.0, 0.0, 0.0
 
         # Thickness integration
-        for k in range(3):
+        for k in range(5):
             if k == 0:
                 zk = zk0
                 wk = wk0
             elif k == 1:
                 zk = zk1
                 wk = wk1
-            else:
+            elif k == 2:
                 zk = zk2
                 wk = wk2
+            elif k == 3:
+                zk = zk3
+                wk = wk3
+            else:
+                zk = zk4
+                wk = wk4
 
             d_exx_k = d_eps_xx + zk * d_kappa_xx
             d_eyy_k = d_eps_yy + zk * d_kappa_yy
@@ -2114,8 +2132,12 @@ def numba_step_shell_forces_and_failures(
                 eps_f = 0.005
 
             # Damage evolution
-            if ultimate_strain > 0.0:
-                dmg_val = element_damage[e, k] + d_peeq / eps_f
+            if ultimate_strain > 0.0 and peeq_new > ultimate_strain:
+                if fracture_energy_jm2 > 0.0:
+                    d_dmg = (yield_val * dx * d_peeq) / fracture_energy_jm2
+                else:
+                    d_dmg = d_peeq / eps_f
+                dmg_val = element_damage[e, k] + d_dmg
                 if dmg_val > 1.0:
                     dmg_val = 1.0
                 element_damage[e, k] = dmg_val
@@ -2135,27 +2157,49 @@ def numba_step_shell_forces_and_failures(
 
         # Check for failure initiation
         if element_failed[e] == 0 and ultimate_strain > 0.0:
-            mean_dmg = (element_damage[e, 0] + element_damage[e, 1] + element_damage[e, 2]) / 3.0
-            if mean_dmg >= 0.99 or element_damage[e, 1] >= 0.99:
+            mean_dmg = (
+                element_damage[e, 0]
+                + element_damage[e, 1]
+                + element_damage[e, 2]
+                + element_damage[e, 3]
+                + element_damage[e, 4]
+            ) / 5.0
+            if (
+                mean_dmg >= 0.70
+                or element_damage[e, 2] >= 0.90
+                or (element_damage[e, 0] >= 0.95 and element_damage[e, 4] >= 0.95)
+            ):
                 element_failed[e] = 2  # softening
                 element_failed_step[e] = current_step
                 ramp = 1.0
 
         # Calculate average damage factor for transverse shear scaling
-        mean_damage = (element_damage[e, 0] + element_damage[e, 1] + element_damage[e, 2]) / 3.0
+        mean_damage = (
+            element_damage[e, 0]
+            + element_damage[e, 1]
+            + element_damage[e, 2]
+            + element_damage[e, 3]
+            + element_damage[e, 4]
+        ) / 5.0
         d_factor_mean = 1.0 - mean_damage if ultimate_strain > 0.0 else 1.0
 
         # Recompute forces and moments integrals
-        for k in range(3):
+        for k in range(5):
             if k == 0:
                 zk = zk0
                 wk = wk0
             elif k == 1:
                 zk = zk1
                 wk = wk1
-            else:
+            elif k == 2:
                 zk = zk2
                 wk = wk2
+            elif k == 3:
+                zk = zk3
+                wk = wk3
+            else:
+                zk = zk4
+                wk = wk4
 
             sig_xx = element_stress[e, k, 0]
             sig_yy = element_stress[e, k, 1]
@@ -2585,276 +2629,23 @@ def _fused_shell_loop_jit(
                 element_peeq_rate,
                 rate_parameter_c,
                 rate_parameter_p,
+                fracture_energy_jm2,
             )
         )
         failure_dissipated += step_fracture_energy
         damp_dissipated += step_stiff_damp_power * dt
 
-        if use_czm:
-            for i in range(len(springs)):
-                if is_tiebreak[i] and spring_failed[i] == 0:
-                    n0 = springs[i, 0]
-                    n1 = springs[i, 1]
-                    dx_s = positions[n1, 0] - positions[n0, 0]
-                    dy_s = positions[n1, 1] - positions[n0, 1]
-                    dz_s = positions[n1, 2] - positions[n0, 2]
-                    delta = sqrt(dx_s * dx_s + dy_s * dy_s + dz_s * dz_s)
-                    if delta > 0.0:
-                        e0 = n0 // 4
-                        e1 = n1 // 4
-
-                        c0_x = 0.25 * (
-                            positions[elements[e0, 0], 0]
-                            + positions[elements[e0, 1], 0]
-                            + positions[elements[e0, 2], 0]
-                            + positions[elements[e0, 3], 0]
-                        )
-                        c0_y = 0.25 * (
-                            positions[elements[e0, 0], 1]
-                            + positions[elements[e0, 1], 1]
-                            + positions[elements[e0, 2], 1]
-                            + positions[elements[e0, 3], 1]
-                        )
-                        c0_z = 0.25 * (
-                            positions[elements[e0, 0], 2]
-                            + positions[elements[e0, 1], 2]
-                            + positions[elements[e0, 2], 2]
-                            + positions[elements[e0, 3], 2]
-                        )
-
-                        c1_x = 0.25 * (
-                            positions[elements[e1, 0], 0]
-                            + positions[elements[e1, 1], 0]
-                            + positions[elements[e1, 2], 0]
-                            + positions[elements[e1, 3], 0]
-                        )
-                        c1_y = 0.25 * (
-                            positions[elements[e1, 0], 1]
-                            + positions[elements[e1, 1], 1]
-                            + positions[elements[e1, 2], 1]
-                            + positions[elements[e1, 3], 1]
-                        )
-                        c1_z = 0.25 * (
-                            positions[elements[e1, 0], 2]
-                            + positions[elements[e1, 1], 2]
-                            + positions[elements[e1, 2], 2]
-                            + positions[elements[e1, 3], 2]
-                        )
-
-                        dx_c = c1_x - c0_x
-                        dy_c = c1_y - c0_y
-                        dz_c = c1_z - c0_z
-
-                        # Normal vector connecting elements (local coordinate projection)
-                        c_len = sqrt(dx_c * dx_c + dy_c * dy_c + dz_c * dz_c)
-                        c_len_safe = c_len if c_len > 1e-12 else 1e-12
-                        nx_c = dx_c / c_len_safe
-                        ny_c = dy_c / c_len_safe
-                        nz_c = dz_c / c_len_safe
-
-                        # Normal separation
-                        delta_n = dx_s * nx_c + dy_s * ny_c + dz_s * nz_c
-
-                        # Tangential separation
-                        dx_t = dx_s - delta_n * nx_c
-                        dy_t = dy_s - delta_n * ny_c
-                        dz_t = dz_s - delta_n * nz_c
-                        delta_t = sqrt(dx_t * dx_t + dy_t * dy_t + dz_t * dz_t)
-
-                        # Mixed-mode equivalent separation
-                        delta_n_pos = delta_n if delta_n > 0.0 else 0.0
-                        delta_mix = sqrt(delta_n_pos * delta_n_pos + delta_t * delta_t)
-
-                        d = spring_damage[i]
-                        d_old = d
-
-                        if delta_mix > delta_0:
-                            d_cand = (delta_c * (delta_mix - delta_0)) / (
-                                delta_mix * (delta_c - delta_0)
-                            )
-                            if d_cand > d:
-                                d = d_cand if d_cand < 1.0 else 1.0
-                                spring_damage[i] = d
-
-                        if d >= 1.0:
-                            spring_failed[i] = 1
-
-                        # Cohesive Force calculation:
-                        # Normal component: linear elastic in compression, damaged in tension
-                        if delta_n >= 0.0:
-                            f_n = (1.0 - d) * k_0 * delta_n
-                        else:
-                            f_n = k_0 * delta_n
-
-                        # Tangential component: damaged shear stiffness
-                        f_t = (1.0 - d) * k_0 * delta_t
-
-                        # Compute force vector components
-                        fx_stiff = f_n * nx_c + (f_t * (dx_t / delta_t) if delta_t > 1e-12 else 0.0)
-                        fy_stiff = f_n * ny_c + (f_t * (dy_t / delta_t) if delta_t > 1e-12 else 0.0)
-                        fz_stiff = f_n * nz_c + (f_t * (dz_t / delta_t) if delta_t > 1e-12 else 0.0)
-
-                        # Cohesive Rayleigh beta damping
-                        vx_rel = velocities[n1, 0] - velocities[n0, 0]
-                        vy_rel = velocities[n1, 1] - velocities[n0, 1]
-                        vz_rel = velocities[n1, 2] - velocities[n0, 2]
-
-                        fx_damp = rayleigh_beta * (1.0 - d) * k_0 * vx_rel
-                        fy_damp = rayleigh_beta * (1.0 - d) * k_0 * vy_rel
-                        fz_damp = rayleigh_beta * (1.0 - d) * k_0 * vz_rel
-
-                        # Track cohesive damping power dissipation
-                        p_damp_czm = (
-                            rayleigh_beta
-                            * (1.0 - d)
-                            * k_0
-                            * (vx_rel * vx_rel + vy_rel * vy_rel + vz_rel * vz_rel)
-                        )
-                        damp_dissipated += p_damp_czm * dt
-
-                        # Total cohesive force
-                        fx = fx_stiff + fx_damp
-                        fy = fy_stiff + fy_damp
-                        fz = fz_stiff + fz_damp
-
-                        # Calculate analytical energy increment based on delta_mix
-                        denom_old = delta_c - d_old * (delta_c - delta_0)
-                        denom_old_safe = denom_old if denom_old != 0.0 else 1.0
-                        e_old = (
-                            0.5 * k_0 * (delta_0**2) * (delta_c * d_old) / denom_old_safe
-                            if d_old < 1.0
-                            else 0.5 * k_0 * delta_0 * delta_c
-                        )
-
-                        denom_new = delta_c - d * (delta_c - delta_0)
-                        denom_new_safe = denom_new if denom_new != 0.0 else 1.0
-                        e_new = (
-                            0.5 * k_0 * (delta_0**2) * (delta_c * d) / denom_new_safe
-                            if d < 1.0
-                            else 0.5 * k_0 * delta_0 * delta_c
-                        )
-
-                        failure_dissipated += e_new - e_old
-
-                        if d < 1.0:
-                            shell_forces[n0, 0] += fx
-                            shell_forces[n0, 1] += fy
-                            shell_forces[n0, 2] += fz
-
-                            shell_forces[n1, 0] -= fx
-                            shell_forces[n1, 1] -= fy
-                            shell_forces[n1, 2] -= fz
-
         # 4. Contact forces
-        proj_forces = zeros((n_nodes, 3), dtype=positions.dtype)
-        proj_reaction_force = zeros(3, dtype=np.float64)
-        proj_torque = zeros(3, dtype=np.float64)
-        proj_contact_e_step = 0.0
-
-        # Projectile 3D SDF contact detection for all shapes (including box shape_code == 0)
-        q_conj = np.array(
-            [proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64
-        )
-        if shape_code == 0:
-            max_R = max(proj_half_width, max(proj_half_thickness, proj_length / 2.0))
-        else:
-            max_R = max(proj_radius, max(proj_length, proj_span))
-        cutoff = max_R + proximity_threshold
-        cutoff_sq = cutoff**2
-        P_loc_shell_contact = zeros(3, dtype=positions.dtype)
-
-        # Track processed nodes during contact kinematics coupling
-        processed = np.zeros(n_nodes, dtype=np.int32)
-
-        for i in range(n_nodes):
-            if processed[i] == 1:
-                continue
-
-            cluster = np.zeros(4, dtype=np.int32)
-            cluster[0] = i
-            cluster_size = 1
-
-            if use_czm:
-                queue = np.zeros(4, dtype=np.int32)
-                queue[0] = i
-                q_head = 0
-                q_tail = 1
-
-                # Get the group of coincident nodes
-                group = coincident_nodes[i]
-
-                # Visited flags matching indices in 'group'
-                visited = np.zeros(4, dtype=np.int32)
-                for k in range(4):
-                    if group[k] == i:
-                        visited[k] = 1
-                        break
-
-                while q_head < q_tail:
-                    curr = queue[q_head]
-                    q_head += 1
-
-                    # Traverse neighbors of curr
-                    for s_idx in range(2):
-                        sp_id = node_czm_spring_ids[curr, s_idx]
-                        if sp_id != -1 and spring_failed[sp_id] == 0:
-                            # Neighbor is the other node in spring
-                            n0 = springs[sp_id, 0]
-                            n1 = springs[sp_id, 1]
-                            neighbor = n1 if n0 == curr else n0
-
-                            # Find neighbor in group
-                            for k in range(4):
-                                if group[k] == neighbor and visited[k] == 0:
-                                    visited[k] = 1
-                                    queue[q_tail] = neighbor
-                                    q_tail += 1
-                                    cluster[cluster_size] = neighbor
-                                    cluster_size += 1
-                                    break
-
-            # Mark all nodes in cluster as processed
-            for k in range(cluster_size):
-                processed[cluster[k]] = 1
-
-            # Compute average position and velocity of the cluster
-            avg_x = 0.0
-            avg_y = 0.0
-            avg_z = 0.0
-            avg_vx = 0.0
-            avg_vy = 0.0
-            avg_vz = 0.0
-
-            for k in range(cluster_size):
-                u = cluster[k]
-                avg_x += positions[u, 0]
-                avg_y += positions[u, 1]
-                avg_z += positions[u, 2]
-                avg_vx += velocities[u, 0]
-                avg_vy += velocities[u, 1]
-                avg_vz += velocities[u, 2]
-
-            avg_x /= float(cluster_size)
-            avg_y /= float(cluster_size)
-            avg_z /= float(cluster_size)
-            avg_vx /= float(cluster_size)
-            avg_vy /= float(cluster_size)
-            avg_vz /= float(cluster_size)
-
-            dx_p = avg_x - proj_position[0]
-            dy_p = avg_y - proj_position[1]
-            dz_p = avg_z - proj_position[2]
-            if dx_p**2 + dy_p**2 + dz_p**2 > cutoff_sq:
-                continue
-
-            P_rel = np.array(
-                [avg_x - proj_position[0], avg_y - proj_position[1], avg_z - proj_position[2]],
-                dtype=positions.dtype,
-            )
-            numba_q_rotate_inplace(q_conj, P_rel, P_loc_shell_contact)
-
-            dist = numba_eval_sdf(
-                P_loc_shell_contact,
+        proj_forces, proj_reaction_force, proj_torque, proj_contact_e_step, friction_diss_step = (
+            numba_compute_projectile_contact_forces(
+                positions,
+                v_half,
+                active_counts,
+                node_initial_elements,
+                proj_position,
+                proj_quat,
+                proj_v_half,
+                proj_omega_half,
                 shape_code,
                 proj_radius,
                 proj_length,
@@ -2872,142 +2663,17 @@ def _fused_shell_loop_jit(
                 proj_y_com,
                 proj_half_width,
                 proj_half_thickness,
+                proximity_threshold,
+                k_penalty,
+                proj_c_damping,
+                dx,
+                yield_strength * thickness,
+                mu_s,
+                dt,
+                True,  # allow_sph_debris
             )
-            delta = proximity_threshold - dist
-            if delta > 0.0:
-                # Check if there are active nodes in the cluster
-                any_active = False
-                total_active_count = 0.0
-                for k in range(cluster_size):
-                    u = cluster[k]
-                    if active_counts[u] > 0.0:
-                        any_active = True
-                        total_active_count += active_counts[u]
-                if not any_active:
-                    continue
-
-                if delta > 0.2 * dx:
-                    delta = 0.2 * dx
-
-                # Compute the cluster scale factor (fraction of active elements)
-                total_initial_elements = 0
-                for k in range(cluster_size):
-                    total_initial_elements += node_initial_elements[cluster[k]]
-
-                cluster_scale_factor = 1.0
-                if total_initial_elements > 0:
-                    cluster_scale_factor = total_active_count / float(total_initial_elements)
-
-                # Cap penalty contact force to sheet structural capacity, scaled by cluster factor
-                f_cap = yield_strength * dx * thickness * cluster_scale_factor
-                if f_cap <= 0.0:
-                    f_cap = E * dx * thickness * cluster_scale_factor
-
-                n_loc = numba_eval_sdf_normal(
-                    P_loc_shell_contact,
-                    shape_code,
-                    proj_radius,
-                    proj_length,
-                    proj_edge_radius,
-                    R_og_val,
-                    L_body_val,
-                    L_nose_val,
-                    proj_z_com,
-                    proj_span,
-                    proj_root_chord,
-                    proj_tip_chord,
-                    proj_twist,
-                    proj_thickness_ratio,
-                    proj_tip_radius,
-                    proj_y_com,
-                    proj_half_width,
-                    proj_half_thickness,
-                )
-                n_world = numba_q_rotate(proj_quat, n_loc)
-
-                # Compute relative velocity and contact damping
-                v_proj_point = proj_v_half + np.array(
-                    [
-                        proj_omega_half[1] * P_rel[2] - proj_omega_half[2] * P_rel[1],
-                        proj_omega_half[2] * P_rel[0] - proj_omega_half[0] * P_rel[2],
-                        proj_omega_half[0] * P_rel[1] - proj_omega_half[1] * P_rel[0],
-                    ],
-                    dtype=np.float64,
-                )
-
-                v_rel_x = avg_vx - v_proj_point[0]
-                v_rel_y = avg_vy - v_proj_point[1]
-                v_rel_z = avg_vz - v_proj_point[2]
-
-                delta_dot = -(v_rel_x * n_world[0] + v_rel_y * n_world[1] + v_rel_z * n_world[2])
-
-                f_mag = k_penalty * delta + proj_c_damping * delta_dot
-                if f_mag < 0.0:
-                    f_mag = 0.0
-
-                f_mag_scaled = f_mag * cluster_scale_factor
-                if f_mag_scaled > f_cap:
-                    f_mag_scaled = f_cap
-
-                fx_contact = f_mag_scaled * n_world[0]
-                fy_contact = f_mag_scaled * n_world[1]
-                fz_contact = f_mag_scaled * n_world[2]
-
-                # Distribute normal contact force to the nodes in the cluster based on active count weights
-                for k in range(cluster_size):
-                    u = cluster[k]
-                    if total_active_count > 0.0:
-                        weight = active_counts[u] / total_active_count
-                        proj_forces[u, 0] += weight * fx_contact
-                        proj_forces[u, 1] += weight * fy_contact
-                        proj_forces[u, 2] += weight * fz_contact
-
-                proj_reaction_force[0] -= fx_contact
-                proj_reaction_force[1] -= fy_contact
-                proj_reaction_force[2] -= fz_contact
-
-                # Torque update
-                P_contact = P_rel
-                proj_torque[0] += P_contact[1] * (-fz_contact) - P_contact[2] * (-fy_contact)
-                proj_torque[1] += P_contact[2] * (-fx_contact) - P_contact[0] * (-fz_contact)
-                proj_torque[2] += P_contact[0] * (-fy_contact) - P_contact[1] * (-fx_contact)
-
-                # Projectile 6-DOF contact friction
-                if mu_s > 0.0:
-                    v_rel_dot_n = v_rel_x * n_world[0] + v_rel_y * n_world[1] + v_rel_z * n_world[2]
-                    v_tang_x = v_rel_x - v_rel_dot_n * n_world[0]
-                    v_tang_y = v_rel_y - v_rel_dot_n * n_world[1]
-                    v_tang_z = v_rel_z - v_rel_dot_n * n_world[2]
-                    v_rel_sq = v_tang_x**2 + v_tang_y**2 + v_tang_z**2
-
-                    v0 = 0.01
-                    denom = np.sqrt(v_rel_sq + v0**2)
-
-                    f_fric_mag = mu_s * f_mag_scaled
-
-                    fx_fric = -f_fric_mag * (v_tang_x / denom)
-                    fy_fric = -f_fric_mag * (v_tang_y / denom)
-                    fz_fric = -f_fric_mag * (v_tang_z / denom)
-
-                    for k in range(cluster_size):
-                        u = cluster[k]
-                        if total_active_count > 0.0:
-                            weight = active_counts[u] / total_active_count
-                            proj_forces[u, 0] += weight * fx_fric
-                            proj_forces[u, 1] += weight * fy_fric
-                            proj_forces[u, 2] += weight * fz_fric
-
-                    proj_reaction_force[0] -= fx_fric
-                    proj_reaction_force[1] -= fy_fric
-                    proj_reaction_force[2] -= fz_fric
-
-                    proj_torque[0] += P_contact[1] * (-fz_fric) - P_contact[2] * (-fy_fric)
-                    proj_torque[1] += P_contact[2] * (-fx_fric) - P_contact[0] * (-fz_fric)
-                    proj_torque[2] += P_contact[0] * (-fy_fric) - P_contact[1] * (-fx_fric)
-
-                    friction_dissipated += f_fric_mag * (v_rel_sq / denom) * dt
-
-                proj_contact_e_step += 0.5 * k_penalty * delta * delta * cluster_scale_factor
+        )
+        friction_dissipated += friction_diss_step
 
         interply_forces, contact_e_step, fric_diss_step = compute_interply_contact_forces(
             positions,
@@ -3114,11 +2780,17 @@ def _fused_shell_loop_jit(
 
                 # Strain energy se: estimate from element elastic stresses
                 se = 0.0
-                w_pts_se = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
+                w_pts_se = np.array([
+                    thickness / 12.0,
+                    4.0 * thickness / 12.0,
+                    2.0 * thickness / 12.0,
+                    4.0 * thickness / 12.0,
+                    thickness / 12.0,
+                ])
                 for e in range(n_elements):
                     if element_failed[e] == 0:
                         el_se = 0.0
-                        for k in range(3):
+                        for k in range(5):
                             wk = w_pts_se[k]
                             s_xx = element_stress[e, k, 0]
                             s_yy = element_stress[e, k, 1]
@@ -3352,13 +3024,13 @@ def fused_leapfrog_loop(
             elements = np.zeros((0, 4), dtype=np.int32)
         n_elems = len(elements)
         if element_stress is None:
-            element_stress = np.zeros((n_elems, 3, 3), dtype=positions.dtype)
+            element_stress = np.zeros((n_elems, 5, 3), dtype=positions.dtype)
         if element_peeq is None:
-            element_peeq = np.zeros((n_elems, 3), dtype=positions.dtype)
+            element_peeq = np.zeros((n_elems, 5), dtype=positions.dtype)
         if element_peeq_rate is None:
-            element_peeq_rate = np.zeros((n_elems, 3), dtype=positions.dtype)
+            element_peeq_rate = np.zeros((n_elems, 5), dtype=positions.dtype)
         if element_damage is None:
-            element_damage = np.zeros((n_elems, 3), dtype=positions.dtype)
+            element_damage = np.zeros((n_elems, 5), dtype=positions.dtype)
 
         # Recover or allocate element_failed
         if element_failed is None or element_failed.shape[0] != n_elems:

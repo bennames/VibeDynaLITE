@@ -87,11 +87,23 @@ def compute_strain_energy(
     if elements is not None and element_stress is not None:
         se = 0.0
         n_elements = len(elements)
-        w_pts = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
+        se = 0.0
+        n_elements = len(elements)
+        n_pts = element_stress.shape[1]
+        if n_pts == 5:
+            w_pts = np.array([
+                thickness / 12.0,
+                4.0 * thickness / 12.0,
+                2.0 * thickness / 12.0,
+                4.0 * thickness / 12.0,
+                thickness / 12.0,
+            ])
+        else:
+            w_pts = np.array([thickness / 6.0, 4.0 * thickness / 6.0, thickness / 6.0])
         for e in range(n_elements):
             if failed is None or not failed[e]:
                 el_se = 0.0
-                for k in range(3):
+                for k in range(n_pts):
                     wk = w_pts[k]
                     s_xx = element_stress[e, k, 0]
                     s_yy = element_stress[e, k, 1]

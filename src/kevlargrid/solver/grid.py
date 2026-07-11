@@ -359,122 +359,16 @@ def generate_rectangular_grid(
         tension_only = np.concatenate(all_tension_only, axis=0)
         elements = np.concatenate(all_elements, axis=0)
     else:
-        if use_czm:
-            # Number of elements in base grid
-            N_el = (nx - 1) * (ny - 1)
-            nodes = np.zeros((4 * N_el, 3), dtype=np.float64)
-
-            # Populate coordinates from base_nodes
-            for i in range(nx - 1):
-                for j in range(ny - 1):
-                    e = i * (ny - 1) + j
-                    nodes[4 * e + 0] = base_nodes[i * ny + j]
-                    nodes[4 * e + 1] = base_nodes[(i + 1) * ny + j]
-                    nodes[4 * e + 2] = base_nodes[(i + 1) * ny + (j + 1)]
-                    nodes[4 * e + 3] = base_nodes[i * ny + (j + 1)]
-
-            elements = np.zeros((N_el, 4), dtype=np.int32)
-            for e in range(N_el):
-                elements[e] = [4 * e + 0, 4 * e + 1, 4 * e + 2, 4 * e + 3]
-
-            # Masses are distributed equally to element corners
-            masses = np.ones(4 * N_el, dtype=np.float64) * (0.25 * m_cell)
-
-            # Build coincident_nodes mapping
-            base_node_to_shell_nodes: list[list[int]] = [[] for _ in range(nx * ny)]
-            for i in range(nx - 1):
-                for j in range(ny - 1):
-                    e = i * (ny - 1) + j
-                    base_node_to_shell_nodes[i * ny + j].append(4 * e + 0)
-                    base_node_to_shell_nodes[(i + 1) * ny + j].append(4 * e + 1)
-                    base_node_to_shell_nodes[(i + 1) * ny + (j + 1)].append(4 * e + 2)
-                    base_node_to_shell_nodes[i * ny + (j + 1)].append(4 * e + 3)
-
-            coincident_nodes = np.zeros((4 * N_el, 4), dtype=np.int32) - 1
-            for g_idx in range(nx * ny):
-                shell_list = base_node_to_shell_nodes[g_idx]
-                for u in shell_list:
-                    for idx, v in enumerate(shell_list):
-                        coincident_nodes[u, idx] = v
-
-            # Build tiebreak springs
-            springs_list = []
-            stiffness_list = []
-
-            cohesive_strength_gpa = material.get("cohesive_strength_gpa", 0.485)
-            fracture_energy_jm2 = material.get("fracture_energy_jm2", 50000.0)
-
-            sig_max = cohesive_strength_gpa * 1e9
-            g_c = fracture_energy_jm2
-            # thickness t
-            t = areal_density / (fiber_density_gcc * 1000.0)
-            # cohesive stiffness
-            k_cohesive = (sig_max**2 * dx * t) / (0.04 * g_c)
-
-            node_czm_spring_ids = np.zeros((4 * N_el, 2), dtype=np.int32) - 1
-
-            def add_czm_spring_to_node(node_id: int, s_id: int) -> None:
-                assert node_czm_spring_ids is not None
-                if node_czm_spring_ids[node_id, 0] == -1:
-                    node_czm_spring_ids[node_id, 0] = s_id
-                elif node_czm_spring_ids[node_id, 1] == -1:
-                    node_czm_spring_ids[node_id, 1] = s_id
-
-            spring_idx = 0
-            for i in range(nx - 1):
-                for j in range(ny - 1):
-                    e = i * (ny - 1) + j
-
-                    # Check right neighbor
-                    if i < nx - 2:
-                        e_right = (i + 1) * (ny - 1) + j
-                        # Corner 1 of e connected to Corner 0 of e_right
-                        springs_list.append((4 * e + 1, 4 * e_right + 0))
-                        stiffness_list.append(k_cohesive)
-                        add_czm_spring_to_node(4 * e + 1, spring_idx)
-                        add_czm_spring_to_node(4 * e_right + 0, spring_idx)
-                        spring_idx += 1
-
-                        # Corner 2 of e connected to Corner 3 of e_right
-                        springs_list.append((4 * e + 2, 4 * e_right + 3))
-                        stiffness_list.append(k_cohesive)
-                        add_czm_spring_to_node(4 * e + 2, spring_idx)
-                        add_czm_spring_to_node(4 * e_right + 3, spring_idx)
-                        spring_idx += 1
-
-                    # Check top neighbor
-                    if j < ny - 2:
-                        e_top = i * (ny - 1) + (j + 1)
-                        # Corner 3 of e connected to Corner 0 of e_top
-                        springs_list.append((4 * e + 3, 4 * e_top + 0))
-                        stiffness_list.append(k_cohesive)
-                        add_czm_spring_to_node(4 * e + 3, spring_idx)
-                        add_czm_spring_to_node(4 * e_top + 0, spring_idx)
-                        spring_idx += 1
-
-                        # Corner 2 of e connected to Corner 1 of e_top
-                        springs_list.append((4 * e + 2, 4 * e_top + 1))
-                        stiffness_list.append(k_cohesive)
-                        add_czm_spring_to_node(4 * e + 2, spring_idx)
-                        add_czm_spring_to_node(4 * e_top + 1, spring_idx)
-                        spring_idx += 1
-
-            springs = np.array(springs_list, dtype=np.int32).reshape(-1, 2)
-            stiffnesses = np.array(stiffness_list, dtype=np.float64)
-            rest_lengths = np.zeros(len(springs), dtype=np.float64)
-            tension_only = np.zeros(len(springs), dtype=bool)
-            is_tiebreak = np.ones(len(springs), dtype=bool)
-        else:
-            nodes = base_nodes
-            springs = base_springs
-            masses = base_masses
-            stiffnesses = base_stiffnesses
-            rest_lengths = base_rest_lengths
-            tension_only = base_tension_only
-            elements = base_elements
-            is_tiebreak = None
-            coincident_nodes = None
-            node_czm_spring_ids = None
+        nodes = base_nodes
+        springs = base_springs
+        masses = base_masses
+        stiffnesses = base_stiffnesses
+        rest_lengths = base_rest_lengths
+        tension_only = base_tension_only
+        elements = base_elements
+        is_tiebreak = None
+        coincident_nodes = None
+        node_czm_spring_ids = None
 
     failed = np.zeros(len(springs), dtype=bool)
 
