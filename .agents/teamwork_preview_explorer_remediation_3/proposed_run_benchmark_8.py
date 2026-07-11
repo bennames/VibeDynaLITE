@@ -226,7 +226,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 _,  # h_ke
                 _,  # h_se
                 _,  # h_proj_ke
-                hist_peak_strain_gpu,
+                _hist_peak_strain_gpu,
                 contact_energy,
                 friction_dissipated,
             ) = taichi_leapfrog_loop(
@@ -378,7 +378,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
         ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
 
         total_energy = ke_nodes + se_springs + ke_proj + damp_dissipated + failure_dissipated + clamp_dissipated + contact_energy + friction_dissipated
-        drift_pct = abs(total_energy - initial_energy) / initial_energy * 100.0
+        abs(total_energy - initial_energy) / initial_energy * 100.0
 
         hist_ke.append(ke_nodes)
         hist_se.append(se_springs)

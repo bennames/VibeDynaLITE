@@ -14,7 +14,7 @@ def main():
     print("Setting up grid...")
     nx, ny = 138, 138
     dx = 0.00182
-    n_nodes = nx * ny
+    nx * ny
 
     material_kev29 = {
         "tensile_modulus_gpa": 70.5,
