@@ -12,6 +12,7 @@ MOCK_MATERIAL = {
     "shear_ratio": 0.0004,
 }
 
+
 def run_smith(nx=201, num_steps=150):
     ny, dx = 1, 0.01
     n_nodes = nx * ny
@@ -42,7 +43,9 @@ def run_smith(nx=201, num_steps=150):
         else:
             eps_right = eps_mid
     eps_analytical = eps_mid
-    u_analytical = c_fiber * np.sqrt(eps_analytical * (1.0 + eps_analytical)) - c_fiber * eps_analytical
+    u_analytical = (
+        c_fiber * np.sqrt(eps_analytical * (1.0 + eps_analytical)) - c_fiber * eps_analytical
+    )
 
     dt = compute_cfl_timestep(grid.stiffnesses, grid.masses, dx, 0.4)
     positions = grid.nodes.copy()
@@ -75,15 +78,48 @@ def run_smith(nx=201, num_steps=150):
         proj.mass,
         proj.blade_width,
         proj.edge_thickness,
-        1, n_nodes, 0.002, dx, 1e7, 0.0, 0.0, 0.1, 0.06, 1.0,
-        dt, num_steps, num_steps, 0.0, 0.0, 0.0, 0.0, 1.0,
-        grid.initial_spring_counts, grid.node_spring_offsets, grid.node_spring_ids, grid.node_spring_signs
+        1,
+        n_nodes,
+        0.002,
+        dx,
+        1e7,
+        0.0,
+        0.0,
+        0.1,
+        0.06,
+        1.0,
+        dt,
+        num_steps,
+        num_steps,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        grid.initial_spring_counts,
+        grid.node_spring_offsets,
+        grid.node_spring_ids,
+        grid.node_spring_signs,
     )
 
     z_deflections = positions_out[:, 2]
     t_elapsed = num_steps * dt
     print(f"u_analytical: {u_analytical:.4f}")
-    for thresh_frac in [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10, 0.15, 0.20, 0.25]:
+    for thresh_frac in [
+        0.01,
+        0.02,
+        0.03,
+        0.04,
+        0.05,
+        0.06,
+        0.07,
+        0.08,
+        0.09,
+        0.10,
+        0.15,
+        0.20,
+        0.25,
+    ]:
         threshold = thresh_frac * z_deflections[center]
         kink_node = center
         for idx in range(center, nx - 1):
@@ -97,6 +133,7 @@ def run_smith(nx=201, num_steps=150):
         u_num = dist_kink / t_elapsed
         err = np.abs(u_num - u_analytical) / u_analytical
         print(f"  thresh_frac={thresh_frac:.2f}: u_numerical={u_num:.4f}, error={err:.4%}")
+
 
 if __name__ == "__main__":
     run_smith()

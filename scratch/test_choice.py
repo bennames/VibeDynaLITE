@@ -39,22 +39,53 @@ for k_penalty in [1.5e5, 2.0e5]:
     arrested = False
 
     for _step in range(600):
-        (
-            pos_a, vel_a, grid_a.failed, proj_pos_a, proj_vel_a, *_
-        ) = fused_leapfrog_loop(
-            pos_a, vel_a, grid_a.springs, grid_a.stiffnesses, grid_a.rest_lengths,
-            grid_a.failed, grid_a.masses, grid_a.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            proj_pos_a, proj_vel_a, proj_mass, blade_width, edge_thickness,
-            1, n_nodes, 0.002, dx, k_penalty, 0.05, 1e-7, 0.04, 0.024, 1.5,
-            dt, 1, 1, 0.0, 0.0, 0.0, t_sim, 1.0,
-            grid_a.initial_spring_counts, grid_a.node_spring_offsets, grid_a.node_spring_ids, grid_a.node_spring_signs
+        (pos_a, vel_a, grid_a.failed, proj_pos_a, proj_vel_a, *_) = fused_leapfrog_loop(
+            pos_a,
+            vel_a,
+            grid_a.springs,
+            grid_a.stiffnesses,
+            grid_a.rest_lengths,
+            grid_a.failed,
+            grid_a.masses,
+            grid_a.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            proj_pos_a,
+            proj_vel_a,
+            proj_mass,
+            blade_width,
+            edge_thickness,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            k_penalty,
+            0.05,
+            1e-7,
+            0.04,
+            0.024,
+            1.5,
+            dt,
+            1,
+            1,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            1.0,
+            grid_a.initial_spring_counts,
+            grid_a.node_spring_offsets,
+            grid_a.node_spring_ids,
+            grid_a.node_spring_signs,
         )
         t_sim += dt
         if proj_vel_a[2] <= 0.0:
             arrested = True
             break
 
-    print(f"  150 m/s: arrested = {arrested} | final Z-pos = {proj_pos_a[2]:.6f}, final Z-vel = {proj_vel_a[2]:.2f}, failed springs = {np.sum(grid_a.failed)}")
+    print(
+        f"  150 m/s: arrested = {arrested} | final Z-pos = {proj_pos_a[2]:.6f}, final Z-vel = {proj_vel_a[2]:.2f}, failed springs = {np.sum(grid_a.failed)}"
+    )
 
     # 2. 400 m/s (Penetration)
     grid_b = generate_rectangular_grid(nx, ny, dx, material_kev29)
@@ -66,19 +97,50 @@ for k_penalty in [1.5e5, 2.0e5]:
     penetrated = False
 
     for _step in range(600):
-        (
-            pos_b, vel_b, grid_b.failed, proj_pos_b, proj_vel_b, *_
-        ) = fused_leapfrog_loop(
-            pos_b, vel_b, grid_b.springs, grid_b.stiffnesses, grid_b.rest_lengths,
-            grid_b.failed, grid_b.masses, grid_b.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            proj_pos_b, proj_vel_b, proj_mass, blade_width, edge_thickness,
-            1, n_nodes, 0.002, dx, k_penalty, 0.05, 1e-7, 0.04, 0.024, 1.5,
-            dt, 1, 1, 0.0, 0.0, 0.0, t_sim, 1.0,
-            grid_b.initial_spring_counts, grid_b.node_spring_offsets, grid_b.node_spring_ids, grid_b.node_spring_signs
+        (pos_b, vel_b, grid_b.failed, proj_pos_b, proj_vel_b, *_) = fused_leapfrog_loop(
+            pos_b,
+            vel_b,
+            grid_b.springs,
+            grid_b.stiffnesses,
+            grid_b.rest_lengths,
+            grid_b.failed,
+            grid_b.masses,
+            grid_b.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            proj_pos_b,
+            proj_vel_b,
+            proj_mass,
+            blade_width,
+            edge_thickness,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            k_penalty,
+            0.05,
+            1e-7,
+            0.04,
+            0.024,
+            1.5,
+            dt,
+            1,
+            1,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            1.0,
+            grid_b.initial_spring_counts,
+            grid_b.node_spring_offsets,
+            grid_b.node_spring_ids,
+            grid_b.node_spring_signs,
         )
         t_sim += dt
         if proj_pos_b[2] > 0.0 and proj_vel_b[2] > 100.0 and np.sum(grid_b.failed) > 0:
             penetrated = True
             break
 
-    print(f"  400 m/s: penetrated = {penetrated} | final Z-pos = {proj_pos_b[2]:.6f}, final Z-vel = {proj_vel_b[2]:.2f}, failed springs = {np.sum(grid_b.failed)}")
+    print(
+        f"  400 m/s: penetrated = {penetrated} | final Z-pos = {proj_pos_b[2]:.6f}, final Z-vel = {proj_vel_b[2]:.2f}, failed springs = {np.sum(grid_b.failed)}"
+    )

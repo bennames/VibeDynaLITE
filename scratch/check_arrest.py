@@ -43,7 +43,7 @@ R = 0.00273
 L = 0.006
 I_zz = 0.5 * proj_mass * R**2
 I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
-proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
+proj_inertia_inv = np.diag([1.0 / I_xx, 1.0 / I_xx, 1.0 / I_zz])
 
 proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
 # Case A strike velocity: 450 m/s
@@ -88,7 +88,7 @@ solver = TaichiSolver(
 )
 
 # Set shape parameters
-solver.proj_shape_type[None] = 1 # cylinder
+solver.proj_shape_type[None] = 1  # cylinder
 solver.radius_field[None] = R
 solver.length_field[None] = L
 solver.span_field[None] = 0.0
@@ -108,25 +108,25 @@ print(f"Initial Kinetic Energy: {initial_energy:.2f} J")
 for chunk in range(10):
     # Run 100 steps
     dt = solver.run_substeps(
-        100,             # num_substeps
-        dt,              # dt_init
-        0.0,             # rayleigh_beta
-        0.0228,          # damage_onset_strain
-        0.038,           # failure_strain
-        n_plies,         # n_plies
-        n_nodes_per_layer, # n_nodes_per_layer
-        0.0001,          # t_ply
-        k_penalty,       # k_penalty
-        0.0,             # w_h
-        0.0,             # t_h
-        5e-8,            # proximity_threshold
-        0.0,             # rayleigh_alpha
-        0,               # use_viscous (0 for false)
-        0.1,             # cfl_factor
-        dx,              # dx
-        1.0,             # fracture_energy_multiplier
+        100,  # num_substeps
+        dt,  # dt_init
+        0.0,  # rayleigh_beta
+        0.0228,  # damage_onset_strain
+        0.038,  # failure_strain
+        n_plies,  # n_plies
+        n_nodes_per_layer,  # n_nodes_per_layer
+        0.0001,  # t_ply
+        k_penalty,  # k_penalty
+        0.0,  # w_h
+        0.0,  # t_h
+        5e-8,  # proximity_threshold
+        0.0,  # rayleigh_alpha
+        0,  # use_viscous (0 for false)
+        0.1,  # cfl_factor
+        dx,  # dx
+        1.0,  # fracture_energy_multiplier
         mu_s=mu_s,
-        cfl_recompute_interval=20
+        cfl_recompute_interval=20,
     )
 
     # Get telemetry
@@ -138,5 +138,7 @@ for chunk in range(10):
     total_energy = telem["ke"] + telem["se"] + telem["proj_ke"]
     drift = (total_energy - initial_energy) / initial_energy
 
-    print(f"Step {(chunk+1)*100:4d}: Proj Vel Z = {proj_v_z:6.2f} m/s, KE = {telem['proj_ke']:6.2f} J, Grid KE = {telem['ke']:6.2f} J, Grid SE = {telem['se']:6.2f} J, Drift = {drift*100:6.3f}%")
+    print(
+        f"Step {(chunk + 1) * 100:4d}: Proj Vel Z = {proj_v_z:6.2f} m/s, KE = {telem['proj_ke']:6.2f} J, Grid KE = {telem['ke']:6.2f} J, Grid SE = {telem['se']:6.2f} J, Drift = {drift * 100:6.3f}%"
+    )
     sys.stdout.flush()

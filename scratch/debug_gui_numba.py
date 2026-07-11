@@ -40,7 +40,7 @@ if __name__ == "__main__":
             "auto_cfl": True,
             "backend": "numba",
             "snapshot_interval": 100,
-        }
+        },
     }
 
     # We will simulate what the runner loop does, calling the worker in a separate process

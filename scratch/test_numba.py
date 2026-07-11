@@ -41,7 +41,7 @@ R = 0.00273
 L = 0.006
 I_zz = 0.5 * proj_mass * R**2
 I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
-proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
+proj_inertia_inv = np.diag([1.0 / I_xx, 1.0 / I_xx, 1.0 / I_zz])
 
 proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
 proj_vel = np.array([0.0, 0.0, 450.0], dtype=np.float64)
@@ -88,7 +88,14 @@ for step_chunk in range(10):
         failure_dissipated,
         clamp_dissipated,
         t_sim,
-        _, _, _, _, _, _, _, _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
         contact_energy,
         friction_dissipated,
     ) = fused_leapfrog_loop(
@@ -112,14 +119,14 @@ for step_chunk in range(10):
         0.0001,
         dx,
         k_penalty,
-        0.0,   # rayleigh_alpha
+        0.0,  # rayleigh_alpha
         5e-8,  # rayleigh_beta
-        0.038, # failure_strain
-        0.0228, # damage_onset_strain
-        1.5,   # fracture_energy_multiplier
+        0.038,  # failure_strain
+        0.0228,  # damage_onset_strain
+        1.5,  # fracture_energy_multiplier
         dt,
-        100,   # n_steps
-        100,   # save_interval
+        100,  # n_steps
+        100,  # save_interval
         damp_dissipated,
         failure_dissipated,
         clamp_dissipated,
@@ -146,17 +153,30 @@ for step_chunk in range(10):
     ke_nodes = 0.5 * np.sum(grid.masses * np.sum(vel**2, axis=1))
     p1 = pos[grid.springs[:, 0]]
     p2 = pos[grid.springs[:, 1]]
-    lens = np.sqrt(np.sum((p2 - p1)**2, axis=1))
+    lens = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
     strains = (lens - grid.rest_lengths) / grid.rest_lengths
     strains_eff = np.where(grid.tension_only & (strains < 0.0), 0.0, strains)
-    se_springs_array = 0.5 * grid.stiffnesses * (1.0 - grid_damage) * (strains_eff * grid.rest_lengths)**2
+    se_springs_array = (
+        0.5 * grid.stiffnesses * (1.0 - grid_damage) * (strains_eff * grid.rest_lengths) ** 2
+    )
     se_springs = float(np.sum(np.where(failed, 0.0, se_springs_array)))
     ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
 
-    total_energy = ke_nodes + se_springs + ke_proj + damp_dissipated + failure_dissipated + clamp_dissipated + contact_energy + friction_dissipated
+    total_energy = (
+        ke_nodes
+        + se_springs
+        + ke_proj
+        + damp_dissipated
+        + failure_dissipated
+        + clamp_dissipated
+        + contact_energy
+        + friction_dissipated
+    )
     drift = (total_energy - initial_energy) / initial_energy
 
-    print(f"Step {(step_chunk+1)*100:4d}: Proj Vel Z = {proj_vel[2]:6.2f} m/s | Proj Pos Z = {proj_pos[2]*1000:6.3f} mm | Drift = {drift*100:6.3f}%")
+    print(
+        f"Step {(step_chunk + 1) * 100:4d}: Proj Vel Z = {proj_vel[2]:6.2f} m/s | Proj Pos Z = {proj_pos[2] * 1000:6.3f} mm | Drift = {drift * 100:6.3f}%"
+    )
     sys.stdout.flush()
 
 print(f"Total time elapsed: {time.perf_counter() - t0:.2f} s")

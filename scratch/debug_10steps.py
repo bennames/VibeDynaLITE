@@ -33,7 +33,7 @@ for step in range(10):
     diff = p2 - p1
     lengths = np.sqrt(np.sum(diff**2, axis=1))
     strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-    grid_failed = grid.failed # no failure yet
+    grid_failed = grid.failed  # no failure yet
 
     lengths_safe = np.where(lengths == 0.0, 1.0, lengths)
     damage = np.minimum(np.maximum((strains - 0.03) / 0.02, 0.0), 1.0)
@@ -64,4 +64,4 @@ for step in range(10):
     positions = positions + velocities * dt
 
     ke = 0.5 * np.sum(grid.masses[:, np.newaxis] * velocities**2)
-    print(f"Step {step+1}: max_vel={np.max(np.abs(velocities)):.3e}, grid_ke={ke:.3e}")
+    print(f"Step {step + 1}: max_vel={np.max(np.abs(velocities)):.3e}, grid_ke={ke:.3e}")

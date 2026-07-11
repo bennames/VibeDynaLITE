@@ -96,7 +96,10 @@ def run_debug(v_strike):
         t_sim += 100 * dt
 
     total_diss = damp_diss + failure_diss + clamp_diss
-    print(f"Strike: {v_strike:3.0f} m/s | Init KE: {init_ke:6.2f} J | Failure Diss: {failure_diss:6.2f} J | Damp Diss: {damp_diss:6.2f} J | Total Diss: {total_diss:6.2f} J")
+    print(
+        f"Strike: {v_strike:3.0f} m/s | Init KE: {init_ke:6.2f} J | Failure Diss: {failure_diss:6.2f} J | Damp Diss: {damp_diss:6.2f} J | Total Diss: {total_diss:6.2f} J"
+    )
+
 
 run_debug(150.0)
 run_debug(200.0)

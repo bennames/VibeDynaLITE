@@ -29,9 +29,11 @@ PLOT_FILE = BENCHMARK_DIR / "validation_plot.png"
 REPORT_PDF = BENCHMARK_DIR / "validation_report.pdf"
 REPORT_HTML = BENCHMARK_DIR / "validation_report.html"
 
+
 def escape_pdf_string(s: str) -> str:
     """Escape parentheses and backslashes for PDF string literals."""
     return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
 
 def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
     """Generate a 100% valid, compliant PDF binary from scratch containing simulation results."""
@@ -39,7 +41,7 @@ def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
     case_b = results["case_b"]
     case_c = results["case_c"]
 
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
 
     title = "Benchmark 8: Ballistic Limit (V50) Validation Report"
     sub = f"Generated: {timestamp}"
@@ -83,11 +85,11 @@ def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
         f"({escape_pdf_string(status_b)}) Tj",
         "T*",
         f"({escape_pdf_string(status_c)}) Tj",
-        "ET"
+        "ET",
     ]
 
     content = "\n".join(stream_cmds)
-    content_bytes = content.encode('latin1')
+    content_bytes = content.encode("latin1")
 
     # Construct PDF structure
     objects = []
@@ -96,11 +98,13 @@ def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
     # 2 0 obj: Pages
     objects.append(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
     # 3 0 obj: Page
-    objects.append(b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>")
+    objects.append(
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
+    )
     # 4 0 obj: Font
     objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
     # 5 0 obj: Contents stream
-    stream_meta = f"<< /Length {len(content_bytes)} >>".encode('latin1')
+    stream_meta = f"<< /Length {len(content_bytes)} >>".encode("latin1")
     objects.append(stream_meta + b"\nstream\n" + content_bytes + b"\nendstream")
 
     # Write PDF file
@@ -109,26 +113,29 @@ def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
         offsets = []
         for i, obj in enumerate(objects):
             offsets.append(f.tell())
-            f.write(f"{i+1} 0 obj\n".encode('latin1'))
+            f.write(f"{i + 1} 0 obj\n".encode("latin1"))
             f.write(obj)
             f.write(b"\nendobj\n")
 
         xref_offset = f.tell()
         f.write(b"xref\n")
-        f.write(f"0 {len(objects)+1}\n".encode('latin1'))
+        f.write(f"0 {len(objects) + 1}\n".encode("latin1"))
         f.write(b"0000000000 65535 f \n")
         for offset in offsets:
-            f.write(f"{offset:010d} 00000 n \n".encode('latin1'))
+            f.write(f"{offset:010d} 00000 n \n".encode("latin1"))
 
         f.write(b"trailer\n")
-        f.write(f"<< /Size {len(objects)+1} /Root 1 0 R >>\n".encode('latin1'))
+        f.write(f"<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode("latin1"))
         f.write(b"startxref\n")
-        f.write(f"{xref_offset}\n".encode('latin1'))
+        f.write(f"{xref_offset}\n".encode("latin1"))
         f.write(b"%%EOF\n")
+
 
 def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     """Run a single dynamic simulation case and return result metrics."""
-    print(f"\n--- Running Case {run_id} (strike velocity: {v_strike} m/s, backend: {backend_name}) ---")
+    print(
+        f"\n--- Running Case {run_id} (strike velocity: {v_strike} m/s, backend: {backend_name}) ---"
+    )
 
     # 1.365 mm element size: exactly 4 elements span the 5.46 mm projectile diameter
     nx, ny = 184, 184
@@ -157,11 +164,11 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
     # Setup Projectile: 17-grain FSP (treated as Right Circular Cylinder)
     proj_mass = 0.0011  # 1.10 grams
-    R = 0.00273         # 5.46 mm diameter
-    L = 0.006           # 6 mm length
+    R = 0.00273  # 5.46 mm diameter
+    L = 0.006  # 6 mm length
     I_zz = 0.5 * proj_mass * R**2
     I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
-    proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
+    proj_inertia_inv = np.diag([1.0 / I_xx, 1.0 / I_xx, 1.0 / I_zz])
 
     proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
     proj_vel = np.array([0.0, 0.0, v_strike], dtype=np.float64)
@@ -250,11 +257,11 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 0.0001,
                 dx,
                 k_penalty,
-                0.0,   # rayleigh_alpha
+                0.0,  # rayleigh_alpha
                 5e-8,  # rayleigh_beta
-                0.038, # failure_strain
-                0.0228, # damage_onset_strain
-                1.5,   # fracture_energy_multiplier
+                0.038,  # failure_strain
+                0.0228,  # damage_onset_strain
+                1.5,  # fracture_energy_multiplier
                 dt,
                 save_interval,
                 save_interval,
@@ -280,7 +287,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 contact_energy_init=contact_energy,
                 friction_dissipated_init=friction_dissipated,
             )
-        else: # numba
+        else:  # numba
             (
                 pos,
                 vel,
@@ -321,11 +328,11 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 0.0001,
                 dx,
                 k_penalty,
-                0.0,   # rayleigh_alpha
+                0.0,  # rayleigh_alpha
                 5e-8,  # rayleigh_beta
-                0.038, # failure_strain
-                0.0228, # damage_onset_strain
-                1.5,   # fracture_energy_multiplier
+                0.038,  # failure_strain
+                0.0228,  # damage_onset_strain
+                1.5,  # fracture_energy_multiplier
                 dt,
                 save_interval,
                 save_interval,
@@ -369,15 +376,24 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
         p1 = pos[grid.springs[:, 0]]
         p2 = pos[grid.springs[:, 1]]
-        lens = np.sqrt(np.sum((p2 - p1)**2, axis=1))
+        lens = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
         strains = (lens - grid.rest_lengths) / grid.rest_lengths
         strains_eff = np.where(grid.tension_only & (strains < 0.0), 0.0, strains)
-        se_springs = np.sum(0.5 * grid.stiffnesses * (strains_eff * grid.rest_lengths)**2)
+        se_springs = np.sum(0.5 * grid.stiffnesses * (strains_eff * grid.rest_lengths) ** 2)
         se_springs = float(np.sum(np.where(grid.failed, 0.0, se_springs)))
 
         ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
 
-        total_energy = ke_nodes + se_springs + ke_proj + damp_dissipated + failure_dissipated + clamp_dissipated + contact_energy + friction_dissipated
+        total_energy = (
+            ke_nodes
+            + se_springs
+            + ke_proj
+            + damp_dissipated
+            + failure_dissipated
+            + clamp_dissipated
+            + contact_energy
+            + friction_dissipated
+        )
         abs(total_energy - initial_energy) / initial_energy * 100.0
 
         hist_ke.append(ke_nodes)
@@ -399,11 +415,13 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
     t1 = time.perf_counter()
     residual_vel = max(0.0, float(proj_vel[2]))
-    energy_drift = float(np.max(np.abs(np.array(hist_total_energy) - initial_energy)) / initial_energy)
+    energy_drift = float(
+        np.max(np.abs(np.array(hist_total_energy) - initial_energy)) / initial_energy
+    )
 
     print(f"Case {run_id} Finished in {t1 - t0:.2f} s")
     print(f"  Residual Velocity: {residual_vel:.2f} m/s")
-    print(f"  Energy Drift: {energy_drift*100:.3f}%")
+    print(f"  Energy Drift: {energy_drift * 100:.3f}%")
     print(f"  Peak Deceleration: {peak_decel_g:.1f} g")
 
     yarn_rupture_pct = (np.sum(grid.failed) / grid.n_springs) * 100.0
@@ -416,15 +434,17 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
     history = []
     for i in range(len(hist_time)):
-        history.append({
-            "time": hist_time[i],
-            "peak_strain": hist_peak_strain[i],
-            "ke": hist_ke[i],
-            "se": hist_se[i],
-            "damped": damp_dissipated,
-            "contact": contact_energy,
-            "total": hist_total_energy[i],
-        })
+        history.append(
+            {
+                "time": hist_time[i],
+                "peak_strain": hist_peak_strain[i],
+                "ke": hist_ke[i],
+                "se": hist_se[i],
+                "damped": damp_dissipated,
+                "contact": contact_energy,
+                "total": hist_total_energy[i],
+            }
+        )
 
     return {
         "initial_velocity": v_strike,
@@ -441,13 +461,19 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             "se": hist_se,
             "proj_ke": hist_proj_ke,
             "total": hist_total_energy,
-        }
+        },
     }
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run KevlarGrid Benchmark 8 validation sweep.")
-    parser.add_argument("--backend", type=str, choices=["taichi", "numba"], default="numba",
-                        help="Compute backend to use for simulation.")
+    parser.add_argument(
+        "--backend",
+        type=str,
+        choices=["taichi", "numba"],
+        default="numba",
+        help="Compute backend to use for simulation.",
+    )
     args = parser.parse_args()
 
     print("Starting Benchmark 8 - Ballistic Limit (V50) Validation Sweep...")
@@ -463,20 +489,20 @@ def main():
             "initial_velocity": case_a["initial_velocity"],
             "residual_velocity": case_a["residual_velocity"],
             "energy_drift_pct": case_a["energy_drift_pct"],
-            "penetrated": case_a["penetrated"]
+            "penetrated": case_a["penetrated"],
         },
         "case_b": {
             "initial_velocity": case_b["initial_velocity"],
             "residual_velocity": case_b["residual_velocity"],
             "energy_drift_pct": case_b["energy_drift_pct"],
-            "penetrated": case_b["penetrated"]
+            "penetrated": case_b["penetrated"],
         },
         "case_c": {
             "initial_velocity": case_c["initial_velocity"],
             "residual_velocity": case_c["residual_velocity"],
             "energy_drift_pct": case_c["energy_drift_pct"],
-            "penetrated": case_c["penetrated"]
-        }
+            "penetrated": case_c["penetrated"],
+        },
     }
 
     with open(RESULTS_FILE, "w") as f:
@@ -485,7 +511,9 @@ def main():
 
     # Plot Jonas-Laval curve and validation points
     v_strike = np.array([450.0, 503.0, 550.0])
-    v_residual = np.array([case_a["residual_velocity"], case_b["residual_velocity"], case_c["residual_velocity"]])
+    v_residual = np.array(
+        [case_a["residual_velocity"], case_b["residual_velocity"], case_c["residual_velocity"]]
+    )
 
     # Jonas-Laval Fit
     v50_fit = 503.0
@@ -497,12 +525,23 @@ def main():
     v_s_plot = np.linspace(400.0, 600.0, 500)
     v_r_plot = np.zeros_like(v_s_plot)
     mask = v_s_plot > v50_fit
-    v_r_plot[mask] = alpha_fit * np.sqrt(v_s_plot[mask]**2 - v50_fit**2)
+    v_r_plot[mask] = alpha_fit * np.sqrt(v_s_plot[mask] ** 2 - v50_fit**2)
 
-    plt.plot(v_s_plot, v_r_plot, color="#34495e", linewidth=2.5, zorder=4, label="Lambert-Jonas Fit ($V_{50} = 503$ m/s)")
-    plt.axvline(503.0, color="#2ecc71", linestyle="--", linewidth=1.5, label="Experimental V50 (503 m/s)")
+    plt.plot(
+        v_s_plot,
+        v_r_plot,
+        color="#34495e",
+        linewidth=2.5,
+        zorder=4,
+        label="Lambert-Jonas Fit ($V_{50} = 503$ m/s)",
+    )
+    plt.axvline(
+        503.0, color="#2ecc71", linestyle="--", linewidth=1.5, label="Experimental V50 (503 m/s)"
+    )
 
-    plt.title("Benchmark 8: Kevlar 29 Style 713 (13-Ply, 17-Grain FSP)", fontsize=12, fontweight="bold")
+    plt.title(
+        "Benchmark 8: Kevlar 29 Style 713 (13-Ply, 17-Grain FSP)", fontsize=12, fontweight="bold"
+    )
     plt.xlabel("Strike Velocity (m/s)", fontsize=11)
     plt.ylabel("Residual Velocity (m/s)", fontsize=11)
     plt.xlim(420, 580)
@@ -533,7 +572,7 @@ def main():
             "velocity": [0.0, 0.0, 503.0],
             "blade_width": 0.0,
             "edge_thickness": 0.0,
-        }
+        },
     }
 
     # Use Case B as the representative telemetry report case
@@ -566,23 +605,50 @@ def main():
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.pdfgen import canvas
+
             c = canvas.Canvas(str(REPORT_PDF), pagesize=letter)
             c.setFont("Helvetica-Bold", 16)
             c.drawString(72, 720, "Benchmark 8: Ballistic Limit (V50) Validation Report")
             c.setFont("Helvetica", 10)
-            c.drawString(72, 700, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}")
+            c.drawString(
+                72, 700, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}"
+            )
             c.setFont("Helvetica-Bold", 12)
             c.drawString(72, 660, "Experimental V50 Reference: 503 m/s (Kevlar 29)")
             c.setFont("Helvetica", 10)
-            c.drawString(72, 630, f"Case A (450 m/s): Residual Velocity = {results['case_a']['residual_velocity']:.2f} m/s (Arrested: {not results['case_a']['penetrated']})")
-            c.drawString(72, 610, f"Case B (503 m/s): Residual Velocity = {results['case_b']['residual_velocity']:.2f} m/s (Arrested: {not results['case_b']['penetrated']})")
-            c.drawString(72, 590, f"Case C (550 m/s): Residual Velocity = {results['case_c']['residual_velocity']:.2f} m/s (Arrested: {not results['case_c']['penetrated']})")
+            c.drawString(
+                72,
+                630,
+                f"Case A (450 m/s): Residual Velocity = {results['case_a']['residual_velocity']:.2f} m/s (Arrested: {not results['case_a']['penetrated']})",
+            )
+            c.drawString(
+                72,
+                610,
+                f"Case B (503 m/s): Residual Velocity = {results['case_b']['residual_velocity']:.2f} m/s (Arrested: {not results['case_b']['penetrated']})",
+            )
+            c.drawString(
+                72,
+                590,
+                f"Case C (550 m/s): Residual Velocity = {results['case_c']['residual_velocity']:.2f} m/s (Arrested: {not results['case_c']['penetrated']})",
+            )
             c.setFont("Helvetica-Bold", 11)
             c.drawString(72, 550, "Verification Outcomes:")
             c.setFont("Helvetica", 10)
-            c.drawString(72, 530, f"  - Case A (450 m/s) is arrested: {'PASS' if not results['case_a']['penetrated'] else 'FAIL'}")
-            c.drawString(72, 510, f"  - Case B (503 m/s) residual velocity < 25 m/s: {'PASS' if results['case_b']['residual_velocity'] < 25.0 else 'FAIL'}")
-            c.drawString(72, 490, f"  - Case C (550 m/s) residual velocity ~220 m/s: {'PASS' if abs(results['case_c']['residual_velocity'] - 220.0) <= 20.0 else 'FAIL'}")
+            c.drawString(
+                72,
+                530,
+                f"  - Case A (450 m/s) is arrested: {'PASS' if not results['case_a']['penetrated'] else 'FAIL'}",
+            )
+            c.drawString(
+                72,
+                510,
+                f"  - Case B (503 m/s) residual velocity < 25 m/s: {'PASS' if results['case_b']['residual_velocity'] < 25.0 else 'FAIL'}",
+            )
+            c.drawString(
+                72,
+                490,
+                f"  - Case C (550 m/s) residual velocity ~220 m/s: {'PASS' if abs(results['case_c']['residual_velocity'] - 220.0) <= 20.0 else 'FAIL'}",
+            )
             c.save()
             print(f"PDF report successfully compiled via ReportLab to {REPORT_PDF}")
             pdf_compiled = True
@@ -593,26 +659,69 @@ def main():
     if not pdf_compiled:
         try:
             from fpdf import FPDF
+
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", "B", 16)
             pdf.cell(0, 10, "Benchmark 8: Ballistic Limit (V50) Validation Report", ln=1, align="L")
             pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 10, f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}", ln=1, align="L")
+            pdf.cell(
+                0,
+                10,
+                f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
+                ln=1,
+                align="L",
+            )
             pdf.ln(10)
             pdf.set_font("Arial", "B", 12)
             pdf.cell(0, 10, "Experimental V50 Reference: 503 m/s (Kevlar 29)", ln=1, align="L")
             pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 10, f"Case A (450 m/s): Residual Velocity = {results['case_a']['residual_velocity']:.2f} m/s (Arrested: {not results['case_a']['penetrated']})", ln=1, align="L")
-            pdf.cell(0, 10, f"Case B (503 m/s): Residual Velocity = {results['case_b']['residual_velocity']:.2f} m/s (Arrested: {not results['case_b']['penetrated']})", ln=1, align="L")
-            pdf.cell(0, 10, f"Case C (550 m/s): Residual Velocity = {results['case_c']['residual_velocity']:.2f} m/s (Arrested: {not results['case_c']['penetrated']})", ln=1, align="L")
+            pdf.cell(
+                0,
+                10,
+                f"Case A (450 m/s): Residual Velocity = {results['case_a']['residual_velocity']:.2f} m/s (Arrested: {not results['case_a']['penetrated']})",
+                ln=1,
+                align="L",
+            )
+            pdf.cell(
+                0,
+                10,
+                f"Case B (503 m/s): Residual Velocity = {results['case_b']['residual_velocity']:.2f} m/s (Arrested: {not results['case_b']['penetrated']})",
+                ln=1,
+                align="L",
+            )
+            pdf.cell(
+                0,
+                10,
+                f"Case C (550 m/s): Residual Velocity = {results['case_c']['residual_velocity']:.2f} m/s (Arrested: {not results['case_c']['penetrated']})",
+                ln=1,
+                align="L",
+            )
             pdf.ln(10)
             pdf.set_font("Arial", "B", 11)
             pdf.cell(0, 10, "Verification Outcomes:", ln=1, align="L")
             pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 10, f"  - Case A (450 m/s) is arrested: {'PASS' if not results['case_a']['penetrated'] else 'FAIL'}", ln=1, align="L")
-            pdf.cell(0, 10, f"  - Case B (503 m/s) residual velocity < 25 m/s: {'PASS' if results['case_b']['residual_velocity'] < 25.0 else 'FAIL'}", ln=1, align="L")
-            pdf.cell(0, 10, f"  - Case C (550 m/s) residual velocity ~220 m/s: {'PASS' if abs(results['case_c']['residual_velocity'] - 220.0) <= 20.0 else 'FAIL'}", ln=1, align="L")
+            pdf.cell(
+                0,
+                10,
+                f"  - Case A (450 m/s) is arrested: {'PASS' if not results['case_a']['penetrated'] else 'FAIL'}",
+                ln=1,
+                align="L",
+            )
+            pdf.cell(
+                0,
+                10,
+                f"  - Case B (503 m/s) residual velocity < 25 m/s: {'PASS' if results['case_b']['residual_velocity'] < 25.0 else 'FAIL'}",
+                ln=1,
+                align="L",
+            )
+            pdf.cell(
+                0,
+                10,
+                f"  - Case C (550 m/s) residual velocity ~220 m/s: {'PASS' if abs(results['case_c']['residual_velocity'] - 220.0) <= 20.0 else 'FAIL'}",
+                ln=1,
+                align="L",
+            )
             pdf.output(str(REPORT_PDF))
             print(f"PDF report successfully compiled via FPDF to {REPORT_PDF}")
             pdf_compiled = True
@@ -623,11 +732,14 @@ def main():
     if not pdf_compiled:
         try:
             generate_pure_python_pdf(REPORT_PDF, results)
-            print(f"PDF report successfully compiled via built-in pure-Python compiler to {REPORT_PDF}")
+            print(
+                f"PDF report successfully compiled via built-in pure-Python compiler to {REPORT_PDF}"
+            )
             pdf_compiled = True
         except Exception as e:
             print(f"Pure-Python PDF compiler failed: {e}")
             raise RuntimeError("All PDF compilation engines and fallbacks failed.") from e
+
 
 if __name__ == "__main__":
     main()

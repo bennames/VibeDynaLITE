@@ -10,6 +10,7 @@ from kevlargrid.solver.timestep import compute_cfl_timestep
 # Initialize Taichi
 ti.init(arch=ti.metal if ti.metal else ti.cpu)
 
+
 def main():
     print("Setting up grid...")
     nx, ny = 138, 138
@@ -41,7 +42,7 @@ def main():
     L = 0.006
     I_zz = 0.5 * proj_mass * R**2
     I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
-    proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
+    proj_inertia_inv = np.diag([1.0 / I_xx, 1.0 / I_xx, 1.0 / I_zz])
 
     proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
     proj_vel = np.array([0.0, 0.0, 503.0], dtype=np.float64)
@@ -112,6 +113,7 @@ def main():
     print(f"Completed 1000 steps in {t1 - t0:.2f} s")
     print(f"Final projectile pos Z: {res[3][2]:.5f} m")
     print(f"Final projectile vel Z: {res[4][2]:.2f} m/s")
+
 
 if __name__ == "__main__":
     main()

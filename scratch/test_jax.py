@@ -75,11 +75,12 @@ try:
         t_sim_init=0.0,
         strike_direction=0.0,
         node_initial_springs=np.zeros(n_nodes, dtype=np.int32),
-        node_spring_offsets=np.zeros(n_nodes+1, dtype=np.int32),
-        node_spring_ids=np.zeros(2*n_springs, dtype=np.int32),
-        node_spring_signs=np.zeros(2*n_springs, dtype=np.float64),
+        node_spring_offsets=np.zeros(n_nodes + 1, dtype=np.int32),
+        node_spring_ids=np.zeros(2 * n_springs, dtype=np.int32),
+        node_spring_signs=np.zeros(2 * n_springs, dtype=np.float64),
     )
     print("JAX execution succeeded!")
 except Exception:
     import traceback
+
     traceback.print_exc()

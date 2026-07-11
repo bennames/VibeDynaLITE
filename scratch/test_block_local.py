@@ -19,6 +19,7 @@ for i in range(3):
 
 indices = ti.field(dtype=ti.i32, shape=(10,))
 
+
 @ti.kernel
 def test_kernel():
     ti.block_local(a)
@@ -26,6 +27,7 @@ def test_kernel():
     for i in range(10):
         idx = indices[i]
         b[idx] += a[idx]
+
 
 a.from_numpy(np.ones((n, 3), dtype=np.float32))
 indices.from_numpy(np.arange(10, dtype=np.int32) * 5)

@@ -33,7 +33,7 @@ p2 = positions[grid.springs[:, 1]]
 diff = p2 - p1
 lengths = np.sqrt(np.sum(diff**2, axis=1))
 strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-newly_failed = (strains > 0.05)
+newly_failed = strains > 0.05
 grid_failed = grid.failed | newly_failed
 
 lengths_safe = np.where(lengths == 0.0, 1.0, lengths)
@@ -71,7 +71,11 @@ rayleigh_alpha = 0.1
 
 x_proj = np.maximum(proj_position[0] - w_h, np.minimum(positions[:, 0], proj_position[0] + w_h))
 y_proj = np.maximum(proj_position[1] - t_h, np.minimum(positions[:, 1], proj_position[1] + t_h))
-dists = np.sqrt((positions[:, 0] - x_proj)**2 + (positions[:, 1] - y_proj)**2 + (positions[:, 2] - proj_position[2])**2)
+dists = np.sqrt(
+    (positions[:, 0] - x_proj) ** 2
+    + (positions[:, 1] - y_proj) ** 2
+    + (positions[:, 2] - proj_position[2]) ** 2
+)
 contact_mask = dists <= 0.02
 
 w_i = np.where(contact_mask, 1.0 / np.maximum(dists, 1e-4), 0.0)
@@ -90,7 +94,7 @@ for i, (n0, n1) in enumerate(grid.springs):
     active_counts[n0] += active_springs[i]
     active_counts[n1] += active_springs[i]
 
-node_initial_springs = active_counts.copy() # assuming no failed initial springs
+node_initial_springs = active_counts.copy()  # assuming no failed initial springs
 scale_factor = np.where(node_initial_springs > 0, active_counts / node_initial_springs, 0.0)
 f_i = f_i * scale_factor
 proj_forces = np.zeros_like(positions)

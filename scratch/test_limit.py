@@ -100,7 +100,7 @@ def run_debug(v_strike):
 
         # Check failed status of each center spring
         failed_statuses = grid.failed[c_spring_ids]
-        print(f"  Chunk {chunk+1}: t_sim = {t_sim:.3e} s")
+        print(f"  Chunk {chunk + 1}: t_sim = {t_sim:.3e} s")
         print(f"    proj_pos Z = {proj_pos[2]:.6f} m | proj_vel Z = {proj_vel[2]:.1f} m/s")
         print(f"    Center node springs failed: {failed_statuses}")
 
@@ -110,5 +110,6 @@ def run_debug(v_strike):
         if proj_pos[2] > 0.015 and proj_vel[2] > 0.0:
             print("  Penetrated and passed Z = 0.015!")
             break
+
 
 run_debug(400.0)

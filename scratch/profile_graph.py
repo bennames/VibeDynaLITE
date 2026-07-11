@@ -42,7 +42,7 @@ R = 0.00273
 L = 0.006
 I_zz = 0.5 * proj_mass * R**2
 I_xx = (1.0 / 12.0) * proj_mass * (3.0 * R**2 + L**2)
-proj_inertia_inv = np.diag([1.0/I_xx, 1.0/I_xx, 1.0/I_zz])
+proj_inertia_inv = np.diag([1.0 / I_xx, 1.0 / I_xx, 1.0 / I_zz])
 
 proj_pos = np.array([0.0, 0.0, -0.002], dtype=np.float64)
 proj_vel = np.array([0.0, 0.0, 450.0], dtype=np.float64)
@@ -105,7 +105,7 @@ for size in [1, 2, 5, 10]:
         # Sync GPU to get accurate timing
         ti.sync()
         t_run = time.time() - t0
-        print(f"Running 100 steps took {t_run:.2f} seconds (average {t_run/100:.3f} s/step).")
+        print(f"Running 100 steps took {t_run:.2f} seconds (average {t_run / 100:.3f} s/step).")
         sys.stdout.flush()
     except Exception as e:
         print(f"Failed for size {size}: {e}")

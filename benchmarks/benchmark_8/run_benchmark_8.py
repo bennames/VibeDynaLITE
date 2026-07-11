@@ -155,11 +155,14 @@ def generate_pure_python_pdf(filepath: Path, results: dict) -> None:
 def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     """Run a single dynamic simulation case and return result metrics."""
     if backend_name == "taichi":
-        logger.info("Taichi backend does not support shell J2 plasticity. Falling back to Numba backend for validation.")
+        logger.info(
+            "Taichi backend does not support shell J2 plasticity. Falling back to Numba backend for validation."
+        )
         backend_name = "numba"
 
     try:
         import numba
+
         active_threads = numba.get_num_threads()
     except Exception:
         active_threads = "unknown"
@@ -177,6 +180,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     n_plies = 1
 
     from kevlargrid.materials.library import MATERIALS
+
     mat = MATERIALS["Corten Steel (14 Gauge)"]
 
     grid = generate_rectangular_grid(nx, ny, dx, mat, n_plies=n_plies, t_ply=0.002)
@@ -189,7 +193,14 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                 boundary_mask[i * ny + j] = True
 
     # Setup Projectile: Steel bullet (1.70 kg, radius 5 mm, length 15 mm)
-    proj = Projectile(mass=1.70, velocity=[0.0, 0.0, v_strike], position=[0.0, 0.0, -0.015], shape_type="bullet", radius=0.005, length=0.015)
+    proj = Projectile(
+        mass=1.70,
+        velocity=[0.0, 0.0, v_strike],
+        position=[0.0, 0.0, -0.015],
+        shape_type="bullet",
+        radius=0.005,
+        length=0.015,
+    )
     proj_mass = proj.mass
     proj_radius = proj.radius
     proj_length = proj.length
@@ -208,7 +219,11 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     rayleigh_alpha = 0.0
 
     # Auto CFL timestep calculation (mirroring worker.py)
-    c_p = np.sqrt(mat["tensile_modulus_gpa"] * 1e9 / (mat["fiber_density_gcc"] * 1000.0 * (1.0 - mat["poisson_ratio"]**2)))
+    c_p = np.sqrt(
+        mat["tensile_modulus_gpa"]
+        * 1e9
+        / (mat["fiber_density_gcc"] * 1000.0 * (1.0 - mat["poisson_ratio"] ** 2))
+    )
     omega_shell = 2.0 * c_p / dx
     mass_min = np.min(grid.masses)
     k_total = mass_min * (omega_shell**2) + 4.0 * k_penalty
@@ -343,7 +358,26 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             rate_parameter_p=mat["rate_parameter_p"],
         )
 
-        pos, vel, _, proj_pos, proj_vel_new, damp_diss, fail_diss, clamp_diss, t_sim, _, _, _, _, _, _, _, contact_energy, friction_diss = res
+        (
+            pos,
+            vel,
+            _,
+            proj_pos,
+            proj_vel_new,
+            damp_diss,
+            fail_diss,
+            clamp_diss,
+            t_sim,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+            contact_energy,
+            friction_diss,
+        ) = res
 
         # Track deceleration of the projectile
         accel_z = (proj_vel_new[2] - proj_vel[2]) / (save_interval * dt)
@@ -359,7 +393,15 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
         # Calculate strain energy from element J2 stress
         se_elems = 0.0
-        w_pts_se = np.array([thickness/12.0, 4.0*thickness/12.0, 2.0*thickness/12.0, 4.0*thickness/12.0, thickness/12.0])
+        w_pts_se = np.array(
+            [
+                thickness / 12.0,
+                4.0 * thickness / 12.0,
+                2.0 * thickness / 12.0,
+                4.0 * thickness / 12.0,
+                thickness / 12.0,
+            ]
+        )
         for e in range(n_elements):
             if element_failed[e] == 0:
                 el_se = 0.0
@@ -369,14 +411,30 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
                     s_yy = element_stress[e, k, 1]
                     t_xy = element_stress[e, k, 2]
                     d_factor = 1.0 - element_damage[e, k]
-                    u0 = (0.5 / (mat["tensile_modulus_gpa"] * 1e9)) * (
-                        s_xx**2 + s_yy**2 - 2.0 * mat["poisson_ratio"] * s_xx * s_yy + 2.0 * (1.0 + mat["poisson_ratio"]) * t_xy**2
-                    ) * d_factor
+                    u0 = (
+                        (0.5 / (mat["tensile_modulus_gpa"] * 1e9))
+                        * (
+                            s_xx**2
+                            + s_yy**2
+                            - 2.0 * mat["poisson_ratio"] * s_xx * s_yy
+                            + 2.0 * (1.0 + mat["poisson_ratio"]) * t_xy**2
+                        )
+                        * d_factor
+                    )
                     el_se += u0 * wk
                 se_elems += el_se * (dx * dx)
 
         ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
-        total_energy = ke_nodes + se_elems + ke_proj + damp_diss + fail_diss + clamp_diss + contact_energy + friction_diss
+        total_energy = (
+            ke_nodes
+            + se_elems
+            + ke_proj
+            + damp_diss
+            + fail_diss
+            + clamp_diss
+            + contact_energy
+            + friction_diss
+        )
         drift_pct = (total_energy - initial_energy) / initial_energy * 100.0
 
         n_failed_elems = int(np.sum(element_failed == 1))
@@ -402,7 +460,9 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
 
     t1 = time.perf_counter()
     residual_vel = max(0.0, float(proj_vel[2]))
-    energy_drift = float(np.max(np.abs(np.array(hist_total_energy) - initial_energy)) / initial_energy)
+    energy_drift = float(
+        np.max(np.abs(np.array(hist_total_energy) - initial_energy)) / initial_energy
+    )
 
     logger.info(f"Case {run_id} Finished in {t1 - t0:.2f} s")
     logger.info(f"  Residual Velocity: {residual_vel:.2f} m/s")
@@ -533,7 +593,9 @@ def main():
     )
 
     plt.title(
-        "Benchmark 8: Steel Plate (Corten Steel 14 Gauge, Bullet Impact)", fontsize=12, fontweight="bold"
+        "Benchmark 8: Steel Plate (Corten Steel 14 Gauge, Bullet Impact)",
+        fontsize=12,
+        fontweight="bold",
     )
     plt.xlabel("Strike Velocity (m/s)", fontsize=11)
     plt.ylabel("Residual Velocity (m/s)", fontsize=11)

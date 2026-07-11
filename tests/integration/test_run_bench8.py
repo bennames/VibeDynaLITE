@@ -26,4 +26,3 @@ def test_run_benchmark_8(monkeypatch):
         assert case_id in results, f"{case_id} missing from results"
         drift = results[case_id]["energy_drift_pct"]
         assert drift < 10.0, f"{case_id} energy drift is too high: {drift:.2f}%"
-

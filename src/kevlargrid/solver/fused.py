@@ -1173,7 +1173,7 @@ def numba_compute_projectile_contact_forces(
             f_elastic = k_penalty * delta
             if f_elastic > f_cap:
                 f_elastic = f_cap
-            proj_contact_e_step += 0.5 * (f_elastic ** 2) / k_penalty * node_scale_factor
+            proj_contact_e_step += 0.5 * (f_elastic**2) / k_penalty * node_scale_factor
 
     return proj_forces, proj_reaction_force, proj_torque, proj_contact_e_step, friction_dissipated
 
@@ -2219,7 +2219,11 @@ def numba_step_shell_forces_and_failures(
             q_bulk = 0.0
             if eps_vol_dot < 0.0:
                 c_sound = sqrt(E / density_kgm3)
-                q_bulk = density_kgm3 * dx * (0.06 * c_sound * abs(eps_vol_dot) + 1.5 * dx * (eps_vol_dot**2))
+                q_bulk = (
+                    density_kgm3
+                    * dx
+                    * (0.06 * c_sound * abs(eps_vol_dot) + 1.5 * dx * (eps_vol_dot**2))
+                )
 
             d_factor = 1.0 - element_damage[e, k] if ultimate_strain > 0.0 else 1.0
 
@@ -2236,7 +2240,11 @@ def numba_step_shell_forces_and_failures(
             M_xy += wk * tau_xy_total * zk
 
             step_stiff_damp_power += (
-                ((sig_xx_damp - q_bulk) * e_dot_xx_k + (sig_yy_damp - q_bulk) * e_dot_yy_k + tau_xy_damp * g_dot_xy_k)
+                (
+                    (sig_xx_damp - q_bulk) * e_dot_xx_k
+                    + (sig_yy_damp - q_bulk) * e_dot_yy_k
+                    + tau_xy_damp * g_dot_xy_k
+                )
                 * wk
                 * (dx * dx)
             )
@@ -2787,13 +2795,15 @@ def _fused_shell_loop_jit(
 
                 # Strain energy se: estimate from element elastic stresses
                 se = 0.0
-                w_pts_se = np.array([
-                    thickness / 12.0,
-                    4.0 * thickness / 12.0,
-                    2.0 * thickness / 12.0,
-                    4.0 * thickness / 12.0,
-                    thickness / 12.0,
-                ])
+                w_pts_se = np.array(
+                    [
+                        thickness / 12.0,
+                        4.0 * thickness / 12.0,
+                        2.0 * thickness / 12.0,
+                        4.0 * thickness / 12.0,
+                        thickness / 12.0,
+                    ]
+                )
                 for e in range(n_elements):
                     if element_failed[e] == 0:
                         el_se = 0.0

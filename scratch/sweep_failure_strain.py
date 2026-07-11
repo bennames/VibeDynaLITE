@@ -39,15 +39,44 @@ for fail_strain in [0.04, 0.03, 0.02, 0.015, 0.01]:
 
     penetrated = False
     for _step in range(600):
-        (
-            pos_b, vel_b, grid_b.failed, proj_pos_b, proj_vel_b, *_
-        ) = fused_leapfrog_loop(
-            pos_b, vel_b, grid_b.springs, grid_b.stiffnesses, grid_b.rest_lengths,
-            grid_b.failed, grid_b.masses, grid_b.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            proj_pos_b, proj_vel_b, proj_mass, blade_width, edge_thickness,
-            1, n_nodes, 0.002, dx, k_penalty, 0.05, 1e-7, fail_strain, onset_strain, 1.5,
-            dt, 1, 1, 0.0, 0.0, 0.0, t_sim, 1.0,
-            grid_b.initial_spring_counts, grid_b.node_spring_offsets, grid_b.node_spring_ids, grid_b.node_spring_signs
+        (pos_b, vel_b, grid_b.failed, proj_pos_b, proj_vel_b, *_) = fused_leapfrog_loop(
+            pos_b,
+            vel_b,
+            grid_b.springs,
+            grid_b.stiffnesses,
+            grid_b.rest_lengths,
+            grid_b.failed,
+            grid_b.masses,
+            grid_b.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            proj_pos_b,
+            proj_vel_b,
+            proj_mass,
+            blade_width,
+            edge_thickness,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            k_penalty,
+            0.05,
+            1e-7,
+            fail_strain,
+            onset_strain,
+            1.5,
+            dt,
+            1,
+            1,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            1.0,
+            grid_b.initial_spring_counts,
+            grid_b.node_spring_offsets,
+            grid_b.node_spring_ids,
+            grid_b.node_spring_signs,
         )
         t_sim += dt
 
@@ -56,4 +85,6 @@ for fail_strain in [0.04, 0.03, 0.02, 0.015, 0.01]:
             penetrated = True
             break
 
-    print(f"fail_strain = {fail_strain:.3f} | penetrated? {penetrated} | final Z-pos={proj_pos_b[2]:.6f}, final Z-vel={proj_vel_b[2]:.2f}, failed springs={np.sum(grid_b.failed)}")
+    print(
+        f"fail_strain = {fail_strain:.3f} | penetrated? {penetrated} | final Z-pos={proj_pos_b[2]:.6f}, final Z-vel={proj_vel_b[2]:.2f}, failed springs={np.sum(grid_b.failed)}"
+    )

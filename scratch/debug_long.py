@@ -36,21 +36,52 @@ for k_penalty in [5e5, 1e6, 2e6]:
 
     print(f"\n--- Long Run k_penalty = {k_penalty:.1e} ---")
     for iter_idx in range(12):  # 12 * 50 = 600 steps
-        (
-            pos_b, vel_b, grid_b.failed, proj_pos_b, proj_vel_b, *_
-        ) = fused_leapfrog_loop(
-            pos_b, vel_b, grid_b.springs, grid_b.stiffnesses, grid_b.rest_lengths,
-            grid_b.failed, grid_b.masses, grid_b.tension_only, boundary_mask, np.zeros((n_nodes, 3)),
-            proj_pos_b, proj_vel_b, proj_mass, blade_width, edge_thickness,
-            1, n_nodes, 0.002, dx, k_penalty, 0.05, 1e-7, 0.04, 0.024, 1.5,
-            dt, 50, 50, 0.0, 0.0, 0.0, t_sim, 1.0,
-            grid_b.initial_spring_counts, grid_b.node_spring_offsets, grid_b.node_spring_ids, grid_b.node_spring_signs
+        (pos_b, vel_b, grid_b.failed, proj_pos_b, proj_vel_b, *_) = fused_leapfrog_loop(
+            pos_b,
+            vel_b,
+            grid_b.springs,
+            grid_b.stiffnesses,
+            grid_b.rest_lengths,
+            grid_b.failed,
+            grid_b.masses,
+            grid_b.tension_only,
+            boundary_mask,
+            np.zeros((n_nodes, 3)),
+            proj_pos_b,
+            proj_vel_b,
+            proj_mass,
+            blade_width,
+            edge_thickness,
+            1,
+            n_nodes,
+            0.002,
+            dx,
+            k_penalty,
+            0.05,
+            1e-7,
+            0.04,
+            0.024,
+            1.5,
+            dt,
+            50,
+            50,
+            0.0,
+            0.0,
+            0.0,
+            t_sim,
+            1.0,
+            grid_b.initial_spring_counts,
+            grid_b.node_spring_offsets,
+            grid_b.node_spring_ids,
+            grid_b.node_spring_signs,
         )
         t_sim += 50 * dt
         n_failed = np.sum(grid_b.failed)
         p1 = pos_b[grid_b.springs[:, 0]]
         p2 = pos_b[grid_b.springs[:, 1]]
-        lengths = np.sqrt(np.sum((p2 - p1)**2, axis=1))
+        lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
         strains = (lengths - grid_b.rest_lengths) / grid_b.rest_lengths
         max_strain = np.max(strains)
-        print(f"Step {(iter_idx+1)*50}: proj_pos={proj_pos_b[2]:.6f}, proj_vel={proj_vel_b[2]:.1f}, max_strain={max_strain:.4f}, failed_springs={n_failed}")
+        print(
+            f"Step {(iter_idx + 1) * 50}: proj_pos={proj_pos_b[2]:.6f}, proj_vel={proj_vel_b[2]:.1f}, max_strain={max_strain:.4f}, failed_springs={n_failed}"
+        )
