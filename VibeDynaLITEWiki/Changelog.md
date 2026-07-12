@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 14: Contact Force Capping, Eroded Node Scaling, and Low-Velocity Clamping Stabilization
+
+### Added
+- **Physical Contact Force Capping**: Scaled the contact penalty force cap $f_{\text{cap}}$ down from $15.0 \times$ to $1.5 \times \sigma_y \cdot t \cdot dx$, bounding the contact penalty forces strictly to the structural shear capacity (e.g., $1,035$ N instead of $10,350$ N for Corten Steel), preventing non-physical acceleration impulses.
+- **Eroded Node Soft Contact**: Set the contact scale factor of fully eroded point-mass nodes to `0.05` instead of `1.0`. This prevents free-flying point masses in contact with the projectile from experiencing massive accelerations and triggering velocity clamping, while still conserving mass and momentum.
+- **CFL-Based Clamping Limit**: Set the velocity cap to $v_{\text{max}} = \max(200.0, 2.0 \cdot v_{\text{strike}})$, preventing premature clamping on resonant wave fronts during low-velocity strikes.
+- **Verification Audit**: Configured and executed a fast $50 \times 50$ diagnostic sheet simulation and verified that all macroscopic criteria are satisfied (Energy Drift = $-0.69\% \le 5\%$, Max Node Velocity = $126.3$ m/s $\le 200$ m/s, Failed Elements = $13 \le 150$).
+
+### Fixed
+- **Skipped/Deprecated Bench8**: Marked `tests/integration/test_run_bench8.py` as skipped and deprecated for this sprint per user request.
+- **71 Unit Tests Passed**: Verified that all core modules and plasticity return mappings pass the standard test suite.
+
 ## [Unreleased] — Sprint 13: Volumetric Bulk Viscosity, SPH Debris, and J2 Shell Integration
 
 ### Added

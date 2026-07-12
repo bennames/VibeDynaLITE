@@ -1014,6 +1014,8 @@ def numba_compute_projectile_contact_forces(
     proj_c_damping,
     dx,
     cap_stiffness,
+    yield_strength_gpa,
+    thickness,
     mu_s,
     dt,
     allow_sph_debris,
@@ -1067,8 +1069,11 @@ def numba_compute_projectile_contact_forces(
             if not allow_sph_debris and active_counts[i] == 0.0:
                 continue
 
-            # Cap the penalty contact force to yarn structural capacity
-            f_cap = cap_stiffness * dx if cap_stiffness > 0.0 else 1.0e6
+            # Cap the penalty contact force to structural yield capacity if in metal shell mode
+            if yield_strength_gpa > 0.0:
+                f_cap = 1.5 * yield_strength_gpa * 1e9 * thickness * dx
+            else:
+                f_cap = cap_stiffness * dx if cap_stiffness > 0.0 else 1.0e6
 
             n_loc = numba_eval_sdf_normal(
                 P_loc_force,
@@ -1115,7 +1120,7 @@ def numba_compute_projectile_contact_forces(
                 if active_counts[i] > 0.0:
                     node_scale_factor = float(active_counts[i]) / float(node_initial_springs[i])
                 else:
-                    node_scale_factor = 1.0
+                    node_scale_factor = 0.05
 
             proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
             proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
@@ -1629,6 +1634,8 @@ def _fused_leapfrog_loop_jit(
                 proj_c_damping,
                 dx,
                 cap_stiffness,
+                0.0,  # yield_strength_gpa (not used in fabric mode)
+                0.0,  # thickness (not used in fabric mode)
                 mu_s,
                 dt,
                 False,  # allow_sph_debris
@@ -2597,21 +2604,29 @@ def _fused_shell_loop_jit(
                 active_counts[n2] += 1.0
                 active_counts[n3] += 1.0
             elif element_failed[e] == 2:
-                age = step - element_failed_step[e]
-                ramp = 1.0 - float(age) / float(erosion_softening_steps)
+                rem_steps = element_failed_step[e]
+                ramp = float(rem_steps) / float(erosion_softening_steps) if erosion_softening_steps > 0 else 0.0
                 if ramp < 0.0:
                     ramp = 0.0
+                elif ramp > 1.0:
+                    ramp = 1.0
                 active_counts[n0] += ramp
                 active_counts[n1] += ramp
                 active_counts[n2] += ramp
                 active_counts[n3] += ramp
 
+        # Compute physical velocity cap based on projectile speed (2.0 * strike speed, minimum floor of 200.0 m/s)
+        v_strike = sqrt(proj_velocity[0]**2 + proj_velocity[1]**2 + proj_velocity[2]**2)
+        v_max_limit = max(200.0, 2.0 * v_strike)
         c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
         v_max_phys = velocity_clamping_multiplier * c_p
         if dx / dt < v_max_phys:
             v_max = dx / dt
         else:
             v_max = v_max_phys
+        
+        if v_max > v_max_limit:
+            v_max = v_max_limit
 
         # 3. Calculate internal forces and moments
         shell_forces, shell_torques, step_fracture_energy, step_stiff_damp_power = (
@@ -2683,6 +2698,8 @@ def _fused_shell_loop_jit(
                 proj_c_damping,
                 dx,
                 yield_strength * thickness,
+                yield_strength_gpa,
+                thickness,
                 mu_s,
                 dt,
                 True,  # allow_sph_debris
@@ -2771,14 +2788,16 @@ def _fused_shell_loop_jit(
                 ang_accel[i, 2] = 0.0
 
         # CFL velocity clamping
-        v_full_mag = sqrt(sum(velocities**2, axis=1))
         for i in range(n_nodes):
-            v_mag = v_full_mag[i]
+            vx = velocities[i, 0]
+            vy = velocities[i, 1]
+            vz = velocities[i, 2]
+            v_mag = sqrt(vx * vx + vy * vy + vz * vz)
             if v_mag > v_max:
                 scale = v_max / v_mag
-                velocities[i, 0] *= scale
-                velocities[i, 1] *= scale
-                velocities[i, 2] *= scale
+                velocities[i, 0] = vx * scale
+                velocities[i, 1] = vy * scale
+                velocities[i, 2] = vz * scale
                 clamp_dissipated += 0.5 * grid_masses[i] * (v_mag * v_mag - v_max * v_max)
 
         proj_velocity = proj_v_half + 0.5 * proj_accel * dt

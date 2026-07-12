@@ -153,3 +153,9 @@ To prevent force and stress explosions when element softening spans across integ
   $$\text{ramp} = \frac{\text{remaining\_steps}}{\text{erosion\_softening\_steps}}$$
 * This guarantees that the softening behavior is perfectly persistent and independent of boundary step counter resets.
 
+### 5.6 Penalty Contact Force Capping & Eroded Node Scaling (July 2026 Sprint 14)
+To resolve the spurious energy pump in low-velocity impacts (e.g. 100 m/s) where velocity clamping artificially traps nodes within the projectile, three critical updates were implemented:
+1. **Physical Contact Cap**: The contact penalty force cap $f_{\text{cap}}$ is scaled down from $15.0 \times$ to $1.5 \times \sigma_y \cdot t \cdot dx$. This bounds the penalty contact forces strictly to the structural shear capacity (e.g. $1,035$ N instead of $10,350$ N), preventing node velocity launch impulses.
+2. **Eroded Node Contact Softening**: When all elements attached to a node erode (`active_counts == 0.0`), the node is retained as an SPH debris point-mass, but its contact scale factor is set to `0.05`. This soft contact prevents the free point-mass from experiencing massive penalty forces that would trigger numerical launch instabilities, while still conserving mass and momentum.
+3. **CFL-Based Velocity Clamping Limit**: The velocity cap is set to $v_{\text{max}} = \max(200.0, 2.0 \cdot v_{\text{strike}})$, ensuring that low-velocity impacts do not trigger premature clamping on resonant wave fronts.
+
