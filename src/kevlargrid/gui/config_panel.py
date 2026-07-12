@@ -865,7 +865,9 @@ class ConfigPanel:
             dpg.set_value(self.mat_ultimate_strain, mat.get("ultimate_strain", 0.0))
             dpg.set_value(self.mat_poisson_ratio, mat.get("poisson_ratio", 0.3))
 
-            struct_type = "Metallic Sheet" if mat.get("material_model") == "j2_plasticity" else "Fabric"
+            struct_type = (
+                "Metallic Sheet" if mat.get("material_model") == "j2_plasticity" else "Fabric"
+            )
             if dpg.get_value(self.sim_structure_type) != struct_type:
                 dpg.set_value(self.sim_structure_type, struct_type)
                 self._on_structure_type_change(None, struct_type)

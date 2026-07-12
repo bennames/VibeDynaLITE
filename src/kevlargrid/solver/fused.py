@@ -2605,7 +2605,11 @@ def _fused_shell_loop_jit(
                 active_counts[n3] += 1.0
             elif element_failed[e] == 2:
                 rem_steps = element_failed_step[e]
-                ramp = float(rem_steps) / float(erosion_softening_steps) if erosion_softening_steps > 0 else 0.0
+                ramp = (
+                    float(rem_steps) / float(erosion_softening_steps)
+                    if erosion_softening_steps > 0
+                    else 0.0
+                )
                 if ramp < 0.0:
                     ramp = 0.0
                 elif ramp > 1.0:
@@ -2616,7 +2620,7 @@ def _fused_shell_loop_jit(
                 active_counts[n3] += ramp
 
         # Compute physical velocity cap based on projectile speed (2.0 * strike speed, minimum floor of 200.0 m/s)
-        v_strike = sqrt(proj_velocity[0]**2 + proj_velocity[1]**2 + proj_velocity[2]**2)
+        v_strike = sqrt(proj_velocity[0] ** 2 + proj_velocity[1] ** 2 + proj_velocity[2] ** 2)
         v_max_limit = max(200.0, 2.0 * v_strike)
         c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
         v_max_phys = velocity_clamping_multiplier * c_p
@@ -2624,7 +2628,7 @@ def _fused_shell_loop_jit(
             v_max = dx / dt
         else:
             v_max = v_max_phys
-        
+
         if v_max > v_max_limit:
             v_max = v_max_limit
 
