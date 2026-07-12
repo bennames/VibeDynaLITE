@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 15: GUI Timestep Sync and Auto CFL UX Improvements
+
+### Added
+- **Dynamic GUI Timestep Sync**: Enabled live synchronization of the `Static Timestep (s)` textbox with the calculated CFL stable timestep when "Auto CFL" is checked. This ensures the user can see the exact timestep the solver will run at.
+- **Auto CFL Callback Triggers**: Registered callbacks on the `Auto CFL` checkbox, grid sizes (`nx`, `ny`, `dx`), and materials to update the manual static timestep input dynamically.
+
+### Fixed
+- **Stale Manual Timestep Bug**: Fixed the bug where the manual timestep input fell back to an unstable stale value ($9.42 \times 10^{-8}$ s) when switching from Kevlar 29 to Corten Steel, preventing numerical CFL explosions.
+- **Consistent File Size and Steps Estimations**: Updated the HDF5 file size estimator to read the manual static timestep input when `Auto CFL` is unchecked, ensuring accurate step count estimations.
+
+---
+
 ## [Unreleased] — Sprint 14: Contact Force Capping, Eroded Node Scaling, and Low-Velocity Clamping Stabilization
 
 ### Added

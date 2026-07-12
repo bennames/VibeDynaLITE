@@ -705,6 +705,7 @@ class ConfigPanel:
                             format="%.9f",
                             enabled=False,
                             width=-1,
+                            callback=self._update_file_size_estimate_cb,
                         )
                     with dpg.table_row():
                         dpg.add_text("Damping Model")
@@ -1162,10 +1163,17 @@ class ConfigPanel:
             else:
                 dt_crit = 1e-6
 
-            cfl = dpg.get_value(self.sim_cfl)
-            dt = cfl * dt_crit
-            if dt <= 0.0:
-                dt = 1e-6
+            auto_cfl = dpg.get_value(self.sim_auto_cfl)
+            if auto_cfl:
+                cfl = dpg.get_value(self.sim_cfl)
+                dt = cfl * dt_crit
+                if dt <= 0.0:
+                    dt = 1e-6
+                dpg.set_value(self.sim_dt, dt)
+            else:
+                dt = dpg.get_value(self.sim_dt)
+                if dt <= 0.0:
+                    dt = 1e-6
 
             duration = dpg.get_value(self.sim_duration)
             total_steps = int(duration / dt)
@@ -1577,3 +1585,4 @@ class ConfigPanel:
             return
         auto_cfl = dpg.get_value(self.sim_auto_cfl)
         dpg.configure_item(self.sim_dt, enabled=not auto_cfl)
+        self._update_file_size_estimate()
