@@ -94,3 +94,30 @@ We have successfully implemented the optional **2D explicit Finite Element (FE) 
 - Verified that all CI/CD checks pass successfully:
   - `lint` (ruff formatting, code quality, and mypy static analysis): **PASSED**
   - `test` (pytest unit tests): **PASSED**
+
+---
+
+## Sprint 16 & 17 Updates: Wave Mechanics & Failure Regularization
+
+### 1. Solver Physics & Stability Hardening
+To prevent spurious cascading failures ("unzipping" waves) under dynamic impact, we implemented four key solver corrections:
+- **Out-of-Plane Membrane Restoring Forces (The Trampoline Effect)**: We projected the membrane stress resultants ($N_{xx}, N_{yy}, N_{xy}$) onto the out-of-plane gradients ($w_{,x}, w_{,y}$) during internal force assembly ($f_{zi}$, `forces[..., 2]`):
+  \[
+  Q_x^{\text{eff}} = Q_x + N_{xx} w_{,x} + N_{xy} w_{,y}
+  \]
+  \[
+  Q_y^{\text{eff}} = Q_y + N_{yy} w_{,y} + N_{xy} w_{,x}
+  \]
+  This restores the physical "drumhead" tension response, preventing runaway deflections.
+- **Viscous Damage Regularization**: We regularized the J2 plastic strain damage evolution using a viscous relaxation parameter ($\mu_{\text{visc}} = 1.0\text{ }\mu\text{s}$):
+  \[
+  d^{n+1} = d^n + \left(\frac{dt}{dt + \mu_{\text{visc}}}\right) \Delta d
+  \]
+  This smooths local stress drops during erosion, preventing unregularized high-frequency shock waves from unzipping neighboring elements.
+- **Wave-Crossing Adaptive Softening**: Overrode `erosion_softening_steps` dynamically based on the element wave crossing time ($\max(\text{erosion\_softening\_steps}, dx / (c_p \cdot dt))$) to bleed off stresses smoothly over multiple steps.
+- **Eroded Node Zero-Velocity Clamping**: Set translational and rotational velocities/accelerations to exactly 0.0 for fully-eroded nodes (`active_counts == 0`) to prevent high-velocity debris particles from re-entering the mesh.
+
+### 2. Verification Outcomes
+- **119 Unit Tests Passed**: All integration and unit tests pass successfully.
+- **CI/CD Pipeline Checks**: Force-pushed commits compile successfully and pass all automated `lint` and `test` jobs on GitHub Actions.
+
