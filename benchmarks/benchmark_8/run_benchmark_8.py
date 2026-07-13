@@ -214,7 +214,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     proj_omega = np.zeros(3, dtype=np.float64)
     proj_quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
 
-    k_penalty = 2.0e6
+    k_penalty = 2.0e8
     rayleigh_beta = 1.0e-9
     rayleigh_alpha = 0.0
 
@@ -261,7 +261,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     element_damage = np.zeros((n_elements, 5), dtype=np.float64)
     element_failed = np.zeros(n_elements, dtype=np.int32)
     element_failed_step = -np.ones(n_elements, dtype=np.int32)
-    element_peeq_rate = np.zeros(n_elements, dtype=np.float64)
+    element_peeq_rate = np.zeros((n_elements, 5), dtype=np.float64)
     ang_pos = np.zeros((n_nodes, 3), dtype=np.float64)
     ang_vel = np.zeros((n_nodes, 3), dtype=np.float64)
     ang_acc = np.zeros((n_nodes, 3), dtype=np.float64)
@@ -332,6 +332,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             hist_proj_quat=np.zeros((save_interval, 4)),
             contact_energy_init=contact_energy,
             mu_s=0.20,
+            structure_type="metallic_sheet",
             friction_dissipated_init=friction_diss,
             elements=grid.elements,
             element_stress=element_stress,
@@ -361,7 +362,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
         (
             pos,
             vel,
-            _,
+            returned_failed,
             proj_pos,
             proj_vel_new,
             damp_diss,
@@ -378,6 +379,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             contact_energy,
             friction_diss,
         ) = res
+        element_failed = returned_failed.astype(np.int32)
 
         # Track deceleration of the projectile
         accel_z = (proj_vel_new[2] - proj_vel[2]) / (save_interval * dt)

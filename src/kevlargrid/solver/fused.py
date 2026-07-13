@@ -2136,7 +2136,9 @@ def numba_step_shell_forces_and_failures(
                     d_dmg = (yield_val * dx * d_peeq) / (2.0 * fracture_energy_jm2)
                 else:
                     d_dmg = d_peeq / eps_f
-                dmg_val = element_damage[e, k] + d_dmg
+                # Viscous regularization to prevent unphysical high-frequency shock waves
+                mu_visc = 1.0e-6  # 1 microsecond relaxation time
+                dmg_val = element_damage[e, k] + (dt / (dt + mu_visc)) * d_dmg
                 if dmg_val > 1.0:
                     dmg_val = 1.0
                 element_damage[e, k] = dmg_val
@@ -2286,31 +2288,35 @@ def numba_step_shell_forces_and_failures(
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
 
+        # Project membrane tensions onto out-of-plane gradients (Von Karman membrane stiffness)
+        Q_x_eff = Q_x + N_xx * dw_dx + N_xy * dw_dy
+        Q_y_eff = Q_y + N_yy * dw_dy + N_xy * dw_dx
+
         # Node 0
         forces[n0, 0] += N_xx * half_dx + N_xy * half_dx
         forces[n0, 1] += N_yy * half_dx + N_xy * half_dx
-        forces[n0, 2] += Q_x * half_dx + Q_y * half_dx
+        forces[n0, 2] += Q_x_eff * half_dx + Q_y_eff * half_dx
         torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n0, 1] += M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 1
         forces[n1, 0] += -N_xx * half_dx + N_xy * half_dx
         forces[n1, 1] += N_yy * half_dx - N_xy * half_dx
-        forces[n1, 2] += -Q_x * half_dx + Q_y * half_dx
+        forces[n1, 2] += -Q_x_eff * half_dx + Q_y_eff * half_dx
         torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 2
         forces[n2, 0] += -N_xx * half_dx - N_xy * half_dx
         forces[n2, 1] += -N_yy * half_dx - N_xy * half_dx
-        forces[n2, 2] += -Q_x * half_dx - Q_y * half_dx
+        forces[n2, 2] += -Q_x_eff * half_dx - Q_y_eff * half_dx
         torques[n2, 0] += M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 3
         forces[n3, 0] += N_xx * half_dx - N_xy * half_dx
         forces[n3, 1] += -N_yy * half_dx + N_xy * half_dx
-        forces[n3, 2] += Q_x * half_dx - Q_y * half_dx
+        forces[n3, 2] += Q_x_eff * half_dx - Q_y_eff * half_dx
         torques[n3, 0] += M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n3, 1] += M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
 
