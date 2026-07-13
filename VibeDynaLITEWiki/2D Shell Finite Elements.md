@@ -12,9 +12,11 @@ The solver utilizes a **Q4 Reissner-Mindlin Bilinear Quadrilateral Shell Element
    - 3 translational: $u_x, u_y, u_z$
    - 3 rotational: $\theta_x, \theta_y, \theta_z$
 2. **Kinematics**: Transverse shear deformation is included based on Reissner-Mindlin theory, allowing the element to remain valid for both thin and moderately thick plates.
-3. **Geometric Non-Linearity (Von Karman strains)**: To model transverse-membrane coupling under large deflections (necessary for lateral tension wave propagation), the strain formulation incorporates non-linear out-of-plane displacement gradients:
-   $$\epsilon_{xx} = \frac{\partial u}{\partial x} + \frac{1}{2}\left(\frac{\partial w}{\partial x}\right)^2, \quad \epsilon_{yy} = \frac{\partial v}{\partial y} + \frac{1}{2}\left(\frac{\partial w}{\partial y}\right)^2, \quad \gamma_{xy} = \frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} + \frac{\partial w}{\partial x}\frac{\partial w}{\partial y}$$
-   This ensures that vertical deflection $w$ induces membrane tension, distributing transverse loads laterally and initiating dynamic wave propagation.
+3. **Geometric Non-Linearity (Trigonometrically Projected Von Karman strains)**: To model transverse-membrane coupling under large deflections (necessary for lateral tension wave propagation) without mathematical singularities under extreme local rotation (e.g. past 45 degrees), the raw out-of-plane displacement gradients are projected onto their trigonometric sines:
+   $$\tilde{w}_{,x} = \frac{\frac{\partial w}{\partial x}}{\sqrt{1 + \left(\frac{\partial w}{\partial x}\right)^2 + \left(\frac{\partial w}{\partial y}\right)^2}}, \quad \tilde{w}_{,y} = \frac{\frac{\partial w}{\partial y}}{\sqrt{1 + \left(\frac{\partial w}{\partial x}\right)^2 + \left(\frac{\partial w}{\partial y}\right)^2}}$$
+   These bounded gradients $\tilde{w}_{,x}, \tilde{w}_{,y} \in [-1.0, 1.0]$ are then substituted into the non-linear Von Karman strain field:
+   $$\epsilon_{xx} = \frac{\partial u}{\partial x} + \frac{1}{2}\tilde{w}_{,x}^2, \quad \epsilon_{yy} = \frac{\partial v}{\partial y} + \frac{1}{2}\tilde{w}_{,y}^2, \quad \gamma_{xy} = \frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} + \tilde{w}_{,x}\tilde{w}_{,y}$$
+   This physically represents the projection of membrane tension onto the transverse direction (bounded to $T \sin\theta$), which ensures correct membrane stiffness at small deflections while preventing stress blow-ups and artificial cascading failures under large-rotation penetration.
 4. **Bending Curvatures**: Curvatures are evaluated from nodal rotation gradients:
    $$\kappa_{xx} = \frac{\partial \theta_y}{\partial x}, \quad \kappa_{yy} = -\frac{\partial \theta_x}{\partial y}, \quad \kappa_{xy} = \frac{\partial \theta_y}{\partial y} - \frac{\partial \theta_x}{\partial x}$$
 5. **Transverse Shear Strains**: Transverse shear strains allow for cross-sectional rotation relative to the mid-surface normal:

@@ -1117,10 +1117,11 @@ def numba_compute_projectile_contact_forces(
 
             node_scale_factor = 1.0
             if node_initial_springs[i] > 0:
-                if active_counts[i] > 0.0:
-                    node_scale_factor = float(active_counts[i]) / float(node_initial_springs[i])
+                active_ratio = float(active_counts[i]) / float(node_initial_springs[i])
+                if active_ratio < 0.5:
+                    node_scale_factor = 0.0
                 else:
-                    node_scale_factor = 0.05
+                    node_scale_factor = active_ratio
 
             proj_forces[i, 0] += f_mag * n_world[0] * node_scale_factor
             proj_forces[i, 1] += f_mag * n_world[1] * node_scale_factor
@@ -1935,10 +1936,15 @@ def numba_step_shell_forces_and_failures(
         tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
 
         # Compute out-of-plane deflection gradients
-        dw_dx = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
-        dw_dy = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
+        dw_dx_raw = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
+        dw_dy_raw = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
 
-        # Compute strains (with Von Karman non-linear membrane strain terms)
+        # Apply trigonometric sine projection to prevent gradient blow-up
+        grad_denom = sqrt(1.0 + dw_dx_raw**2 + dw_dy_raw**2)
+        dw_dx = dw_dx_raw / grad_denom
+        dw_dy = dw_dy_raw / grad_denom
+
+        # Compute strains (with geometrically bounded membrane strain terms)
         eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx) + 0.5 * dw_dx**2
         eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx) + 0.5 * dw_dy**2
         gam_xy = (
@@ -2226,8 +2232,8 @@ def numba_step_shell_forces_and_failures(
             sig_yy_damp = rayleigh_beta * C_mat * (e_dot_yy_k + nu * e_dot_xx_k)
             tau_xy_damp = rayleigh_beta * G * g_dot_xy_k
 
-            # Volumetric Bulk Viscosity
-            eps_vol_dot = e_dot_xx_k + e_dot_yy_k
+            # Volumetric Bulk Viscosity (membrane-only to prevent bending coupling)
+            eps_vol_dot = (d_eps_xx + d_eps_yy) / dt if dt > 0.0 else 0.0
             q_bulk = 0.0
             if eps_vol_dot < 0.0:
                 c_sound = sqrt(E / density_kgm3)
@@ -3098,12 +3104,12 @@ def fused_leapfrog_loop(
         if element_failed is None or element_failed.shape[0] != n_elems:
             element_failed = np.zeros(n_elems, dtype=np.int32)
         else:
-            element_failed = element_failed.astype(np.int32)
+            element_failed = element_failed.astype(np.int32, copy=False)
 
         if element_failed_step is None or element_failed_step.shape[0] != n_elems:
             element_failed_step = np.zeros(n_elems, dtype=np.int32) - 1
         else:
-            element_failed_step = element_failed_step.astype(np.int32)
+            element_failed_step = element_failed_step.astype(np.int32, copy=False)
 
         if element_strains is None or element_strains.shape[0] != n_elems:
             element_strains = np.zeros((n_elems, 8), dtype=positions.dtype)
