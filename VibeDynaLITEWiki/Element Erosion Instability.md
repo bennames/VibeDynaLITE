@@ -168,3 +168,21 @@ To resolve cascading failures caused by unphysical wave clipping and shock front
 3. **Corrected Strain State Updates**: Moved history-dependent `element_strains` store operations to execute after radial-return plasticity updates, ensuring strain increments are calculated based on the correct converged physical state.
 4. **Eroded Node Zero-Velocity Clamping**: Set translational and rotational velocities and accelerations to exactly 0.0 for fully-eroded nodes (`active_counts == 0`) to prevent high-velocity debris particles from re-entering the contact zone.
 
+### 5.8 Out-of-Plane Membrane Restoring Forces & Viscous Damage Regularization (July 2026 Sprint 17)
+To resolve unphysical cascading failures under high-energy impacts and correct shell solver kinematics:
+1. **Out-of-Plane Membrane Forces Projection (The Trampoline Effect)**:
+   Under large out-of-plane deflections ($w$), membrane tensions ($N_{xx}, N_{yy}, N_{xy}$) must resist out-of-plane motion. We project these tensions onto the mid-surface slope gradients ($w_{,x}, w_{,y}$):
+   \[
+   Q_x^{\text{eff}} = Q_x + N_{xx} w_{,x} + N_{xy} w_{,y}
+   \]
+   \[
+   Q_y^{\text{eff}} = Q_y + N_{yy} w_{,y} + N_{xy} w_{,x}
+   \]
+   These effective shear resultants are used for out-of-plane nodal force assembly ($f_{zi}$, `forces[..., 2]`), restoring the membrane stiffness response to dynamic transverse impact.
+2. **Viscous Damage Regularization**:
+   To prevent unphysical high-frequency shock waves generated during element deletion, we damp the damage rate using a viscous relaxation parameter ($\mu_{\text{visc}} = 1.0\text{ }\mu\text{s}$):
+   \[
+   d^{n+1} = d^n + \left(\frac{dt}{dt + \mu_{\text{visc}}}\right) \Delta d
+   \]
+   This regularizes damage growth over time, smoothing the local stress drop and stopping domino-like unzipping of adjacent elements.
+

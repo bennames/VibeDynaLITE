@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 17: Out-of-Plane Membrane Restoring Forces and Viscous Damage Regularization
+
+### Added
+- **Out-of-Plane Membrane Forces Projection (Trampoline Stiffness)**: Projected the large-deflection membrane tensions ($N_{xx}, N_{yy}, N_{xy}$) onto the out-of-plane gradients ($w_{,x}, w_{,y}$) during internal force assembly ($f_{zi}$, `forces[..., 2]`). This restores correct membrane structural coupling under transverse projectile impact.
+- **Viscous J2 Damage Regularization**: Damped the rate of J2 plastic strain damage evolution using a viscous relaxation parameter ($\mu_{\text{visc}} = 1.0\text{ }\mu\text{s}$), preventing instantaneous force/stress discontinuities that generate numerical unzipping shock waves.
+- **Benchmark 8 Integration Sync**: Updated validation parameters in `run_benchmark_8.py` to correctly dispatch `structure_type="metallic_sheet"` to the JIT shell solver loop.
+
+### Fixed
+- **119 Unit Tests Passed**: Verified that all core modules and plasticity return mappings pass the standard test suite.
+
+---
+
 ## [Unreleased] — Sprint 16: Wave-Crossing Adaptive Softening and Velocity Clamping Stability
 
 ### Added
