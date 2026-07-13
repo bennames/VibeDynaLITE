@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased] — Sprint 16: Wave-Crossing Adaptive Softening and Velocity Clamping Stability
+
+### Added
+- **Wave-Crossing Adaptive Softening**: Overrode `erosion_softening_steps` dynamically in the shell JIT loop to match or exceed the physical wave crossing time of the element ($\text{softening\_steps\_eff} = \max(\text{erosion\_softening\_steps}, dx / (c_p \cdot dt))$), ensuring that stress is released smoothly without creating singular numerical shock fronts.
+- **Wave-Speed-Based Velocity Clamping**: Removed the heuristic velocity cap `v_max_limit = max(200.0, 2.0 * v_strike)`, relying strictly on the physical longitudinal wave speed ($c_p \approx 5,291.5$ m/s for steel) for numerical velocity clamping to prevent non-physical momentum destruction.
+- **Eroded Node Zero-Velocity Clamping**: Explicitly set translational and rotational velocities and accelerations to 0.0 for fully-eroded nodes (`active_counts == 0`) to prevent high-velocity debris particles from re-entering the mesh boundaries and contact zone.
+
+### Fixed
+- **Corrected Strain State Updates**: Moved history-dependent `element_strains` store operations to execute after radial-return plasticity updates, ensuring strain increments are calculated based on the correct converged physical state.
+- **119 Unit Tests Passed**: Verified that all core modules and plasticity return mappings pass the standard test suite.
+
+---
+
 ## [Unreleased] — Sprint 15: GUI Timestep Sync and Auto CFL UX Improvements
 
 ### Added

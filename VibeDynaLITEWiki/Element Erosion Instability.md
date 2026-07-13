@@ -159,3 +159,12 @@ To resolve the spurious energy pump in low-velocity impacts (e.g. 100 m/s) where
 2. **Eroded Node Contact Softening**: When all elements attached to a node erode (`active_counts == 0.0`), the node is retained as an SPH debris point-mass, but its contact scale factor is set to `0.05`. This soft contact prevents the free point-mass from experiencing massive penalty forces that would trigger numerical launch instabilities, while still conserving mass and momentum.
 3. **CFL-Based Velocity Clamping Limit**: The velocity cap is set to $v_{\text{max}} = \max(200.0, 2.0 \cdot v_{\text{strike}})$, ensuring that low-velocity impacts do not trigger premature clamping on resonant wave fronts.
 
+### 5.7 Physical Wave-Speed Clamping & Adaptive Softening (July 2026 Sprint 16)
+To resolve cascading failures caused by unphysical wave clipping and shock front propagation:
+1. **Wave-Speed-Based Velocity Clamping**: Removed the heuristic $v_{\text{max\_limit}} = \max(200.0, 2.0 \cdot v_{\text{strike}})$ velocity cap. The solver now relies strictly on the physical longitudinal wave speed of the material ($c_p \approx 5,291.5$ m/s for steel) for numerical velocity clamping. This prevents non-conservative momentum destruction of physical snap-back waves and Poisson reflections.
+2. **Wave-Crossing Adaptive Softening**: Instead of dropping internal stresses over a hardcoded 10 steps, the solver dynamically overrides `erosion_softening_steps` to match or exceed the physical wave crossing time of the element:
+   $$\text{softening\_steps\_eff} = \max\left(\text{erosion\_softening\_steps}, \frac{dx}{c_p \cdot dt}\right)$$
+   This ensures that stresses are released smoothly over at least one full wave-crossing duration, preventing the formation of unphysical singular shock fronts that drive adjacent elements to fail in a chain reaction.
+3. **Corrected Strain State Updates**: Moved history-dependent `element_strains` store operations to execute after radial-return plasticity updates, ensuring strain increments are calculated based on the correct converged physical state.
+4. **Eroded Node Zero-Velocity Clamping**: Set translational and rotational velocities and accelerations to exactly 0.0 for fully-eroded nodes (`active_counts == 0`) to prevent high-velocity debris particles from re-entering the contact zone.
+
