@@ -190,7 +190,7 @@ def run_benchmark(arch_name: str, size: int, mode: str, n_steps: int = 50) -> fl
 def run_all() -> None:
     """Run CPU vs GPU benchmarks across grid sizes and save results/plots."""
     results = {}
-    arches_to_test = ["cpu", "gpu", "numba"]
+    arches_to_test = ["numba"]
     modes = ["A", "B"]
 
     print("Starting KevlarGrid explicit solver performance benchmark...")

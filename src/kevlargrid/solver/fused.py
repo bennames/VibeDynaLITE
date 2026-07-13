@@ -1967,15 +1967,7 @@ def numba_step_shell_forces_and_failures(
         d_gam_xz = gam_xz - element_strains[e, 6]
         d_gam_yz = gam_yz - element_strains[e, 7]
 
-        # Store strains
-        element_strains[e, 0] = eps_xx
-        element_strains[e, 1] = eps_yy
-        element_strains[e, 2] = gam_xy
-        element_strains[e, 3] = kappa_xx
-        element_strains[e, 4] = kappa_yy
-        element_strains[e, 5] = kappa_xy
-        element_strains[e, 6] = gam_xz
-        element_strains[e, 7] = gam_yz
+        # (strain store moved to after stress integration)
 
         # Incompressibility-based dynamic thickness update
         lambda_z = 1.0 - (eps_xx + eps_yy)
@@ -2161,6 +2153,17 @@ def numba_step_shell_forces_and_failures(
             element_stress[e, k, 0] = sig_xx_new
             element_stress[e, k, 1] = sig_yy_new
             element_stress[e, k, 2] = tau_xy_new
+
+        # Store strains after stress integration so stored state matches what
+        # the radial-return used, not the raw kinematic increment.
+        element_strains[e, 0] = eps_xx
+        element_strains[e, 1] = eps_yy
+        element_strains[e, 2] = gam_xy
+        element_strains[e, 3] = kappa_xx
+        element_strains[e, 4] = kappa_yy
+        element_strains[e, 5] = kappa_xy
+        element_strains[e, 6] = gam_xz
+        element_strains[e, 7] = gam_yz
 
         # Check for failure initiation
         if element_failed[e] == 0 and ultimate_strain > 0.0:
@@ -2529,8 +2532,8 @@ def _fused_shell_loop_jit(
         delta_0 = 0.0
         k_0 = 0.0
 
+    c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
     if cfl_factor > 0.0:
-        c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
         omega_shell = 2.0 * c_p / dx
         k_total = mass_min * (omega_shell**2)
         if use_czm:
@@ -2540,6 +2543,16 @@ def _fused_shell_loop_jit(
         omega_max = sqrt(k_total / mass_min)
         dt_crit = sqrt(rayleigh_beta**2 + 4.0 / (omega_max**2)) - rayleigh_beta
         dt = cfl_factor * dt_crit
+
+    # Dynamically scale softening steps to match the physical wave crossing time of the element.
+    # This prevents instantaneous stress release (shock fronts) that drive unzipping cascades.
+    t_cross = dx / c_p
+    softening_steps_eff = int(t_cross / dt)
+    if erosion_softening_steps > softening_steps_eff:
+        softening_steps_eff = erosion_softening_steps
+    if softening_steps_eff < 10:
+        softening_steps_eff = 10
+    erosion_softening_steps = softening_steps_eff
 
     accel = zeros((n_nodes, 3), dtype=positions.dtype)
 
@@ -2619,18 +2632,15 @@ def _fused_shell_loop_jit(
                 active_counts[n2] += ramp
                 active_counts[n3] += ramp
 
-        # Compute physical velocity cap based on projectile speed (2.0 * strike speed, minimum floor of 200.0 m/s)
-        v_strike = sqrt(proj_velocity[0] ** 2 + proj_velocity[1] ** 2 + proj_velocity[2] ** 2)
-        v_max_limit = max(200.0, 2.0 * v_strike)
+        # Compute physical velocity cap based on longitudinal wave speed.
+        # Removing the non-physical v_max_limit cap prevents artificial momentum destruction
+        # and unzipping cascades caused by clipping physical snap-back and Poisson reflection waves.
         c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
         v_max_phys = velocity_clamping_multiplier * c_p
         if dx / dt < v_max_phys:
             v_max = dx / dt
         else:
             v_max = v_max_phys
-
-        if v_max > v_max_limit:
-            v_max = v_max_limit
 
         # 3. Calculate internal forces and moments
         shell_forces, shell_torques, step_fracture_energy, step_stiff_damp_power = (
@@ -2784,6 +2794,12 @@ def _fused_shell_loop_jit(
         ang_velocities = omega_half + 0.5 * ang_accel * dt
         for i in range(n_nodes):
             if active_counts[i] == 0:
+                velocities[i, 0] = 0.0
+                velocities[i, 1] = 0.0
+                velocities[i, 2] = 0.0
+                accel[i, 0] = 0.0
+                accel[i, 1] = 0.0
+                accel[i, 2] = 0.0
                 ang_velocities[i, 0] = 0.0
                 ang_velocities[i, 1] = 0.0
                 ang_velocities[i, 2] = 0.0
