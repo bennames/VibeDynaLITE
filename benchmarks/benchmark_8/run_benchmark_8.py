@@ -265,6 +265,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     ang_pos = np.zeros((n_nodes, 3), dtype=np.float64)
     ang_vel = np.zeros((n_nodes, 3), dtype=np.float64)
     ang_acc = np.zeros((n_nodes, 3), dtype=np.float64)
+    nodal_acc = np.zeros((n_nodes, 3), dtype=np.float64)
     spring_failed = np.zeros(grid.n_springs, dtype=bool)
 
     step = 0
@@ -351,6 +352,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             ang_positions=ang_pos,
             ang_velocities=ang_vel,
             ang_accel=ang_acc,
+            nodal_accel=nodal_acc,
             element_failed_step=element_failed_step,
             erosion_softening_steps=mat["softening_steps"],
             velocity_clamping_multiplier=1.0,

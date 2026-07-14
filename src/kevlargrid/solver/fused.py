@@ -1253,6 +1253,7 @@ def _fused_leapfrog_loop_jit(
     velocity_clamping_multiplier: float,
     youngs_modulus_gpa: float,
     density_kgm3: float,
+    accel: np.ndarray,
 ):
     n_nodes = len(positions)
     n_springs = len(grid_springs)
@@ -1276,7 +1277,6 @@ def _fused_leapfrog_loop_jit(
 
     masses_col = grid_masses.reshape(-1, 1)
 
-    accel = zeros((n_nodes, 3), dtype=positions.dtype)
     proj_accel = zeros(3, dtype=np.float64)
     omega_dot = zeros(3, dtype=np.float64)
     proj_reaction_force = zeros(3, dtype=np.float64)
@@ -1676,7 +1676,7 @@ def _fused_leapfrog_loop_jit(
         net_forces = clamp_boundary(net_forces, boundary_mask)
 
         # 4. Update Accelerations and Finalize v_full (Velocity Verlet Step 2)
-        accel = net_forces / masses_col
+        accel[:, :] = net_forces / masses_col
         proj_accel = proj_reaction_force / proj_mass
 
         if shape_code >= 0:
@@ -2509,6 +2509,7 @@ def _fused_shell_loop_jit(
     element_peeq_rate,
     rate_parameter_c,
     rate_parameter_p,
+    accel,
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
@@ -2586,8 +2587,6 @@ def _fused_shell_loop_jit(
     if softening_steps_eff < 10:
         softening_steps_eff = 10
     erosion_softening_steps = softening_steps_eff
-
-    accel = zeros((n_nodes, 3), dtype=positions.dtype)
 
     # Re-evaluate dimensions for bullet/cylinder shape logic
     R_og_val = 0.0
@@ -2782,7 +2781,7 @@ def _fused_shell_loop_jit(
         net_forces = clamp_boundary(net_forces, boundary_mask)
 
         # 4. Update Accelerations and Finalize velocities (Velocity Verlet Step 2)
-        accel = net_forces / masses_col
+        accel[:, :] = net_forces / masses_col
         proj_accel = proj_reaction_force / proj_mass
 
         if shape_code >= 0:
@@ -3041,6 +3040,7 @@ def fused_leapfrog_loop(
     rate_parameter_c: float = 40.0,
     rate_parameter_p: float = 5.0,
     softening_steps: int | None = None,
+    nodal_accel: np.ndarray | None = None,
 ) -> tuple[
     np.ndarray,  # positions
     np.ndarray,  # velocities
@@ -3069,6 +3069,8 @@ def fused_leapfrog_loop(
         grid_damage = np.zeros(n_springs, dtype=np.float64)
     if spring_failed_step is None:
         spring_failed_step = np.zeros(n_springs, dtype=np.int32) - 1
+    if nodal_accel is None:
+        nodal_accel = np.zeros((n_nodes, 3), dtype=positions.dtype)
     if ang_positions is None:
         ang_positions = np.zeros((n_nodes, 3), dtype=np.float64)
     if ang_velocities is None:
@@ -3231,6 +3233,7 @@ def fused_leapfrog_loop(
             element_peeq_rate,
             rate_parameter_c,
             rate_parameter_p,
+            nodal_accel,
         )
 
     return _fused_leapfrog_loop_jit(
@@ -3302,4 +3305,5 @@ def fused_leapfrog_loop(
         velocity_clamping_multiplier,
         youngs_modulus_gpa,
         density_kgm3,
+        nodal_accel,
     )

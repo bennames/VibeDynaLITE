@@ -135,14 +135,32 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         else:
             nodal_external_forces = np.zeros((grid.n_nodes, 3), dtype=np.float64)
 
+        # Calculate thickness
+        areal_density = mat.get("areal_density_kgm2", 0.47)
+        fiber_density_gcc = mat.get("fiber_density_gcc", 1.44)
+        thickness = areal_density / (fiber_density_gcc * 1000.0)
+
         # Calculate timestep
         k_penalty = sim_cfg.get("k_penalty", 10.0 * np.mean(grid.stiffnesses))
         auto_cfl = sim_cfg.get("auto_cfl", True)
+        structure_type = sim_cfg.get("structure_type", "fabric")
         if auto_cfl:
             k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
-            dt = compute_cfl_timestep(
-                np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
-            )
+            if structure_type == "metallic_sheet":
+                dt = compute_cfl_timestep(
+                    np.array([k_max_effective]),
+                    grid.masses,
+                    dx,
+                    sim_cfg["cfl_factor"],
+                    youngs_modulus_gpa=mat.get("tensile_modulus_gpa"),
+                    thickness=thickness,
+                    density_kgm3=fiber_density_gcc * 1000.0,
+                    poisson_ratio=mat.get("poisson_ratio", 0.3),
+                )
+            else:
+                dt = compute_cfl_timestep(
+                    np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
+                )
         else:
             dt = sim_cfg.get("dt", 1.5e-7)
 
@@ -460,6 +478,9 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             if solver_backend == "numba":
                 from kevlargrid.solver.fused import fused_leapfrog_loop
 
+                if not hasattr(grid, "accel") or grid.accel is None:
+                    grid.accel = np.zeros_like(grid.nodes)
+
                 extra_kwargs["proj_peak_deceleration"] = proj_peak_deceleration
                 (
                     positions,
@@ -530,6 +551,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     ang_positions=grid.ang_positions,
                     ang_velocities=grid.ang_velocities,
                     ang_accel=grid.ang_accel,
+                    nodal_accel=grid.accel,
                     erosion_softening_steps=sim_cfg.get("erosion_softening_steps", 10),
                     velocity_clamping_multiplier=sim_cfg.get("velocity_clamping_multiplier", 2.0),
                     **extra_kwargs,

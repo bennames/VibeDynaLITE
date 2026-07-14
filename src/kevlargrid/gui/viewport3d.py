@@ -668,7 +668,8 @@ class Viewport3D:
                 n_springs = len(springs)
                 failed_elements = getattr(self.grid, "element_failed", None)
                 if failed_elements is not None and len(failed_elements) * 4 == n_springs:
-                    failed = np.repeat(failed_elements, 4)
+                    failed_bool = (failed_elements == 1) if failed_elements.dtype != bool else failed_elements
+                    failed = np.repeat(failed_bool, 4)
                 else:
                     failed = np.zeros(n_springs, dtype=bool)
 

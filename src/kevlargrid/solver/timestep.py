@@ -14,6 +14,10 @@ def compute_cfl_timestep(
     masses: np.ndarray,
     dx: float,
     cfl: float,
+    youngs_modulus_gpa: float | None = None,
+    thickness: float | None = None,
+    density_kgm3: float | None = None,
+    poisson_ratio: float = 0.3,
 ) -> float:
     """Compute the CFL-limited stable time-step.
 
@@ -30,6 +34,14 @@ def compute_cfl_timestep(
         Characteristic element length (metres).
     cfl : float
         CFL safety factor (typically 0.5–0.9).
+    youngs_modulus_gpa : float, optional
+        Young's modulus in GPa (for shell bending CFL limit).
+    thickness : float, optional
+        Shell element thickness in metres.
+    density_kgm3 : float, optional
+        Density in kg/m^3.
+    poisson_ratio : float, optional
+        Poisson's ratio (defaults to 0.3).
 
     Returns
     -------
@@ -42,7 +54,20 @@ def compute_cfl_timestep(
     m_min = np.min(masses)
     k_max = np.max(stiffnesses)
 
-    # dt_crit = sqrt(m / k) representing physical wave traversal limit
+    # dt_crit = sqrt(m / k) representing physical wave traversal limit (membrane-only)
     dt_crit = np.sqrt(m_min / k_max)
+
+    # Account for shell bending limits if thin shell parameters are present
+    if (
+        youngs_modulus_gpa is not None
+        and thickness is not None
+        and density_kgm3 is not None
+        and thickness > 0.0
+    ):
+        E = youngs_modulus_gpa * 1.0e9
+        term1 = (dx * dx) / (thickness * np.sqrt(3.0))
+        term2 = np.sqrt(density_kgm3 * (1.0 - poisson_ratio * poisson_ratio) / E)
+        dt_bend = term1 * term2
+        dt_crit = min(dt_crit, dt_bend)
 
     return float(cfl * dt_crit)
