@@ -57,6 +57,7 @@ class Grid:
     ang_positions: np.ndarray
     ang_velocities: np.ndarray
     ang_accel: np.ndarray
+    accel: np.ndarray | None
     n_nodes: int
     n_springs: int
     initial_spring_counts: np.ndarray
@@ -106,6 +107,7 @@ class Grid:
         self.ang_positions = np.zeros((len(nodes), 3), dtype=np.float64)
         self.ang_velocities = np.zeros((len(nodes), 3), dtype=np.float64)
         self.ang_accel = np.zeros((len(nodes), 3), dtype=np.float64)
+        self.accel = None
         if is_tiebreak is None:
             self.is_tiebreak = np.zeros(len(springs), dtype=bool)
         else:
