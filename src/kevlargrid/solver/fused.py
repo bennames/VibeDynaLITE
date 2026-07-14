@@ -1889,6 +1889,9 @@ def numba_step_shell_forces_and_failures(
         sig_y_u = yield_strength
         H_soft = hardening_modulus
 
+    rate_filter_tau = 1.0e-5
+    yield_res = 0.01 * yield_strength
+
     step_fracture_energy = 0.0
     step_stiff_damp_power = 0.0
 
@@ -2038,12 +2041,17 @@ def numba_step_shell_forces_and_failures(
 
             peeq_old = element_peeq[e, k]
             peeq_rate_old = element_peeq_rate[e, k]
+            dmg_old = element_damage[e, k]
 
             # Cowper-Symonds rate scaling factor (constant during iteration)
             if rate_parameter_c > 0.0 and rate_parameter_p > 0.0:
-                beta = 1.0 + (max(0.0, peeq_rate_old) / rate_parameter_c) ** (
+                beta_nominal = 1.0 + (max(0.0, peeq_rate_old) / rate_parameter_c) ** (
                     1.0 / rate_parameter_p
                 )
+                # Power-law rate degradation with residual crack-tip regularization
+                # Exponent m = 3, residual rate factor gamma_res = 0.15
+                phi_d = 1.0 - (1.0 - 0.15) * (dmg_old**3)
+                beta = 1.0 + phi_d * (beta_nominal - 1.0)
             else:
                 beta = 1.0
 
@@ -2051,9 +2059,10 @@ def numba_step_shell_forces_and_failures(
                 if peeq_old <= ultimate_strain:
                     yield_val = yield_strength + K_ro * ((peeq_old + eps_reg) ** 0.2 - eps_reg**0.2)
                 else:
-                    yield_val = sig_y_u + H_soft * (peeq_old - ultimate_strain)
+                    # Clamp static yield strength to avoid thermodynamic violation (Clausius-Duhem)
+                    yield_val = max(yield_res, sig_y_u + H_soft * (peeq_old - ultimate_strain))
             else:
-                yield_val = yield_strength + hardening_modulus * peeq_old
+                yield_val = max(yield_res, yield_strength + hardening_modulus * peeq_old)
 
             yield_val_dynamic = yield_val * beta
             f_yield = sig_vm_trial - yield_val_dynamic
@@ -2076,8 +2085,14 @@ def numba_step_shell_forces_and_failures(
                             )
                             H_tang = 0.2 * K_ro * (peeq_temp + eps_reg) ** (-0.8)
                         else:
-                            sig_y_val = sig_y_u + H_soft * (peeq_temp - ultimate_strain)
-                            H_tang = H_soft
+                            # Clamp dynamic yield stress in return iterations and set tangent to zero if clamped
+                            raw_sig_y = sig_y_u + H_soft * (peeq_temp - ultimate_strain)
+                            if raw_sig_y <= yield_res:
+                                sig_y_val = yield_res
+                                H_tang = 0.0
+                            else:
+                                sig_y_val = raw_sig_y
+                                H_tang = H_soft
 
                         f_val = sig_vm_trial - 3.0 * G * d_peeq - sig_y_val * beta
                         df_val = -3.0 * G - H_tang * beta
@@ -2089,20 +2104,22 @@ def numba_step_shell_forces_and_failures(
                         d_peeq = 0.0
                     peeq_new = peeq_old + d_peeq
 
-                    # Re-evaluate final yield value for plastic energy tracking
+                    # Re-evaluate final yield value for plastic energy tracking (clamped to yield_res)
                     if peeq_new <= ultimate_strain:
                         yield_val = yield_strength + K_ro * (
                             (peeq_new + eps_reg) ** 0.2 - eps_reg**0.2
                         )
                     else:
-                        yield_val = sig_y_u + H_soft * (peeq_new - ultimate_strain)
+                        yield_val = max(yield_res, sig_y_u + H_soft * (peeq_new - ultimate_strain))
                 else:
-                    # Linear radial return (analytical solution)
+                    # Linear radial return (analytical solution, clamped to yield_res)
                     d_peeq = f_yield / (3.0 * G + hardening_modulus * beta)
                     if d_peeq < 0.0:
                         d_peeq = 0.0
                     peeq_new = peeq_old + d_peeq
-                    yield_val = yield_strength + hardening_modulus * peeq_new
+                    yield_val = max(yield_res, yield_strength + hardening_modulus * peeq_new)
+
+                yield_val_dynamic = yield_val * beta
 
                 # Scale stress components (strictly dissipative, scale <= 1.0)
                 scale = 1.0 - (3.0 * G * d_peeq) / (sig_vm_trial if sig_vm_trial != 0.0 else 1.0)
@@ -2115,9 +2132,13 @@ def numba_step_shell_forces_and_failures(
                 sig_yy_new = sig_yy_trial * scale
                 tau_xy_new = tau_xy_trial * scale
 
-            # Update filtered plastic strain rate
+            # Update filtered plastic strain rate using physical time constant (rate_filter_tau)
             peeq_rate_inst = d_peeq / dt if dt > 0.0 else 0.0
-            peeq_rate_new = 0.9 * peeq_rate_old + 0.1 * peeq_rate_inst
+            if rate_filter_tau > 0.0:
+                alpha_filter = dt / (rate_filter_tau + dt)
+            else:
+                alpha_filter = 1.0  # Instantaneous tracking safeguard
+            peeq_rate_new = (1.0 - alpha_filter) * peeq_rate_old + alpha_filter * peeq_rate_inst
             element_peeq_rate[e, k] = peeq_rate_new
 
             # Stress Triaxiality & Continuous Damage Mechanics
@@ -2136,10 +2157,10 @@ def numba_step_shell_forces_and_failures(
             if eps_f < 0.005:
                 eps_f = 0.005
 
-            # Damage evolution
+            # Damage evolution (coupled to dynamic yield strength yield_val_dynamic)
             if ultimate_strain > 0.0 and peeq_new > ultimate_strain:
                 if fracture_energy_jm2 > 0.0:
-                    d_dmg = (yield_val * dx * d_peeq) / (2.0 * fracture_energy_jm2)
+                    d_dmg = (yield_val_dynamic * dx * d_peeq) / (2.0 * fracture_energy_jm2)
                 else:
                     d_dmg = d_peeq / eps_f
                 # Viscous regularization to prevent unphysical high-frequency shock waves
@@ -2153,8 +2174,8 @@ def numba_step_shell_forces_and_failures(
 
             d_factor = 1.0 - element_damage[e, k]
 
-            # Plastic dissipation energy (using damaged stress)
-            step_fracture_energy += d_factor * yield_val * beta * d_peeq * wk * (dx * dx)
+            # Plastic dissipation energy (using damaged stress and dynamic yield strength)
+            step_fracture_energy += d_factor * yield_val_dynamic * d_peeq * wk * (dx * dx)
 
             # Store updated plastic strain and stresses
             element_peeq[e, k] = peeq_new
