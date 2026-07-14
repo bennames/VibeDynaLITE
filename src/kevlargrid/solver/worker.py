@@ -534,9 +534,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     velocity_clamping_multiplier=sim_cfg.get("velocity_clamping_multiplier", 2.0),
                     **extra_kwargs,
                 )
-                if structure_type == "metallic_sheet":
-                    grid.element_failed = returned_failed
-                else:
+                if structure_type != "metallic_sheet":
                     grid.failed = returned_failed
                 hist_peak_strain = np.zeros(len(hist_time))
                 n_springs = len(grid.springs)

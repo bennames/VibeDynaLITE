@@ -95,7 +95,7 @@ class Grid:
         self.element_peeq_rate = None
         self.element_damage = None
         if elements is not None and len(elements) > 0:
-            self.element_failed = np.zeros(len(elements), dtype=bool)
+            self.element_failed = np.zeros(len(elements), dtype=np.int32)
             self.element_failed_step = np.zeros(len(elements), dtype=np.int32) - 1
             self.element_strains = np.zeros((len(elements), 8), dtype=np.float64)
         else:
