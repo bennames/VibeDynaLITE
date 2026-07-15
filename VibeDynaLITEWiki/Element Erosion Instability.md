@@ -186,3 +186,19 @@ To resolve unphysical cascading failures under high-energy impacts and correct s
    \]
    This regularizes damage growth over time, smoothing the local stress drop and stopping domino-like unzipping of adjacent elements.
 
+### 5.9 Objective Green-Lagrange Strain Kinematics & Work-Conjugate Forces (July 2026 Sprint 18)
+To resolve the remaining numerical energy leakage/pump under large rotations, the flat Q4 shell element solver's kinematics was upgraded:
+1. **Objective Green-Lagrange Strain Tensor**:
+   The trigonometric-clamped Von Karman strain was replaced by the exact, frame-invariant Green-Lagrange strain tensor to capture large rotations correctly:
+   $$\epsilon_{xx} = u_{,x} + \frac{1}{2}(u_{,x}^2 + v_{,x}^2 + w_{,x}^2)$$
+   $$\epsilon_{yy} = v_{,y} + \frac{1}{2}(u_{,y}^2 + v_{,y}^2 + w_{,y}^2)$$
+   $$\gamma_{xy} = u_{,y} + v_{,x} + u_{,x} u_{,y} + v_{,x} v_{,y} + w_{,x} w_{,y}$$
+2. **Work-Conjugate Nodal Force Projections**:
+   To satisfy energy conservation, internal forces are assembled using the work-conjugate projections of the membrane stresses ($N_{xx}, N_{yy}, N_{xy}$):
+   $$T_{xx} = N_{xx} (1 + u_{,x}) + N_{xy} u_{,y}, \quad T_{xy} = N_{yy} u_{,y} + N_{xy} (1 + u_{,x})$$
+   $$T_{yx} = N_{xx} v_{,x} + N_{xy} (1 + v_{,y}), \quad T_{yy} = N_{yy} (1 + v_{,y}) + N_{xy} v_{,x}$$
+   $$Q_{x,\text{eff}} = Q_x + N_{xx} w_{,x} + N_{xy} w_{,y}, \quad Q_{y,\text{eff}} = Q_y + N_{yy} w_{,y} + N_{xy} w_{,x}$$
+   This conservative force projection ensures that no numerical energy is pumped or leaked under coordinate noise or wave fronts, preventing artificial cascading failures.
+3. **`element_strains` Persistence Fix**:
+   Passed and persisted the `element_strains` history array across integration chunks in the validation benchmarks, preventing spurious strain-increment spikes at chunk boundaries.
+

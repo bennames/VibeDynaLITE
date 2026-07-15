@@ -1938,23 +1938,18 @@ def numba_step_shell_forces_and_failures(
         tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
         tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
 
-        # Compute out-of-plane deflection gradients
-        dw_dx_raw = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
-        dw_dy_raw = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
+        # Compute displacement gradients
+        u_x = ((u1 - u0) + (u2 - u3)) / (2.0 * dx)
+        u_y = ((u3 - u0) + (u2 - u1)) / (2.0 * dx)
+        v_x = ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
+        v_y = ((v3 - v0) + (v2 - v1)) / (2.0 * dx)
+        w_x = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
+        w_y = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
 
-        # Apply trigonometric sine projection to prevent gradient blow-up
-        grad_denom = sqrt(1.0 + dw_dx_raw**2 + dw_dy_raw**2)
-        dw_dx = dw_dx_raw / grad_denom
-        dw_dy = dw_dy_raw / grad_denom
-
-        # Compute strains (with geometrically bounded membrane strain terms)
-        eps_xx = ((u1 - u0) + (u2 - u3)) / (2.0 * dx) + 0.5 * dw_dx**2
-        eps_yy = ((v3 - v0) + (v2 - v1)) / (2.0 * dx) + 0.5 * dw_dy**2
-        gam_xy = (
-            ((u3 - u0) + (u2 - u1)) / (2.0 * dx)
-            + ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
-            + dw_dx * dw_dy
-        )
+        # Green-Lagrange Strain Tensor (100% Objective under rotation)
+        eps_xx = u_x + 0.5 * (u_x**2 + v_x**2 + w_x**2)
+        eps_yy = v_y + 0.5 * (u_y**2 + v_y**2 + w_y**2)
+        gam_xy = u_y + v_x + (u_x * u_y + v_x * v_y + w_x * w_y)
 
         kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
         kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
@@ -1962,8 +1957,8 @@ def numba_step_shell_forces_and_failures(
             2.0 * dx
         )
 
-        gam_xz = dw_dx + (ty0 + ty1 + ty2 + ty3) / 4.0
-        gam_yz = dw_dy - (tx0 + tx1 + tx2 + tx3) / 4.0
+        gam_xz = w_x + (ty0 + ty1 + ty2 + ty3) / 4.0
+        gam_yz = w_y - (tx0 + tx1 + tx2 + tx3) / 4.0
 
         # Calculate strain increments
         d_eps_xx = eps_xx - element_strains[e, 0]
@@ -2315,34 +2310,38 @@ def numba_step_shell_forces_and_failures(
         # Calculate nodal internal forces and moments
         half_dx = 0.5 * dx
 
-        # Project membrane tensions onto out-of-plane gradients (Von Karman membrane stiffness)
-        Q_x_eff = Q_x + N_xx * dw_dx + N_xy * dw_dy
-        Q_y_eff = Q_y + N_yy * dw_dy + N_xy * dw_dx
+        # 3. Work-Conjugate Green-Lagrange Forces Projection
+        T_xx = N_xx * (1.0 + u_x) + N_xy * u_y
+        T_xy = N_yy * u_y + N_xy * (1.0 + u_x)
+        T_yx = N_xx * v_x + N_xy * (1.0 + v_y)
+        T_yy = N_yy * (1.0 + v_y) + N_xy * v_x
+        Q_x_eff = Q_x + N_xx * w_x + N_xy * w_y
+        Q_y_eff = Q_y + N_yy * w_y + N_xy * w_x
 
         # Node 0
-        forces[n0, 0] += N_xx * half_dx + N_xy * half_dx
-        forces[n0, 1] += N_yy * half_dx + N_xy * half_dx
+        forces[n0, 0] += T_xx * half_dx + T_xy * half_dx
+        forces[n0, 1] += T_yx * half_dx + T_yy * half_dx
         forces[n0, 2] += Q_x_eff * half_dx + Q_y_eff * half_dx
         torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n0, 1] += M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 1
-        forces[n1, 0] += -N_xx * half_dx + N_xy * half_dx
-        forces[n1, 1] += N_yy * half_dx - N_xy * half_dx
+        forces[n1, 0] += -T_xx * half_dx + T_xy * half_dx
+        forces[n1, 1] += -T_yx * half_dx + T_yy * half_dx
         forces[n1, 2] += -Q_x_eff * half_dx + Q_y_eff * half_dx
         torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 2
-        forces[n2, 0] += -N_xx * half_dx - N_xy * half_dx
-        forces[n2, 1] += -N_yy * half_dx - N_xy * half_dx
+        forces[n2, 0] += -T_xx * half_dx - T_xy * half_dx
+        forces[n2, 1] += -T_yx * half_dx - T_yy * half_dx
         forces[n2, 2] += -Q_x_eff * half_dx - Q_y_eff * half_dx
         torques[n2, 0] += M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
 
         # Node 3
-        forces[n3, 0] += N_xx * half_dx - N_xy * half_dx
-        forces[n3, 1] += -N_yy * half_dx + N_xy * half_dx
+        forces[n3, 0] += T_xx * half_dx - T_xy * half_dx
+        forces[n3, 1] += T_yx * half_dx - T_yy * half_dx
         forces[n3, 2] += Q_x_eff * half_dx - Q_y_eff * half_dx
         torques[n3, 0] += M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
         torques[n3, 1] += M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x

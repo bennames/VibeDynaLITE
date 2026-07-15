@@ -262,6 +262,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
     element_failed = np.zeros(n_elements, dtype=np.int32)
     element_failed_step = -np.ones(n_elements, dtype=np.int32)
     element_peeq_rate = np.zeros((n_elements, 5), dtype=np.float64)
+    element_strains = np.zeros((n_elements, 8), dtype=np.float64)
     ang_pos = np.zeros((n_nodes, 3), dtype=np.float64)
     ang_vel = np.zeros((n_nodes, 3), dtype=np.float64)
     ang_acc = np.zeros((n_nodes, 3), dtype=np.float64)
@@ -359,6 +360,7 @@ def run_case(v_strike: float, run_id: str, backend_name: str) -> dict:
             element_peeq_rate=element_peeq_rate,
             rate_parameter_c=mat["rate_parameter_c"],
             rate_parameter_p=mat["rate_parameter_p"],
+            element_strains=element_strains,
         )
 
         (
