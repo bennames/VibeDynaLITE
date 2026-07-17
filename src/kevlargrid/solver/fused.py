@@ -1994,34 +1994,67 @@ def numba_step_shell_forces_and_failures(
         vy3 = velocities[n3, 0] * e2x + velocities[n3, 1] * e2y + velocities[n3, 2] * e2z
         vz3 = velocities[n3, 0] * e3x + velocities[n3, 1] * e3y + velocities[n3, 2] * e3z
 
-        wx0 = ang_velocities[n0, 0] * e1x + ang_velocities[n0, 1] * e1y + ang_velocities[n0, 2] * e1z
-        wy0 = ang_velocities[n0, 0] * e2x + ang_velocities[n0, 1] * e2y + ang_velocities[n0, 2] * e2z
-        wz0 = ang_velocities[n0, 0] * e3x + ang_velocities[n0, 1] * e3y + ang_velocities[n0, 2] * e3z
+        wx0 = (
+            ang_velocities[n0, 0] * e1x + ang_velocities[n0, 1] * e1y + ang_velocities[n0, 2] * e1z
+        )
+        wy0 = (
+            ang_velocities[n0, 0] * e2x + ang_velocities[n0, 1] * e2y + ang_velocities[n0, 2] * e2z
+        )
+        wz0 = (
+            ang_velocities[n0, 0] * e3x + ang_velocities[n0, 1] * e3y + ang_velocities[n0, 2] * e3z
+        )
 
-        wx1 = ang_velocities[n1, 0] * e1x + ang_velocities[n1, 1] * e1y + ang_velocities[n1, 2] * e1z
-        wy1 = ang_velocities[n1, 0] * e2x + ang_velocities[n1, 1] * e2y + ang_velocities[n1, 2] * e2z
-        wz1 = ang_velocities[n1, 0] * e3x + ang_velocities[n1, 1] * e3y + ang_velocities[n1, 2] * e3z
+        wx1 = (
+            ang_velocities[n1, 0] * e1x + ang_velocities[n1, 1] * e1y + ang_velocities[n1, 2] * e1z
+        )
+        wy1 = (
+            ang_velocities[n1, 0] * e2x + ang_velocities[n1, 1] * e2y + ang_velocities[n1, 2] * e2z
+        )
+        wz1 = (
+            ang_velocities[n1, 0] * e3x + ang_velocities[n1, 1] * e3y + ang_velocities[n1, 2] * e3z
+        )
 
-        wx2 = ang_velocities[n2, 0] * e1x + ang_velocities[n2, 1] * e1y + ang_velocities[n2, 2] * e1z
-        wy2 = ang_velocities[n2, 0] * e2x + ang_velocities[n2, 1] * e2y + ang_velocities[n2, 2] * e2z
-        wz2 = ang_velocities[n2, 0] * e3x + ang_velocities[n2, 1] * e3y + ang_velocities[n2, 2] * e3z
+        wx2 = (
+            ang_velocities[n2, 0] * e1x + ang_velocities[n2, 1] * e1y + ang_velocities[n2, 2] * e1z
+        )
+        wy2 = (
+            ang_velocities[n2, 0] * e2x + ang_velocities[n2, 1] * e2y + ang_velocities[n2, 2] * e2z
+        )
+        wz2 = (
+            ang_velocities[n2, 0] * e3x + ang_velocities[n2, 1] * e3y + ang_velocities[n2, 2] * e3z
+        )
 
-        wx3 = ang_velocities[n3, 0] * e1x + ang_velocities[n3, 1] * e1y + ang_velocities[n3, 2] * e1z
-        wy3 = ang_velocities[n3, 0] * e2x + ang_velocities[n3, 1] * e2y + ang_velocities[n3, 2] * e2z
-        wz3 = ang_velocities[n3, 0] * e3x + ang_velocities[n3, 1] * e3y + ang_velocities[n3, 2] * e3z
+        wx3 = (
+            ang_velocities[n3, 0] * e1x + ang_velocities[n3, 1] * e1y + ang_velocities[n3, 2] * e1z
+        )
+        wy3 = (
+            ang_velocities[n3, 0] * e2x + ang_velocities[n3, 1] * e2y + ang_velocities[n3, 2] * e2z
+        )
+        wz3 = (
+            ang_velocities[n3, 0] * e3x + ang_velocities[n3, 1] * e3y + ang_velocities[n3, 2] * e3z
+        )
 
         # 4. Local Strain Rates and Increments
         eps_dot_xx = vx0 * b0_x + vx1 * b1_x + vx2 * b2_x + vx3 * b3_x
         eps_dot_yy = vy0 * b0_y + vy1 * b1_y + vy2 * b2_y + vy3 * b3_y
         gam_dot_xy = (
-            vx0 * b0_y + vx1 * b1_y + vx2 * b2_y + vx3 * b3_y
-            + vy0 * b0_x + vy1 * b1_x + vy2 * b2_x + vy3 * b3_x
+            vx0 * b0_y
+            + vx1 * b1_y
+            + vx2 * b2_y
+            + vx3 * b3_y
+            + vy0 * b0_x
+            + vy1 * b1_x
+            + vy2 * b2_x
+            + vy3 * b3_x
         )
 
         kappa_dot_xx = wy0 * b0_x + wy1 * b1_x + wy2 * b2_x + wy3 * b3_x
         kappa_dot_yy = -(wx0 * b0_y + wx1 * b1_y + wx2 * b2_y + wx3 * b3_y)
         kappa_dot_xy = (
-            wy0 * b0_y + wy1 * b1_y + wy2 * b2_y + wy3 * b3_y
+            wy0 * b0_y
+            + wy1 * b1_y
+            + wy2 * b2_y
+            + wy3 * b3_y
             - (wx0 * b0_x + wx1 * b1_x + wx2 * b2_x + wx3 * b3_x)
         )
 
