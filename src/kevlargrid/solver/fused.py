@@ -872,7 +872,7 @@ def numba_compute_cfl_contact_distances(
     dists = np.zeros(n_nodes, dtype=positions.dtype)
     dists[:] = 999.0
     q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
-    max_R = max(proj_radius, max(proj_length, proj_span))
+    max_R = max(proj_radius, max(proj_length, max(proj_span, L_nose_val)))
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
     P_loc = np.zeros(3, dtype=positions.dtype)
@@ -938,7 +938,7 @@ def numba_compute_cfl_contact_stiffness(
     n_nodes = len(positions)
     nodal_k_contact = np.zeros(n_nodes, dtype=positions.dtype)
     q_conj = np.array([proj_quat[0], -proj_quat[1], -proj_quat[2], -proj_quat[3]], dtype=np.float64)
-    max_R = max(proj_radius, max(proj_length, proj_span))
+    max_R = max(proj_radius, max(proj_length, max(proj_span, L_nose_val)))
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
     P_loc_cfl = np.zeros(3, dtype=positions.dtype)
@@ -1031,7 +1031,7 @@ def numba_compute_projectile_contact_forces(
     if shape_code == 0:
         max_R = max(w_h, max(t_h, proj_length / 2.0))
     else:
-        max_R = max(proj_radius, max(proj_length, proj_span))
+        max_R = max(proj_radius, max(proj_length, max(proj_span, L_nose_val)))
     cutoff = max_R + proximity_threshold
     cutoff_sq = cutoff**2
     P_loc_force = np.zeros(3, dtype=positions.dtype)
@@ -1257,7 +1257,7 @@ def _fused_leapfrog_loop_jit(
 ):
     n_nodes = len(positions)
     n_springs = len(grid_springs)
-    m_frames = max(1, n_steps // save_interval)
+    m_frames = (n_steps - 1) // save_interval + 1
 
     # Pre-allocate history structures (compatible with JIT vector allocations)
     hist_positions = zeros((m_frames, n_nodes, 3), dtype=positions.dtype)
@@ -1371,6 +1371,8 @@ def _fused_leapfrog_loop_jit(
         velocities=velocities,
         mu_s=mu_s,
         dt=dt,
+        grid_masses=grid_masses,
+        damping_ratio=0.1,
     )
     contact_energy = contact_e_step
 
@@ -1529,8 +1531,9 @@ def _fused_leapfrog_loop_jit(
                     end_idx = start_idx + n_nodes_per_layer
                     z_n = positions[start_idx:end_idx, 2]
                     z_n1 = positions[end_idx : end_idx + n_nodes_per_layer, 2]
-                    delta = z_n - z_n1 + t_ply
-                    penetrating = delta > 0.0
+                    gap = np.abs(z_n - z_n1)
+                    penetration = t_ply - gap
+                    penetrating = penetration > 0.0
                     active_n = active_counts[start_idx:end_idx] > 0
                     active_n1 = active_counts[end_idx : end_idx + n_nodes_per_layer] > 0
                     both_active = active_n & active_n1 & penetrating
@@ -1654,6 +1657,8 @@ def _fused_leapfrog_loop_jit(
             velocities=v_half,
             mu_s=mu_s,
             dt=dt,
+            grid_masses=grid_masses,
+            damping_ratio=0.1,
         )
         contact_energy = contact_e_step + proj_contact_e_step
         friction_dissipated += fric_diss_step
@@ -1910,66 +1915,139 @@ def numba_step_shell_forces_and_failures(
 
         if is_softening:
             element_failed_step[e] -= 1
-            ramp = float(element_failed_step[e]) / float(erosion_softening_steps)
-            if element_failed_step[e] <= 0:
-                element_failed[e] = 1
-                continue
+        # 1. Coordinate Triad Construction
+        x0, y0, z0 = positions[n0, 0], positions[n0, 1], positions[n0, 2]
+        x1, y1, z1 = positions[n1, 0], positions[n1, 1], positions[n1, 2]
+        x2, y2, z2 = positions[n2, 0], positions[n2, 1], positions[n2, 2]
+        x3, y3, z3 = positions[n3, 0], positions[n3, 1], positions[n3, 2]
 
-        # Current nodal displacements
-        u0 = positions[n0, 0] - X_ref[n0, 0]
-        v0 = positions[n0, 1] - X_ref[n0, 1]
-        w0 = positions[n0, 2] - X_ref[n0, 2]
+        xc = 0.25 * (x0 + x1 + x2 + x3)
+        yc = 0.25 * (y0 + y1 + y2 + y3)
+        zc = 0.25 * (z0 + z1 + z2 + z3)
 
-        u1 = positions[n1, 0] - X_ref[n1, 0]
-        v1 = positions[n1, 1] - X_ref[n1, 1]
-        w1 = positions[n1, 2] - X_ref[n1, 2]
+        s1x, s1y, s1z = x2 - x0, y2 - y0, z2 - z0
+        s2x, s2y, s2z = x3 - x1, y3 - y1, z3 - z1
 
-        u2 = positions[n2, 0] - X_ref[n2, 0]
-        v2 = positions[n2, 1] - X_ref[n2, 1]
-        w2 = positions[n2, 2] - X_ref[n2, 2]
+        # Element normal vector e3
+        e3x = s1y * s2z - s1z * s2y
+        e3y = s1z * s2x - s1x * s2z
+        e3z = s1x * s2y - s1y * s2x
+        len_e3 = sqrt(e3x**2 + e3y**2 + e3z**2) + 1e-20
+        e3x /= len_e3
+        e3y /= len_e3
+        e3z /= len_e3
 
-        u3 = positions[n3, 0] - X_ref[n3, 0]
-        v3 = positions[n3, 1] - X_ref[n3, 1]
-        w3 = positions[n3, 2] - X_ref[n3, 2]
+        # Element local x-axis direction e1 (diagonal s1)
+        len_s1 = sqrt(s1x**2 + s1y**2 + s1z**2) + 1e-20
+        e1x = s1x / len_s1
+        e1y = s1y / len_s1
+        e1z = s1z / len_s1
 
-        # Nodal rotations (theta_x, theta_y)
-        tx0, ty0 = ang_positions[n0, 0], ang_positions[n0, 1]
-        tx1, ty1 = ang_positions[n1, 0], ang_positions[n1, 1]
-        tx2, ty2 = ang_positions[n2, 0], ang_positions[n2, 1]
-        tx3, ty3 = ang_positions[n3, 0], ang_positions[n3, 1]
+        # Local y-axis direction e2 = e3 x e1
+        e2x = e3y * e1z - e3z * e1y
+        e2y = e3z * e1x - e3x * e1z
+        e2z = e3x * e1y - e3y * e1x
 
-        # Compute displacement gradients
-        u_x = ((u1 - u0) + (u2 - u3)) / (2.0 * dx)
-        u_y = ((u3 - u0) + (u2 - u1)) / (2.0 * dx)
-        v_x = ((v1 - v0) + (v2 - v3)) / (2.0 * dx)
-        v_y = ((v3 - v0) + (v2 - v1)) / (2.0 * dx)
-        w_x = ((w1 - w0) + (w2 - w3)) / (2.0 * dx)
-        w_y = ((w3 - w0) + (w2 - w1)) / (2.0 * dx)
+        # 2. Local coordinates of nodes (projected onto element plane)
+        x0_loc = (x0 - xc) * e1x + (y0 - yc) * e1y + (z0 - zc) * e1z
+        y0_loc = (x0 - xc) * e2x + (y0 - yc) * e2y + (z0 - zc) * e2z
 
-        # Green-Lagrange Strain Tensor (100% Objective under rotation)
-        eps_xx = u_x + 0.5 * (u_x**2 + v_x**2 + w_x**2)
-        eps_yy = v_y + 0.5 * (u_y**2 + v_y**2 + w_y**2)
-        gam_xy = u_y + v_x + (u_x * u_y + v_x * v_y + w_x * w_y)
+        x1_loc = (x1 - xc) * e1x + (y1 - yc) * e1y + (z1 - zc) * e1z
+        y1_loc = (x1 - xc) * e2x + (y1 - yc) * e2y + (z1 - zc) * e2z
 
-        kappa_xx = ((ty1 - ty0) + (ty2 - ty3)) / (2.0 * dx)
-        kappa_yy = -((tx3 - tx0) + (tx2 - tx1)) / (2.0 * dx)
-        kappa_xy = ((ty3 - ty0) + (ty2 - ty1)) / (2.0 * dx) - ((tx1 - tx0) + (tx2 - tx3)) / (
-            2.0 * dx
+        x2_loc = (x2 - xc) * e1x + (y2 - yc) * e1y + (z2 - zc) * e1z
+        y2_loc = (x2 - xc) * e2x + (y2 - yc) * e2y + (z2 - zc) * e2z
+
+        x3_loc = (x3 - xc) * e1x + (y3 - yc) * e1y + (z3 - zc) * e1z
+        y3_loc = (x3 - xc) * e2x + (y3 - yc) * e2y + (z3 - zc) * e2z
+
+        # Shape function derivatives
+        area = 0.5 * ((x2_loc - x0_loc) * (y3_loc - y1_loc) - (x3_loc - x1_loc) * (y2_loc - y0_loc))
+        if area <= 1e-20:
+            area = 1e-20
+        two_area = 2.0 * area
+
+        b0_x = (y1_loc - y3_loc) / two_area
+        b1_x = (y2_loc - y0_loc) / two_area
+        b2_x = (y3_loc - y1_loc) / two_area
+        b3_x = (y0_loc - y2_loc) / two_area
+
+        b0_y = (x3_loc - x1_loc) / two_area
+        b1_y = (x0_loc - x2_loc) / two_area
+        b2_y = (x1_loc - x3_loc) / two_area
+        b3_y = (x2_loc - x0_loc) / two_area
+
+        # 3. Local Nodal Velocities and Rotational Rates Projections
+        vx0 = velocities[n0, 0] * e1x + velocities[n0, 1] * e1y + velocities[n0, 2] * e1z
+        vy0 = velocities[n0, 0] * e2x + velocities[n0, 1] * e2y + velocities[n0, 2] * e2z
+        vz0 = velocities[n0, 0] * e3x + velocities[n0, 1] * e3y + velocities[n0, 2] * e3z
+
+        vx1 = velocities[n1, 0] * e1x + velocities[n1, 1] * e1y + velocities[n1, 2] * e1z
+        vy1 = velocities[n1, 0] * e2x + velocities[n1, 1] * e2y + velocities[n1, 2] * e2z
+        vz1 = velocities[n1, 0] * e3x + velocities[n1, 1] * e3y + velocities[n1, 2] * e3z
+
+        vx2 = velocities[n2, 0] * e1x + velocities[n2, 1] * e1y + velocities[n2, 2] * e1z
+        vy2 = velocities[n2, 0] * e2x + velocities[n2, 1] * e2y + velocities[n2, 2] * e2z
+        vz2 = velocities[n2, 0] * e3x + velocities[n2, 1] * e3y + velocities[n2, 2] * e3z
+
+        vx3 = velocities[n3, 0] * e1x + velocities[n3, 1] * e1y + velocities[n3, 2] * e1z
+        vy3 = velocities[n3, 0] * e2x + velocities[n3, 1] * e2y + velocities[n3, 2] * e2z
+        vz3 = velocities[n3, 0] * e3x + velocities[n3, 1] * e3y + velocities[n3, 2] * e3z
+
+        wx0 = ang_velocities[n0, 0] * e1x + ang_velocities[n0, 1] * e1y + ang_velocities[n0, 2] * e1z
+        wy0 = ang_velocities[n0, 0] * e2x + ang_velocities[n0, 1] * e2y + ang_velocities[n0, 2] * e2z
+        wz0 = ang_velocities[n0, 0] * e3x + ang_velocities[n0, 1] * e3y + ang_velocities[n0, 2] * e3z
+
+        wx1 = ang_velocities[n1, 0] * e1x + ang_velocities[n1, 1] * e1y + ang_velocities[n1, 2] * e1z
+        wy1 = ang_velocities[n1, 0] * e2x + ang_velocities[n1, 1] * e2y + ang_velocities[n1, 2] * e2z
+        wz1 = ang_velocities[n1, 0] * e3x + ang_velocities[n1, 1] * e3y + ang_velocities[n1, 2] * e3z
+
+        wx2 = ang_velocities[n2, 0] * e1x + ang_velocities[n2, 1] * e1y + ang_velocities[n2, 2] * e1z
+        wy2 = ang_velocities[n2, 0] * e2x + ang_velocities[n2, 1] * e2y + ang_velocities[n2, 2] * e2z
+        wz2 = ang_velocities[n2, 0] * e3x + ang_velocities[n2, 1] * e3y + ang_velocities[n2, 2] * e3z
+
+        wx3 = ang_velocities[n3, 0] * e1x + ang_velocities[n3, 1] * e1y + ang_velocities[n3, 2] * e1z
+        wy3 = ang_velocities[n3, 0] * e2x + ang_velocities[n3, 1] * e2y + ang_velocities[n3, 2] * e2z
+        wz3 = ang_velocities[n3, 0] * e3x + ang_velocities[n3, 1] * e3y + ang_velocities[n3, 2] * e3z
+
+        # 4. Local Strain Rates and Increments
+        eps_dot_xx = vx0 * b0_x + vx1 * b1_x + vx2 * b2_x + vx3 * b3_x
+        eps_dot_yy = vy0 * b0_y + vy1 * b1_y + vy2 * b2_y + vy3 * b3_y
+        gam_dot_xy = (
+            vx0 * b0_y + vx1 * b1_y + vx2 * b2_y + vx3 * b3_y
+            + vy0 * b0_x + vy1 * b1_x + vy2 * b2_x + vy3 * b3_x
         )
 
-        gam_xz = w_x + (ty0 + ty1 + ty2 + ty3) / 4.0
-        gam_yz = w_y - (tx0 + tx1 + tx2 + tx3) / 4.0
+        kappa_dot_xx = wy0 * b0_x + wy1 * b1_x + wy2 * b2_x + wy3 * b3_x
+        kappa_dot_yy = -(wx0 * b0_y + wx1 * b1_y + wx2 * b2_y + wx3 * b3_y)
+        kappa_dot_xy = (
+            wy0 * b0_y + wy1 * b1_y + wy2 * b2_y + wy3 * b3_y
+            - (wx0 * b0_x + wx1 * b1_x + wx2 * b2_x + wx3 * b3_x)
+        )
 
-        # Calculate strain increments
-        d_eps_xx = eps_xx - element_strains[e, 0]
-        d_eps_yy = eps_yy - element_strains[e, 1]
-        d_gam_xy = gam_xy - element_strains[e, 2]
+        w_bar_x = 0.25 * (wx0 + wx1 + wx2 + wx3)
+        w_bar_y = 0.25 * (wy0 + wy1 + wy2 + wy3)
 
-        d_kappa_xx = kappa_xx - element_strains[e, 3]
-        d_kappa_yy = kappa_yy - element_strains[e, 4]
-        d_kappa_xy = kappa_xy - element_strains[e, 5]
-        d_gam_xz = gam_xz - element_strains[e, 6]
-        d_gam_yz = gam_yz - element_strains[e, 7]
+        gam_dot_xz = vz0 * b0_x + vz1 * b1_x + vz2 * b2_x + vz3 * b3_x + w_bar_y
+        gam_dot_yz = vz0 * b0_y + vz1 * b1_y + vz2 * b2_y + vz3 * b3_y - w_bar_x
+
+        d_eps_xx = eps_dot_xx * dt
+        d_eps_yy = eps_dot_yy * dt
+        d_gam_xy = gam_dot_xy * dt
+        d_kappa_xx = kappa_dot_xx * dt
+        d_kappa_yy = kappa_dot_yy * dt
+        d_kappa_xy = kappa_dot_xy * dt
+        d_gam_xz = gam_dot_xz * dt
+        d_gam_yz = gam_dot_yz * dt
+
+        eps_xx = element_strains[e, 0] + d_eps_xx
+        eps_yy = element_strains[e, 1] + d_eps_yy
+        gam_xy = element_strains[e, 2] + d_gam_xy
+        kappa_xx = element_strains[e, 3] + d_kappa_xx
+        kappa_yy = element_strains[e, 4] + d_kappa_yy
+        kappa_xy = element_strains[e, 5] + d_kappa_xy
+        gam_xz = element_strains[e, 6] + d_gam_xz
+        gam_yz = element_strains[e, 7] + d_gam_yz
 
         # (strain store moved to after stress integration)
 
@@ -2307,109 +2385,117 @@ def numba_step_shell_forces_and_failures(
         Q_x *= ramp
         Q_y *= ramp
 
-        # Calculate nodal internal forces and moments
-        half_dx = 0.5 * dx
+        # Calculate local internal forces and moments (negated to act as resisting forces)
+        f_local_x0 = -area * (N_xx * b0_x + N_xy * b0_y)
+        f_local_y0 = -area * (N_yy * b0_y + N_xy * b0_x)
+        f_local_z0 = -area * (Q_x * b0_x + Q_y * b0_y)
 
-        # 3. Work-Conjugate Green-Lagrange Forces Projection
-        T_xx = N_xx * (1.0 + u_x) + N_xy * u_y
-        T_xy = N_yy * u_y + N_xy * (1.0 + u_x)
-        T_yx = N_xx * v_x + N_xy * (1.0 + v_y)
-        T_yy = N_yy * (1.0 + v_y) + N_xy * v_x
-        Q_x_eff = Q_x + N_xx * w_x + N_xy * w_y
-        Q_y_eff = Q_y + N_yy * w_y + N_xy * w_x
+        f_local_x1 = -area * (N_xx * b1_x + N_xy * b1_y)
+        f_local_y1 = -area * (N_yy * b1_y + N_xy * b1_x)
+        f_local_z1 = -area * (Q_x * b1_x + Q_y * b1_y)
 
-        # Node 0
-        forces[n0, 0] += T_xx * half_dx + T_xy * half_dx
-        forces[n0, 1] += T_yx * half_dx + T_yy * half_dx
-        forces[n0, 2] += Q_x_eff * half_dx + Q_y_eff * half_dx
-        torques[n0, 0] += -M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
-        torques[n0, 1] += M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
+        f_local_x2 = -area * (N_xx * b2_x + N_xy * b2_y)
+        f_local_y2 = -area * (N_yy * b2_y + N_xy * b2_x)
+        f_local_z2 = -area * (Q_x * b2_x + Q_y * b2_y)
 
-        # Node 1
-        forces[n1, 0] += -T_xx * half_dx + T_xy * half_dx
-        forces[n1, 1] += -T_yx * half_dx + T_yy * half_dx
-        forces[n1, 2] += -Q_x_eff * half_dx + Q_y_eff * half_dx
-        torques[n1, 0] += -M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
-        torques[n1, 1] += -M_xx * half_dx + M_xy * half_dx - 0.25 * dx * dx * Q_x
+        f_local_x3 = -area * (N_xx * b3_x + N_xy * b3_y)
+        f_local_y3 = -area * (N_yy * b3_y + N_xy * b3_x)
+        f_local_z3 = -area * (Q_x * b3_x + Q_y * b3_y)
 
-        # Node 2
-        forces[n2, 0] += -T_xx * half_dx - T_xy * half_dx
-        forces[n2, 1] += -T_yx * half_dx - T_yy * half_dx
-        forces[n2, 2] += -Q_x_eff * half_dx - Q_y_eff * half_dx
-        torques[n2, 0] += M_yy * half_dx + M_xy * half_dx + 0.25 * dx * dx * Q_y
-        torques[n2, 1] += -M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
+        m_local_x0 = -area * (-M_yy * b0_y - M_xy * b0_x) + 0.25 * area * Q_y
+        m_local_y0 = -area * (M_xx * b0_x + M_xy * b0_y) - 0.25 * area * Q_x
 
-        # Node 3
-        forces[n3, 0] += T_xx * half_dx - T_xy * half_dx
-        forces[n3, 1] += T_yx * half_dx - T_yy * half_dx
-        forces[n3, 2] += Q_x_eff * half_dx - Q_y_eff * half_dx
-        torques[n3, 0] += M_yy * half_dx - M_xy * half_dx + 0.25 * dx * dx * Q_y
-        torques[n3, 1] += M_xx * half_dx - M_xy * half_dx - 0.25 * dx * dx * Q_x
+        m_local_x1 = -area * (-M_yy * b1_y - M_xy * b1_x) + 0.25 * area * Q_y
+        m_local_y1 = -area * (M_xx * b1_x + M_xy * b1_y) - 0.25 * area * Q_x
 
-        # Flanagan-Belytschko hourglass stabilization for 4-node quadrilateral shell element
-        # 1. Project nodal velocities onto the zero-energy hourglass mode (gamma = [1, -1, 1, -1])
-        q_vx = velocities[n0, 0] - velocities[n1, 0] + velocities[n2, 0] - velocities[n3, 0]
-        q_vy = velocities[n0, 1] - velocities[n1, 1] + velocities[n2, 1] - velocities[n3, 1]
-        q_vz = velocities[n0, 2] - velocities[n1, 2] + velocities[n2, 2] - velocities[n3, 2]
+        m_local_x2 = -area * (-M_yy * b2_y - M_xy * b2_x) + 0.25 * area * Q_y
+        m_local_y2 = -area * (M_xx * b2_x + M_xy * b2_y) - 0.25 * area * Q_x
 
-        q_wx = (
-            ang_velocities[n0, 0]
-            - ang_velocities[n1, 0]
-            + ang_velocities[n2, 0]
-            - ang_velocities[n3, 0]
-        )
-        q_wy = (
-            ang_velocities[n0, 1]
-            - ang_velocities[n1, 1]
-            + ang_velocities[n2, 1]
-            - ang_velocities[n3, 1]
-        )
-        q_wz = (
-            ang_velocities[n0, 2]
-            - ang_velocities[n1, 2]
-            + ang_velocities[n2, 2]
-            - ang_velocities[n3, 2]
-        )
+        m_local_x3 = -area * (-M_yy * b3_y - M_xy * b3_x) + 0.25 * area * Q_y
+        m_local_y3 = -area * (M_xx * b3_x + M_xy * b3_y) - 0.25 * area * Q_x
 
-        # 2. Compute physical stabilization damping coefficients using wave-impedance
-        C_damp = 0.015 * sqrt(E * density_kgm3) * t_curr * dx * ramp
-        C_rot_damp = 0.015 * sqrt(E * density_kgm3) * (t_curr**3) * dx * ramp
-        shear_damping = 0.015 * sqrt(G * density_kgm3) * t_curr * (dx * dx * dx) * ramp
+        # Flanagan-Belytschko hourglass stabilization in local element frame
+        q_vx = vx0 - vx1 + vx2 - vx3
+        q_vy = vy0 - vy1 + vy2 - vy3
+        q_vz = vz0 - vz1 + vz2 - vz3
+
+        q_wx = wx0 - wx1 + wx2 - wx3
+        q_wy = wy0 - wy1 + wy2 - wy3
+        q_wz = wz0 - wz1 + wz2 - wz3
+
+        C_damp = 0.05 * sqrt(E * density_kgm3) * t_curr * dx * ramp
+        C_rot_damp = 0.05 * sqrt(E * density_kgm3) * (t_curr**3) * dx * ramp
+        shear_damping = 0.05 * sqrt(G * density_kgm3) * t_curr * (dx * dx * dx) * ramp
         C_rot_total = C_rot_damp + shear_damping
 
-        # 3. Distribute viscous resisting forces/torques using orthogonalized operator (gamma_I)
-        # Scaling by 0.25 accounts for the inner product norm ||gamma||^2 = 4.
         # Node 0 (gamma_0 = 1.0)
-        forces[n0, 0] -= 0.25 * C_damp * q_vx
-        forces[n0, 1] -= 0.25 * C_damp * q_vy
-        forces[n0, 2] -= 0.25 * C_damp * q_vz
-        torques[n0, 0] -= 0.25 * C_rot_total * q_wx
-        torques[n0, 1] -= 0.25 * C_rot_total * q_wy
-        torques[n0, 2] -= 0.25 * C_rot_total * q_wz
+        f_local_x0 -= 0.25 * C_damp * q_vx
+        f_local_y0 -= 0.25 * C_damp * q_vy
+        f_local_z0 -= 0.25 * C_damp * q_vz
+        m_local_x0 -= 0.25 * C_rot_total * q_wx
+        m_local_y0 -= 0.25 * C_rot_total * q_wy
+        m_local_z0 = -0.25 * C_rot_total * q_wz
 
         # Node 1 (gamma_1 = -1.0)
-        forces[n1, 0] += 0.25 * C_damp * q_vx
-        forces[n1, 1] += 0.25 * C_damp * q_vy
-        forces[n1, 2] += 0.25 * C_damp * q_vz
-        torques[n1, 0] += 0.25 * C_rot_total * q_wx
-        torques[n1, 1] += 0.25 * C_rot_total * q_wy
-        torques[n1, 2] += 0.25 * C_rot_total * q_wz
+        f_local_x1 += 0.25 * C_damp * q_vx
+        f_local_y1 += 0.25 * C_damp * q_vy
+        f_local_z1 += 0.25 * C_damp * q_vz
+        m_local_x1 += 0.25 * C_rot_total * q_wx
+        m_local_y1 += 0.25 * C_rot_total * q_wy
+        m_local_z1 = 0.25 * C_rot_total * q_wz
 
         # Node 2 (gamma_2 = 1.0)
-        forces[n2, 0] -= 0.25 * C_damp * q_vx
-        forces[n2, 1] -= 0.25 * C_damp * q_vy
-        forces[n2, 2] -= 0.25 * C_damp * q_vz
-        torques[n2, 0] -= 0.25 * C_rot_total * q_wx
-        torques[n2, 1] -= 0.25 * C_rot_total * q_wy
-        torques[n2, 2] -= 0.25 * C_rot_total * q_wz
+        f_local_x2 -= 0.25 * C_damp * q_vx
+        f_local_y2 -= 0.25 * C_damp * q_vy
+        f_local_z2 -= 0.25 * C_damp * q_vz
+        m_local_x2 -= 0.25 * C_rot_total * q_wx
+        m_local_y2 -= 0.25 * C_rot_total * q_wy
+        m_local_z2 = -0.25 * C_rot_total * q_wz
 
         # Node 3 (gamma_3 = -1.0)
-        forces[n3, 0] += 0.25 * C_damp * q_vx
-        forces[n3, 1] += 0.25 * C_damp * q_vy
-        forces[n3, 2] += 0.25 * C_damp * q_vz
-        torques[n3, 0] += 0.25 * C_rot_total * q_wx
-        torques[n3, 1] += 0.25 * C_rot_total * q_wy
-        torques[n3, 2] += 0.25 * C_rot_total * q_wz
+        f_local_x3 += 0.25 * C_damp * q_vx
+        f_local_y3 += 0.25 * C_damp * q_vy
+        f_local_z3 += 0.25 * C_damp * q_vz
+        m_local_x3 += 0.25 * C_rot_total * q_wx
+        m_local_y3 += 0.25 * C_rot_total * q_wy
+        m_local_z3 = 0.25 * C_rot_total * q_wz
+
+        # Rotate local forces and torques back to global coordinate system
+        # Node 0
+        forces[n0, 0] += e1x * f_local_x0 + e2x * f_local_y0 + e3x * f_local_z0
+        forces[n0, 1] += e1y * f_local_x0 + e2y * f_local_y0 + e3y * f_local_z0
+        forces[n0, 2] += e1z * f_local_x0 + e2z * f_local_y0 + e3z * f_local_z0
+
+        torques[n0, 0] += e1x * m_local_x0 + e2x * m_local_y0 + e3x * m_local_z0
+        torques[n0, 1] += e1y * m_local_x0 + e2y * m_local_y0 + e3y * m_local_z0
+        torques[n0, 2] += e1z * m_local_x0 + e2z * m_local_y0 + e3z * m_local_z0
+
+        # Node 1
+        forces[n1, 0] += e1x * f_local_x1 + e2x * f_local_y1 + e3x * f_local_z1
+        forces[n1, 1] += e1y * f_local_x1 + e2y * f_local_y1 + e3y * f_local_z1
+        forces[n1, 2] += e1z * f_local_x1 + e2z * f_local_y1 + e3z * f_local_z1
+
+        torques[n1, 0] += e1x * m_local_x1 + e2x * m_local_y1 + e3x * m_local_z1
+        torques[n1, 1] += e1y * m_local_x1 + e2y * m_local_y1 + e3y * m_local_z1
+        torques[n1, 2] += e1z * m_local_x1 + e2z * m_local_y1 + e3z * m_local_z1
+
+        # Node 2
+        forces[n2, 0] += e1x * f_local_x2 + e2x * f_local_y2 + e3x * f_local_z2
+        forces[n2, 1] += e1y * f_local_x2 + e2y * f_local_y2 + e3y * f_local_z2
+        forces[n2, 2] += e1z * f_local_x2 + e2z * f_local_y2 + e3z * f_local_z2
+
+        torques[n2, 0] += e1x * m_local_x2 + e2x * m_local_y2 + e3x * m_local_z2
+        torques[n2, 1] += e1y * m_local_x2 + e2y * m_local_y2 + e3y * m_local_z2
+        torques[n2, 2] += e1z * m_local_x2 + e2z * m_local_y2 + e3z * m_local_z2
+
+        # Node 3
+        forces[n3, 0] += e1x * f_local_x3 + e2x * f_local_y3 + e3x * f_local_z3
+        forces[n3, 1] += e1y * f_local_x3 + e2y * f_local_y3 + e3y * f_local_z3
+        forces[n3, 2] += e1z * f_local_x3 + e2z * f_local_y3 + e3z * f_local_z3
+
+        torques[n3, 0] += e1x * m_local_x3 + e2x * m_local_y3 + e3x * m_local_z3
+        torques[n3, 1] += e1y * m_local_x3 + e2y * m_local_y3 + e3y * m_local_z3
+        torques[n3, 2] += e1z * m_local_x3 + e2z * m_local_y3 + e3z * m_local_z3
 
     return forces, torques, step_fracture_energy, step_stiff_damp_power
 
@@ -2512,7 +2598,7 @@ def _fused_shell_loop_jit(
 ):
     n_nodes = len(positions)
     n_elements = len(elements)
-    m_frames = max(1, n_steps // save_interval)
+    m_frames = (n_steps - 1) // save_interval + 1
     mass_min = np.min(grid_masses)
 
     # Pre-allocate history structures (compatible with JIT vector allocations)
@@ -2762,6 +2848,8 @@ def _fused_shell_loop_jit(
             velocities=v_half,
             mu_s=mu_s,
             dt=dt,
+            grid_masses=grid_masses,
+            damping_ratio=0.1,
         )
         contact_energy = contact_e_step + proj_contact_e_step
         friction_dissipated += fric_diss_step
@@ -3089,7 +3177,7 @@ def fused_leapfrog_loop(
     if proj_peak_deceleration is None:
         proj_peak_deceleration = np.zeros(1, dtype=np.float64)
     if hist_proj_quat is None:
-        hist_proj_quat = np.zeros((max(1, n_steps // save_interval), 4), dtype=np.float64)
+        hist_proj_quat = np.zeros(((n_steps - 1) // save_interval + 1, 4), dtype=np.float64)
 
     proximity_threshold_val = dx * 2.0 if proximity_threshold < 0.0 else proximity_threshold
 

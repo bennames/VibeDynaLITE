@@ -404,7 +404,7 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 break
 
             # Allocate history array for orientation
-            m_frames = max(1, current_steps // save_interval)
+            m_frames = (current_steps - 1) // save_interval + 1
             hist_proj_quat = np.zeros((m_frames, 4), dtype=np.float64)
 
             # Extra solver arguments for 6-DOF and shape

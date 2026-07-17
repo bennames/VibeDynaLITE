@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] — Sprint 19: Co-Rotational Belytschko-Tsay Shell Element and Contact Cutoff Hardening
+
+### Added
+- **Co-Rotational Shell Element**: Implemented the Belytschko-Tsay co-rotational shell formulation, constructing a local coordinate frame $(\mathbf{e}_1, \mathbf{e}_2, \mathbf{e}_3)$ from element diagonals to project velocities/spins, compute local strain rates/curvatures, and rotate assembled local forces and moments back to the global frame. This ensures 100% geometric objectivity under large angles without spurious shear locking.
+- **Flanagan-Belytschko Hourglass in Local Frame**: Projected zero-energy hourglass modes and damping in the local frame to preserve energy conservation.
+- **Bullet Ogive Nose Cutoff Correction**: Updated projectile contact distance checking to include `L_nose_val`, eliminating force jump discontinuities.
+- **Inter-ply Damping**: Added critical damping (damping ratio = 0.1) to inter-ply contact forces to eliminate unphysical layer resonance.
+
+### Fixed
+- **History Sizing Allocation**: Fixed the `m_frames` off-by-one pre-allocation sizing in both shell loop JITs to prevent JIT `IndexError` crashes.
+- **21 Unit Tests Passed**: Verified that the entire unit test suite compiles, JITs, and passes successfully, including the updated rate-based J2 plasticity tests.
+
 ---
 
 ## [Unreleased] — Sprint 18: Objective Green-Lagrange Kinematics and Benchmark 8 State Persistence

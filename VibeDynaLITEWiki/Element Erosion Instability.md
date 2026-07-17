@@ -202,3 +202,14 @@ To resolve the remaining numerical energy leakage/pump under large rotations, th
 3. **`element_strains` Persistence Fix**:
    Passed and persisted the `element_strains` history array across integration chunks in the validation benchmarks, preventing spurious strain-increment spikes at chunk boundaries.
 
+### 5.10 Co-Rotational Belytschko-Tsay Shell Element & Contact Cutoff Hardening (July 2026 Sprint 19)
+To resolve spurious bending shear stresses under large angles and correct contact force jumps:
+1. **Co-Rotational Coordinate Triad Projection**:
+   Constructs a local coordinate frame $(\mathbf{e}_1, \mathbf{e}_2, \mathbf{e}_3)$ for each element at each timestep. Nodal velocities and rotations are projected onto this local triad, and strain rates and curvatures are evaluated in local coordinates. Forces and moments are assembled locally and rotated back to the global coordinate frame. This ensures 100% objectivity under large rotations without generating spurious shear locking.
+2. **Hourglass Stabilization in Local Frame**:
+   The Flanagan-Belytschko hourglass control is performed in the local co-rotational coordinate system, preventing rotational energy leakage.
+3. **Bullet Ogive Nose Cutoff Correction**:
+   Updated the contact cutoff distance calculations (`max_R = max(proj_radius, max(proj_length, proj_span))`) to incorporate the projectile's ogive nose length (`L_nose_val`), resolving the contact force discontinuity.
+4. **Dynamic Inter-ply Damping**:
+   Reactivated critical contact damping (damping ratio = 0.1) in the inter-ply contact forces to eliminate unphysical wave resonances between layers.
+

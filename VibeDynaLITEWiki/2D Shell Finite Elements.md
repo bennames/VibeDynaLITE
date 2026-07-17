@@ -6,32 +6,42 @@ To support modeling metallic sheets, container walls, and other continuous thin-
 
 ## Element Formulation
 
-The solver utilizes a **Q4 Reissner-Mindlin Bilinear Quadrilateral Shell Element** to capture both membrane and bending behavior:
+The solver utilizes a **Co-Rotational Belytschko-Tsay Shell Element** to capture large-deformation membrane, bending, and transverse shear behavior objectively and frame-invariantly:
 
 1. **Degrees of Freedom**: Each node has 6 degrees of freedom:
    - 3 translational: $u_x, u_y, u_z$
    - 3 rotational: $\theta_x, \theta_y, \theta_z$
-2. **Kinematics**: Transverse shear deformation is included based on Reissner-Mindlin theory, allowing the element to remain valid for both thin and moderately thick plates.
-3. **Geometric Non-Linearity (Green-Lagrange Strain Tensor & Work-Conjugate Forces)**: To model membrane-bending coupling under large out-of-plane deflections objectively and conservatively under arbitrary rotations, the solver utilizes the Green-Lagrange strain tensor:
-   $$\epsilon_{xx} = \frac{\partial u}{\partial x} + \frac{1}{2}\left[\left(\frac{\partial u}{\partial x}\right)^2 + \left(\frac{\partial v}{\partial x}\right)^2 + \left(\frac{\partial w}{\partial x}\right)^2\right]$$
-   $$\epsilon_{yy} = \frac{\partial v}{\partial y} + \frac{1}{2}\left[\left(\frac{\partial u}{\partial y}\right)^2 + \left(\frac{\partial v}{\partial y}\right)^2 + \left(\frac{\partial w}{\partial y}\right)^2\right]$$
-   $$\gamma_{xy} = \frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} + \frac{\partial u}{\partial x}\frac{\partial u}{\partial y} + \frac{\partial v}{\partial x}\frac{\partial v}{\partial y} + \frac{\partial w}{\partial x}\frac{\partial w}{\partial y}$$
-   To satisfy energy conservation and frame invariance under large rotations, the internal nodal forces are evaluated using the work-conjugate projections of the membrane stresses:
-   $$T_{xx} = N_{xx} \left(1 + \frac{\partial u}{\partial x}\right) + N_{xy} \frac{\partial u}{\partial y}, \quad T_{xy} = N_{yy} \frac{\partial u}{\partial y} + N_{xy} \left(1 + \frac{\partial u}{\partial x}\right)$$
-   $$T_{yx} = N_{xx} \frac{\partial v}{\partial x} + N_{xy} \left(1 + \frac{\partial v}{\partial y}\right), \quad T_{yy} = N_{yy} \left(1 + \frac{\partial v}{\partial y}\right) + N_{xy} \frac{\partial v}{\partial x}$$
-   $$Q_{x,\text{eff}} = Q_x + N_{xx} \frac{\partial w}{\partial x} + N_{xy} \frac{\partial w}{\partial y}, \quad Q_{y,\text{eff}} = Q_y + N_{yy} \frac{\partial w}{\partial y} + N_{xy} \frac{\partial w}{\partial x}$$
-   This mathematically rigorous formulation ensures that the internal forces remain conservative (zero energy leakage/generation) during dynamic wave propagation, eliminating self-excitation and artificial cascading failures.
-4. **Bending Curvatures**: Curvatures are evaluated from nodal rotation gradients:
-   $$\kappa_{xx} = \frac{\partial \theta_y}{\partial x}, \quad \kappa_{yy} = -\frac{\partial \theta_x}{\partial y}, \quad \kappa_{xy} = \frac{\partial \theta_y}{\partial y} - \frac{\partial \theta_x}{\partial x}$$
-5. **Transverse Shear Strains**: Transverse shear strains allow for cross-sectional rotation relative to the mid-surface normal:
-   $$\gamma_{xz} = \frac{\partial w}{\partial x} + \theta_y, \quad \gamma_{yz} = \frac{\partial w}{\partial y} - \theta_x$$
-6. **Total In-Plane Strains**: The total in-plane strain field at a distance $z$ from the shell mid-surface is:
-   $$\epsilon_{xx}(z) = \epsilon_{xx} + z \kappa_{xx}, \quad \epsilon_{yy}(z) = \epsilon_{yy} + z \kappa_{yy}, \quad \gamma_{xy}(z) = \gamma_{xy} + z \kappa_{xy}$$
-7. **Numerical Integration**: In-plane integration is performed using a single Gauss point at the center of the element, combined with **Flanagan-Belytschko hourglass control** to suppress spurious zero-energy modes. The stabilization forces and torques are scaled using physical wave-impedance properties to prevent numerical explosions:
-   - Translational Hourglass Damping: $C_{\text{damp}} = 0.015 \sqrt{E \rho} \cdot h \cdot dx$
-   - Rotational Hourglass Damping: $C_{\text{rot\_damp}} = 0.015 \sqrt{E \rho} \cdot h^3 \cdot dx$
-   - Transverse Shear Hourglass Damping: $C_{\text{shear\_damp}} = 0.015 \sqrt{G \rho} \cdot h \cdot dx^3$
-8. **Through-Thickness Integration**: Integration through the thickness is performed using **Simpson's rule** with 3 integration points ($z_k \in \{-0.5h, 0, 0.5h\}$ with weights $w_k \in \{h/6, 4h/6, h/6\}$) to capture bending and nonlinear material response accurately.
+2. **Local Coordinate Triad Construction**: At each timestep, an orthonormal local frame $(\mathbf{e}_1, \mathbf{e}_2, \mathbf{e}_3)$ is constructed at the element center:
+   - Diagonals are defined as $\mathbf{s}_1 = \mathbf{x}_2 - \mathbf{x}_0$ and $\mathbf{s}_2 = \mathbf{x}_3 - \mathbf{x}_1$.
+   - The normal vector is $\mathbf{e}_3 = \text{normalize}(\mathbf{s}_1 \times \mathbf{s}_2)$.
+   - The local x-axis is $\mathbf{e}_1 = \text{normalize}(\mathbf{s}_1)$.
+   - The local y-axis is $\mathbf{e}_2 = \mathbf{e}_3 \times \mathbf{e}_1$.
+3. **Local Kinematics Projection**: Global velocities $\mathbf{v}_i$ and angular velocities $\boldsymbol{\omega}_i$ are projected onto the local frame to yield local velocities $(v'_{x,i}, v'_{y,i}, v'_{z,i})$ and spin rates $(\omega'_{x,i}, \omega'_{y,i}, \omega'_{z,i})$.
+4. **Local Strain and Curvature Rates**: Local velocity strain rates and bending curvature rates are evaluated at the element center:
+   - Velocity strain rates:
+     $$\dot{\epsilon}'_{xx} = \sum v'_{x,i} N_{i,x'}, \quad \dot{\epsilon}'_{yy} = \sum v'_{y,i} N_{i,y'}, \quad \dot{\gamma}'_{xy} = \sum (v'_{x,i} N_{i,y'} + v'_{y,i} N_{i,x'})$$
+   - Bending curvature rates:
+     $$\dot{\kappa}'_{xx} = \sum \omega'_{y,i} N_{i,x'}, \quad \dot{\kappa}'_{yy} = -\sum \omega'_{x,i} N_{i,y'}, \quad \dot{\kappa}'_{xy} = \sum (\omega'_{y,i} N_{i,y'} - \omega'_{x,i} N_{i,x'})$$
+   - Transverse shear strain rates (Reissner-Mindlin):
+     $$\dot{\gamma}'_{xz} = \sum v'_{z,i} N_{i,x'} + \bar{\omega}'_y, \quad \dot{\gamma}'_{yz} = \sum v'_{z,i} N_{i,y'} - \bar{\omega}'_x$$
+     where $\bar{\omega}'_x, \bar{\omega}'_y$ are the average nodal rotational rates, and $N_{i,x'}, N_{i,y'}$ are the local bilinear shape function derivatives.
+5. **Rate-Integration**: Strain increments are integrated incrementally:
+   $$\Delta \epsilon'_{ij} = \dot{\epsilon}'_{ij} \Delta t, \quad \Delta \kappa'_{ij} = \dot{\kappa}'_{ij} \Delta t, \quad \Delta \gamma'_{iz} = \dot{\gamma}'_{iz} \Delta t$$
+6. **Stress Resultants**: J2 plastic stress integration is performed through the thickness, and local membrane forces $\mathbf{N}'$, bending moments $\mathbf{M}'$, and shear forces $\mathbf{Q}'$ are computed by integration.
+7. **Local Force Assembly**: Local nodal forces and moments are assembled from stress resultants (resisting forces are negated to act against deformation):
+   $$f'_{x,i} = -A (N'_{xx} N_{i,x'} + N'_{xy} N_{i,y'})$$
+   $$f'_{y,i} = -A (N'_{yy} N_{i,y'} + N'_{xy} N_{i,x'})$$
+   $$f'_{z,i} = -A (Q'_x N_{i,x'} + Q'_y N_{i,y'})$$
+   $$m'_{x,i} = -A (-M'_{yy} N_{i,y'} - M'_{xy} N_{i,x'}) + 0.25 A Q'_y$$
+   $$m'_{y,i} = -A (M'_{xx} N_{i,x'} + M'_{xy} N_{i,y'}) - 0.25 A Q'_x$$
+8. **Flanagan-Belytschko Hourglass Control**: Visco-plastic resisting forces and moments are added in the local frame to suppress spurious zero-energy modes using coefficient $\epsilon_{hg} = 0.05$:
+   - Translational: $C_{\text{damp}} = 0.05 \sqrt{E \rho} \cdot h \cdot dx$
+   - Rotational: $C_{\text{rot\_damp}} = 0.05 \sqrt{E \rho} \cdot h^3 \cdot dx$
+   - Transverse Shear: $C_{\text{shear\_damp}} = 0.05 \sqrt{G \rho} \cdot h \cdot dx^3$
+9. **Global Rotation**: Local nodal forces $\mathbf{f}'_i$ and moments $\mathbf{m}'_i$ (including hourglass contributions) are rotated back to the global frame:
+   $$\mathbf{f}_i = \mathbf{R}^T \cdot \mathbf{f}'_i, \quad \mathbf{m}_i = \mathbf{R}^T \cdot \mathbf{m}'_i$$
+   where $\mathbf{R} = [\mathbf{e}_1, \mathbf{e}_2, \mathbf{e}_3]^T$ is the local-to-global rotation matrix.
+10. **Through-Thickness Integration**: Integration through the thickness is performed using **Simpson's rule** with 5 integration points ($z_k \in \{-0.5h, -0.25h, 0, 0.25h, 0.5h\}$ with weights $w_k \in \{h/12, 4h/12, 2h/12, 4h/12, h/12\}$) to capture bending and nonlinear material response accurately.
 
 ---
 

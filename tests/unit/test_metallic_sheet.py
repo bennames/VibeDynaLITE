@@ -1153,7 +1153,9 @@ def test_ramberg_osgood_nonlinear_hardening():
     element_failed_step = np.array([-1], dtype=np.int32)
 
     # Apply strain increment that causes plastic yielding (0.005 is > yield strain of 0.001)
-    element_strains[0, 0] = 0.005
+    element_strains[0, 0] = 0.0
+    velocities[1, 0] = 500.0
+    velocities[2, 0] = 500.0
 
     forces, torques, step_fe, step_sd = numba_step_shell_forces_and_failures(
         positions,
@@ -1201,7 +1203,9 @@ def test_ramberg_osgood_nonlinear_hardening():
     assert sig_vm1 < tensile_strength
 
     # Apply very large strain to exceed ultimate strain
-    element_strains[0, 0] = 0.1
+    element_strains[0, 0] = 0.005
+    velocities[1, 0] = 9500.0
+    velocities[2, 0] = 9500.0
     numba_step_shell_forces_and_failures(
         positions,
         X_ref,
