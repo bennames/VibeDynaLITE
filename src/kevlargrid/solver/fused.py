@@ -1915,6 +1915,10 @@ def numba_step_shell_forces_and_failures(
 
         if is_softening:
             element_failed_step[e] -= 1
+            ramp = float(element_failed_step[e]) / float(erosion_softening_steps)
+            if element_failed_step[e] <= 0:
+                element_failed[e] = 1
+                continue
         # 1. Coordinate Triad Construction
         x0, y0, z0 = positions[n0, 0], positions[n0, 1], positions[n0, 2]
         x1, y1, z1 = positions[n1, 0], positions[n1, 1], positions[n1, 2]
