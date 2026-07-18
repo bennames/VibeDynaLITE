@@ -184,9 +184,21 @@ class SimRunner:
             nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
             n_plies = grid_cfg["n_plies"]
             t_ply = grid_cfg["t_ply"]
+            use_czm = config.get("simulation", {}).get(
+                "structure_type", "fabric"
+            ) == "metallic_sheet" and config.get("simulation", {}).get("use_czm", True)
             # Build parent-side grid placeholder
             grid = generate_rectangular_grid(
-                nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
+                nx=nx,
+                ny=ny,
+                dx=dx,
+                material=mat,
+                n_plies=n_plies,
+                t_ply=t_ply,
+                corrugation_amplitude=grid_cfg.get("corrugation_amplitude", 0.0),
+                corrugation_period=grid_cfg.get("corrugation_period", 1.0),
+                corrugation_axis=grid_cfg.get("corrugation_axis", "x"),
+                use_czm=use_czm,
             )
             with self.lock:
                 self.grid_nodes = grid.nodes.copy()
@@ -403,6 +415,16 @@ AUTOSAVE_DIR = ".autosave"
 AUTOSAVE_PATH = f"{AUTOSAVE_DIR}/session.toml"
 
 
+def _get_fail_thresh(cfg: dict) -> float:
+    """Helper to extract correct failure threshold based on structure type."""
+    is_fabric = cfg.get("simulation", {}).get("structure_type", "fabric") == "fabric"
+    mat_cfg = cfg.get("material", {})
+    if is_fabric:
+        return float(mat_cfg.get("failure_strain") or 0.036)
+    else:
+        return float(mat_cfg.get("ultimate_strain") or mat_cfg.get("failure_strain") or 0.20)
+
+
 def enforce_projectile_tangency(config: dict, update_widget: bool = True) -> float:
     """Check if the projectile overlaps the grid and adjust its Z coordinate to ensure tangent contact."""
     proj_cfg = config["projectile"]
@@ -412,17 +434,83 @@ def enforce_projectile_tangency(config: dict, update_widget: bool = True) -> flo
     radius = proj_cfg.get("radius", 0.005)
     length = proj_cfg.get("length", 0.01)
     edge_thickness = proj_cfg.get("edge_thickness", 0.005)
+    quat = proj_cfg.get("quat", [1.0, 0.0, 0.0, 0.0])
 
-    # Calculate half-height along Z axis based on shape
     s_lower = shape_type.lower()
+
+    # Define helper to rotate vector by quaternion
+    def q_rotate_local(q, v):
+        qw, qx, qy, qz = q[0], q[1], q[2], q[3]
+        vx, vy, vz = v[0], v[1], v[2]
+        tx = 2.0 * (qy * vz - qz * vy)
+        ty = 2.0 * (qz * vx - qx * vz)
+        tz = 2.0 * (qx * vy - qy * vx)
+        return np.array(
+            [
+                vx + qw * tx + (qy * tz - qz * ty),
+                vy + qw * ty + (qz * tx - qx * tz),
+                vz + qw * tz + (qx * ty - qy * tx),
+            ]
+        )
+
+    local_pts = []
     if s_lower == "box":
-        h_half = edge_thickness / 2.0
+        w = proj_cfg.get("blade_width", 0.02)
+        t = edge_thickness
+        l_val = length
+        for dx in [-w / 2, w / 2]:
+            for dy in [-l_val / 2, l_val / 2]:
+                for dz in [-t / 2, t / 2]:
+                    local_pts.append(np.array([dx, dy, dz]))
     elif s_lower == "sphere":
         h_half = radius
-    elif s_lower == "cylinder" or s_lower == "bullet":
-        h_half = length / 2.0
+    elif s_lower == "cylinder":
+        r = radius
+        l_val = length
+        for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+            local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), l_val / 2]))
+            local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l_val / 2]))
+    elif s_lower == "bullet":
+        r = radius
+        l_val = length
+        for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+            local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l_val / 2]))
+        local_pts.append(np.array([0.0, 0.0, l_val / 2]))
+    elif s_lower == "propeller":
+        span = proj_cfg.get("span", 0.05)
+        c_r = proj_cfg.get("root_chord", 0.01)
+        c_t = proj_cfg.get("tip_chord", 0.005)
+        ys = np.linspace(0.0, span, 20)
+        dy = span / 20.0
+        dV_sum = 0.0
+        y_dV_sum = 0.0
+        tau = proj_cfg.get("thickness_ratio", 12.0) / 100.0
+        for y in ys:
+            c = c_r + (y / span) * (c_t - c_r)
+            area = 0.60 * (c**2) * tau
+            dV = area * dy
+            dV_sum += dV
+            y_dV_sum += y * dV
+        y_com = y_dV_sum / dV_sum if dV_sum > 0 else 0.0
+
+        # Single-bladed propeller extends only in the positive Y direction (from local Y = -y_com to span - y_com)
+        y_tip = span - y_com
+        c = c_t
+        local_pts.append(np.array([c / 2, y_tip, 0.0]))
+        local_pts.append(np.array([-c / 2, y_tip, 0.0]))
+        local_pts.append(np.array([c_r / 2, -y_com, 0.0]))
+        local_pts.append(np.array([-c_r / 2, -y_com, 0.0]))
     else:
         h_half = radius
+
+    if len(local_pts) > 0:
+        max_z = 0.0
+        for pt in local_pts:
+            rot_pt = q_rotate_local(quat, pt)
+            z_val = np.abs(rot_pt[2])
+            if z_val > max_z:
+                max_z = z_val
+        h_half = max_z
 
     # Check for initial penetration Z-overlap
     z_pos = proj_cfg["position"][2]
@@ -581,6 +669,9 @@ def launch() -> None:
             validate_config(cfg)
 
             # Reset and initialize viewport coordinate mappings
+            use_czm = cfg.get("simulation", {}).get(
+                "structure_type", "fabric"
+            ) == "metallic_sheet" and cfg.get("simulation", {}).get("use_czm", True)
             dummy_grid = generate_rectangular_grid(
                 nx=cfg["grid"]["nx"],
                 ny=cfg["grid"]["ny"],
@@ -588,6 +679,10 @@ def launch() -> None:
                 material=cfg["material"],
                 n_plies=cfg["grid"]["n_plies"],
                 t_ply=cfg["grid"]["t_ply"],
+                corrugation_amplitude=cfg["grid"].get("corrugation_amplitude", 0.0),
+                corrugation_period=cfg["grid"].get("corrugation_period", 1.0),
+                corrugation_axis=cfg["grid"].get("corrugation_axis", "x"),
+                use_czm=use_czm,
             )
             viewport3d.reset(
                 grid=dummy_grid,
@@ -607,6 +702,8 @@ def launch() -> None:
                 thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
                 tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                 t_ply=cfg["grid"].get("t_ply", None),
+                structure_type=cfg.get("simulation", {}).get("structure_type", "fabric"),
+                fail_thresh=_get_fail_thresh(cfg),
             )
             viewport3d.draw_projectile(
                 np.array(cfg["projectile"]["position"], dtype=np.float64),
@@ -668,6 +765,9 @@ def launch() -> None:
         reset_cfg = config_panel.get_config()
         z_pos = enforce_projectile_tangency(reset_cfg, update_widget=True)
         reset_cfg["projectile"]["position"][2] = z_pos
+        use_czm = reset_cfg.get("simulation", {}).get(
+            "structure_type", "fabric"
+        ) == "metallic_sheet" and reset_cfg.get("simulation", {}).get("use_czm", True)
         blank_grid = generate_rectangular_grid(
             nx=reset_cfg["grid"]["nx"],
             ny=reset_cfg["grid"]["ny"],
@@ -675,6 +775,10 @@ def launch() -> None:
             material=reset_cfg["material"],
             n_plies=reset_cfg["grid"]["n_plies"],
             t_ply=reset_cfg["grid"]["t_ply"],
+            corrugation_amplitude=reset_cfg["grid"].get("corrugation_amplitude", 0.0),
+            corrugation_period=reset_cfg["grid"].get("corrugation_period", 1.0),
+            corrugation_axis=reset_cfg["grid"].get("corrugation_axis", "x"),
+            use_czm=use_czm,
         )
         viewport3d.reset(
             blank_grid,
@@ -694,6 +798,8 @@ def launch() -> None:
             thickness_ratio=reset_cfg["projectile"].get("thickness_ratio", 12.0),
             tip_radius=reset_cfg["projectile"].get("tip_radius", 0.002),
             t_ply=reset_cfg["grid"].get("t_ply", None),
+            structure_type=reset_cfg.get("simulation", {}).get("structure_type", "fabric"),
+            fail_thresh=_get_fail_thresh(reset_cfg),
         )
         viewport3d.draw_projectile(
             np.array(reset_cfg["projectile"]["position"], dtype=np.float64),
@@ -815,6 +921,9 @@ def launch() -> None:
     initial_cfg = config_panel.get_config()
     z_pos = enforce_projectile_tangency(initial_cfg, update_widget=True)
     initial_cfg["projectile"]["position"][2] = z_pos
+    use_czm = initial_cfg.get("simulation", {}).get(
+        "structure_type", "fabric"
+    ) == "metallic_sheet" and initial_cfg.get("simulation", {}).get("use_czm", True)
     init_grid = generate_rectangular_grid(
         nx=initial_cfg["grid"]["nx"],
         ny=initial_cfg["grid"]["ny"],
@@ -822,6 +931,10 @@ def launch() -> None:
         material=initial_cfg["material"],
         n_plies=initial_cfg["grid"]["n_plies"],
         t_ply=initial_cfg["grid"]["t_ply"],
+        corrugation_amplitude=initial_cfg["grid"].get("corrugation_amplitude", 0.0),
+        corrugation_period=initial_cfg["grid"].get("corrugation_period", 1.0),
+        corrugation_axis=initial_cfg["grid"].get("corrugation_axis", "x"),
+        use_czm=use_czm,
     )
     viewport3d.reset(
         init_grid,
@@ -841,6 +954,8 @@ def launch() -> None:
         thickness_ratio=initial_cfg["projectile"].get("thickness_ratio", 12.0),
         tip_radius=initial_cfg["projectile"].get("tip_radius", 0.002),
         t_ply=initial_cfg["grid"].get("t_ply", None),
+        structure_type=initial_cfg.get("simulation", {}).get("structure_type", "fabric"),
+        fail_thresh=_get_fail_thresh(initial_cfg),
     )
     viewport3d.draw_projectile(
         np.array(initial_cfg["projectile"]["position"], dtype=np.float64),
@@ -888,10 +1003,16 @@ def launch() -> None:
                 cfg["grid"]["n_plies"],
                 cfg["grid"]["t_ply"],
                 cfg["grid"]["boundary_type"],
-                cfg["material"].get("material_name", ""),
+                cfg["grid"].get("corrugation_amplitude", 0.0),
+                cfg["grid"].get("corrugation_period", 1.0),
+                cfg["grid"].get("corrugation_axis", "x"),
+                cfg.get("simulation", {}).get("structure_type", "fabric"),
+                cfg["material"].get("areal_density_kgm2", 0.0),
+                cfg["material"].get("name", ""),
                 cfg["projectile"]["blade_width"],
                 cfg["projectile"]["edge_thickness"],
                 tuple(cfg["projectile"]["position"]),
+                tuple(cfg["projectile"].get("quat", [1.0, 0.0, 0.0, 0.0])),
                 cfg["projectile"].get("shape_type", "box"),
                 cfg["projectile"].get("radius", 0.005),
                 cfg["projectile"].get("length", 0.01),
@@ -911,6 +1032,9 @@ def launch() -> None:
                     cfg = config_panel.get_config()
                     z_pos = enforce_projectile_tangency(cfg, update_widget=True)
                     cfg["projectile"]["position"][2] = z_pos
+                    use_czm = cfg.get("simulation", {}).get(
+                        "structure_type", "fabric"
+                    ) == "metallic_sheet" and cfg.get("simulation", {}).get("use_czm", True)
 
                     preview_grid = generate_rectangular_grid(
                         nx=cfg["grid"]["nx"],
@@ -919,6 +1043,10 @@ def launch() -> None:
                         material=cfg["material"],
                         n_plies=cfg["grid"]["n_plies"],
                         t_ply=cfg["grid"]["t_ply"],
+                        corrugation_amplitude=cfg["grid"].get("corrugation_amplitude", 0.0),
+                        corrugation_period=cfg["grid"].get("corrugation_period", 1.0),
+                        corrugation_axis=cfg["grid"].get("corrugation_axis", "x"),
+                        use_czm=use_czm,
                     )
                     viewport3d.reset(
                         preview_grid,
@@ -938,6 +1066,8 @@ def launch() -> None:
                         thickness_ratio=cfg["projectile"].get("thickness_ratio", 12.0),
                         tip_radius=cfg["projectile"].get("tip_radius", 0.002),
                         t_ply=cfg["grid"].get("t_ply", None),
+                        structure_type=cfg.get("simulation", {}).get("structure_type", "fabric"),
+                        fail_thresh=_get_fail_thresh(cfg),
                     )
                     viewport3d.draw_projectile(
                         np.array(cfg["projectile"]["position"], dtype=np.float64),

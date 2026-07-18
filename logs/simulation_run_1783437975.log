@@ -1,0 +1,19 @@
+[2026-07-07 08:26:15] [INFO]: ============================================================
+[2026-07-07 08:26:15] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-07-07 08:26:15] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-07-07 08:26:15] [INFO]: Python: 3.12.13
+[2026-07-07 08:26:15] [INFO]: Active Backend: taichi
+[2026-07-07 08:26:15] [INFO]: Taichi CPU/GPU Integration active
+[2026-07-07 08:26:15] [INFO]: Grid Dimensions: 200x200 (plies: 1)
+[2026-07-07 08:26:15] [INFO]: Grid Nodes: 40000 | Springs: 158802
+[2026-07-07 08:26:15] [INFO]: Projectile: Shape=propeller | Mass=1.70000 kg | Initial Velocity=[0.0, 0.0, 70.0] m/s
+[2026-07-07 08:26:15] [INFO]: Initial System Energy: 4623.2465 J
+[2026-07-07 08:26:15] [INFO]: ============================================================
+[2026-07-07 08:26:15] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:26:19] [ERROR]: Simulation run failed with exception:
+[2026-07-07 08:26:19] [ERROR]: Traceback (most recent call last):
+  File "/Users/bennames/Developer/VibeDynaLITE/src/kevlargrid/solver/worker.py", line 426, in run_solver_process
+    active_strains = np.where(failed_f, 0.0, strains_f)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: operands could not be broadcast together with shapes (39601,) () (158802,) 
+

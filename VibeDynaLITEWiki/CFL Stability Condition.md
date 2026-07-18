@@ -12,21 +12,41 @@ The CFL condition says: **no information can travel more than one grid cell per 
 
 ## Critical Timestep
 
-The critical (maximum stable) timestep is derived from the highest natural frequency in the system:
+The critical (maximum stable) timestep is derived from the highest natural frequency in the system $\omega_{max}$:
 
+$$dt_{crit} = \frac{2}{\omega_{max}}$$
+
+### 1. Fabric Mode
+In the lumped mass-spring lattice, the highest frequency is governed by the stiffest spring and the lightest node:
+$$\omega_{max} = 2 \sqrt{\frac{k_{max}}{m_{min}}}$$
+Which leads to the classical undamped stability limit:
 $$dt_{crit} = \sqrt{\frac{m_{min}}{k_{max}}}$$
 
 where:
-- $m_{min}$ = the smallest lumped mass of any node
-- $k_{max}$ = the largest stiffness of any spring element
+- $m_{min}$ = the smallest lumped mass of any node (typically corner nodes, which receive ¼ of a cell's mass)
+- $k_{max}$ = the largest stiffness of any spring element (often contact penalty stiffness $k_{penalty}$)
 
-This is computed by `compute_cfl_timestep()` in `timestep.py`:
+This is computed by `compute_cfl_timestep()` in `timestep.py`.
 
-```python
-m_min = np.min(masses)
-k_max = np.max(stiffnesses)
-dt_crit = np.sqrt(m_min / k_max)
-```
+### 2. Shell Element Mode
+For 2D shell elements, the elastic wave frequency is governed by the plane-stress longitudinal wave speed $c_p$:
+$$c_p = \sqrt{\frac{E}{\rho(1 - \nu^2)}}$$
+The maximum element frequency is:
+$$\omega_{shell} = \frac{2 c_p}{dx}$$
+
+### 3. Cohesive Zone Model (CZM) Mode
+When the interface Cohesive Zone Model (CZM) is enabled, the tiebreak spring stiffness $k_0$ introduces another high-frequency component:
+$$\omega_{spring} = \sqrt{\frac{2 k_0}{m_{min}}}$$
+where $k_0$ is the initial cohesive stiffness and $m_{min}$ is the nodal mass in the duplicated CZM grid. The overall system frequency becomes:
+$$\omega_{max} = \max\left(\omega_{shell}, \omega_{spring}\right)$$
+
+### 4. Rayleigh Damping Correction
+Stiffness-proportional Rayleigh damping ($\beta$) reduces the stable timestep limit:
+$$dt_{crit} = \sqrt{\beta^2 + \frac{4}{\omega_{max}^2}} - \beta$$
+If contact is active, the penalty contact stiffness $k_{penalty}$ also enforces a contact timestep limit:
+$$dt_{contact} = 2\sqrt{\frac{m_{min}}{k_{penalty}}}$$
+The solver enforces $dt_{crit} = \min(dt_{crit}, dt_{contact})$.
+
 
 ### What Determines $k_{max}$?
 
@@ -86,8 +106,8 @@ $$E_{clamped} = \sum_i \frac{1}{2} m_i \left(\|v_i\|^2 - v_{max}^2\right) \quad 
 
 This is a safety net, not a substitute for a correct timestep. In a well-behaved simulation, velocity clamping should trigger rarely and dissipate negligible energy. If it's firing frequently, something else is wrong (ghost forces, excessive penalty stiffness, CFL factor too high).
 
-> [!WARNING]
-> Velocity clamp dissipation is not yet tracked in the current implementation (planned for Sprint 7.7). Until then, clamping events silently remove energy from the system without it appearing in the [[Energy Conservation|energy balance]].
+> [!NOTE]
+> Velocity clamp dissipation is tracked dynamically as `clamp_dissipated` and is fully integrated into the live telemetry energy plots and binary trajectory exports to maintain a closed [[Energy Conservation|energy balance]].
 
 ---
 

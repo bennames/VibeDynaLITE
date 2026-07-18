@@ -76,31 +76,58 @@ def run_solver_process(config: dict, queue, pipe) -> None:
 
         nx, ny, dx = grid_cfg["nx"], grid_cfg["ny"], grid_cfg["dx"]
         n_plies = grid_cfg["n_plies"]
-        t_ply = grid_cfg["t_ply"]
+        t_ply = grid_cfg.get("t_ply")
+        n_nodes_per_layer = nx * ny
+        n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
 
         # Build grid
+        use_czm = sim_cfg.get("structure_type", "fabric") == "metallic_sheet" and sim_cfg.get(
+            "use_czm", True
+        )
         grid = generate_rectangular_grid(
-            nx=nx, ny=ny, dx=dx, material=mat, n_plies=n_plies, t_ply=t_ply
+            nx=nx,
+            ny=ny,
+            dx=dx,
+            material=mat,
+            n_plies=n_plies,
+            t_ply=t_ply,
+            corrugation_amplitude=grid_cfg.get("corrugation_amplitude", 0.0),
+            corrugation_period=grid_cfg.get("corrugation_period", 1.0),
+            corrugation_axis=grid_cfg.get("corrugation_axis", "x"),
+            use_czm=use_czm,
         )
 
         # Build boundary mask
         boundary_mask = np.zeros(grid.n_nodes, dtype=np.int32)
-        n_nodes_per_layer = nx * ny
-        n_layers = n_plies if (t_ply is not None and n_plies > 1) else 1
+        val_to_set = 0
         if grid_cfg["boundary_type"] == "fixed":
-            for ply in range(n_layers):
-                offset = ply * n_nodes_per_layer
-                for i in range(nx):
-                    for j in range(ny):
-                        if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                            boundary_mask[offset + i * ny + j] = 1
+            val_to_set = 1
         elif grid_cfg["boundary_type"] == "non-reflecting":
-            for ply in range(n_layers):
-                offset = ply * n_nodes_per_layer
-                for i in range(nx):
-                    for j in range(ny):
-                        if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                            boundary_mask[offset + i * ny + j] = 2
+            val_to_set = 2
+
+        if val_to_set > 0:
+            if use_czm:
+                x_min = -(nx - 1) * dx / 2.0
+                x_max = (nx - 1) * dx / 2.0
+                y_min = -(ny - 1) * dx / 2.0
+                y_max = (ny - 1) * dx / 2.0
+                for idx in range(grid.n_nodes):
+                    x = grid.nodes[idx, 0]
+                    y = grid.nodes[idx, 1]
+                    if (
+                        np.abs(x - x_min) < 1e-5
+                        or np.abs(x - x_max) < 1e-5
+                        or np.abs(y - y_min) < 1e-5
+                        or np.abs(y - y_max) < 1e-5
+                    ):
+                        boundary_mask[idx] = val_to_set
+            else:
+                for ply in range(n_layers):
+                    offset = ply * n_nodes_per_layer
+                    for i in range(nx):
+                        for j in range(ny):
+                            if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+                                boundary_mask[offset + i * ny + j] = val_to_set
 
         # Nodal external forces setup
         if "nodal_external_forces" in config:
@@ -108,14 +135,32 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         else:
             nodal_external_forces = np.zeros((grid.n_nodes, 3), dtype=np.float64)
 
+        # Calculate thickness
+        areal_density = mat.get("areal_density_kgm2", 0.47)
+        fiber_density_gcc = mat.get("fiber_density_gcc", 1.44)
+        thickness = areal_density / (fiber_density_gcc * 1000.0)
+
         # Calculate timestep
         k_penalty = sim_cfg.get("k_penalty", 10.0 * np.mean(grid.stiffnesses))
         auto_cfl = sim_cfg.get("auto_cfl", True)
+        structure_type = sim_cfg.get("structure_type", "fabric")
         if auto_cfl:
             k_max_effective = max(np.max(grid.stiffnesses), k_penalty)
-            dt = compute_cfl_timestep(
-                np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
-            )
+            if structure_type == "metallic_sheet":
+                dt = compute_cfl_timestep(
+                    np.array([k_max_effective]),
+                    grid.masses,
+                    dx,
+                    sim_cfg["cfl_factor"],
+                    youngs_modulus_gpa=mat.get("tensile_modulus_gpa"),
+                    thickness=thickness,
+                    density_kgm3=fiber_density_gcc * 1000.0,
+                    poisson_ratio=mat.get("poisson_ratio", 0.3),
+                )
+            else:
+                dt = compute_cfl_timestep(
+                    np.array([k_max_effective]), grid.masses, dx, sim_cfg["cfl_factor"]
+                )
         else:
             dt = sim_cfg.get("dt", 1.5e-7)
 
@@ -127,17 +172,83 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         radius = proj_cfg.get("radius", 0.005)
         length = proj_cfg.get("length", 0.01)
         edge_thickness = proj_cfg.get("edge_thickness", 0.005)
+        quat = proj_cfg.get("quat", [1.0, 0.0, 0.0, 0.0])
 
-        # Calculate half-height along Z axis based on shape
         s_lower = shape_type.lower()
+
+        # Define helper to rotate vector by quaternion
+        def q_rotate_local(q, v):
+            qw, qx, qy, qz = q[0], q[1], q[2], q[3]
+            vx, vy, vz = v[0], v[1], v[2]
+            tx = 2.0 * (qy * vz - qz * vy)
+            ty = 2.0 * (qz * vx - qx * vz)
+            tz = 2.0 * (qx * vy - qy * vx)
+            return np.array(
+                [
+                    vx + qw * tx + (qy * tz - qz * ty),
+                    vy + qw * ty + (qz * tx - qx * tz),
+                    vz + qw * tz + (qx * ty - qy * tx),
+                ]
+            )
+
+        local_pts = []
         if s_lower == "box":
-            h_half = edge_thickness / 2.0
+            w = proj_cfg.get("blade_width", 0.02)
+            t = edge_thickness
+            l_val = length
+            for dx in [-w / 2, w / 2]:
+                for dy in [-l_val / 2, l_val / 2]:
+                    for dz in [-t / 2, t / 2]:
+                        local_pts.append(np.array([dx, dy, dz]))
         elif s_lower == "sphere":
             h_half = radius
-        elif s_lower == "cylinder" or s_lower == "bullet":
-            h_half = length / 2.0
+        elif s_lower == "cylinder":
+            r = radius
+            l_val = length
+            for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), l_val / 2]))
+                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l_val / 2]))
+        elif s_lower == "bullet":
+            r = radius
+            l_val = length
+            for theta in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+                local_pts.append(np.array([r * np.cos(theta), r * np.sin(theta), -l_val / 2]))
+            local_pts.append(np.array([0.0, 0.0, l_val / 2]))
+        elif s_lower == "propeller":
+            span = proj_cfg.get("span", 0.05)
+            c_r = proj_cfg.get("root_chord", 0.01)
+            c_t = proj_cfg.get("tip_chord", 0.005)
+            ys = np.linspace(0.0, span, 20)
+            dy = span / 20.0
+            dV_sum = 0.0
+            y_dV_sum = 0.0
+            tau = proj_cfg.get("thickness_ratio", 12.0) / 100.0
+            for y in ys:
+                c = c_r + (y / span) * (c_t - c_r)
+                area = 0.60 * (c**2) * tau
+                dV = area * dy
+                dV_sum += dV
+                y_dV_sum += y * dV
+            y_com = y_dV_sum / dV_sum if dV_sum > 0 else 0.0
+
+            # Single-bladed propeller extends only in the positive Y direction (from local Y = -y_com to span - y_com)
+            y_tip = span - y_com
+            c = c_t
+            local_pts.append(np.array([c / 2, y_tip, 0.0]))
+            local_pts.append(np.array([-c / 2, y_tip, 0.0]))
+            local_pts.append(np.array([c_r / 2, -y_com, 0.0]))
+            local_pts.append(np.array([-c_r / 2, -y_com, 0.0]))
         else:
             h_half = radius
+
+        if len(local_pts) > 0:
+            max_z = 0.0
+            for pt in local_pts:
+                rot_pt = q_rotate_local(quat, pt)
+                z_val = np.abs(rot_pt[2])
+                if z_val > max_z:
+                    max_z = z_val
+            h_half = max_z
 
         # Check for initial penetration Z-overlap
         z_pos = proj_cfg["position"][2]
@@ -259,6 +370,18 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         n_chunk = 100
         save_interval = 10
         is_paused = False
+        reason = None
+        X_ref = grid.nodes.copy()
+        structure_type = sim_cfg.get("structure_type", "fabric")
+        if structure_type == "metallic_sheet":
+            n_elems = len(grid.elements)
+            grid.element_stress = np.zeros((n_elems, 5, 3), dtype=np.float64)
+            grid.element_peeq = np.zeros((n_elems, 5), dtype=np.float64)
+            grid.element_peeq_rate = np.zeros((n_elems, 5), dtype=np.float64)
+            grid.element_damage = np.zeros((n_elems, 5), dtype=np.float64)
+            el_failed = grid.element_failed
+            if el_failed is None or el_failed.shape[0] != n_elems:
+                grid.element_failed = np.zeros(n_elems, dtype=bool)
 
         while t_sim < duration:
             # Check for control signals from GUI process
@@ -281,10 +404,17 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 break
 
             # Allocate history array for orientation
-            m_frames = max(1, current_steps // save_interval)
+            m_frames = (current_steps - 1) // save_interval + 1
             hist_proj_quat = np.zeros((m_frames, 4), dtype=np.float64)
 
             # Extra solver arguments for 6-DOF and shape
+            areal_density = mat.get("areal_density_kgm2", 0.47)
+            fiber_density_gcc = mat.get("fiber_density_gcc", 1.44)
+            thickness = areal_density / (fiber_density_gcc * 1000.0)
+
+            use_czm = sim_cfg.get("structure_type", "fabric") == "metallic_sheet" and sim_cfg.get(
+                "use_czm", True
+            )
             extra_kwargs = {
                 "grid_damage": grid.damage,
                 "proj_quat": proj.quat,
@@ -305,21 +435,57 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                 "proj_c_damping": proj_cfg.get("c_damping", 0.0),
                 "proj_inertia_inv": proj.inertia_inv,
                 "hist_proj_quat": hist_proj_quat,
+                "structure_type": sim_cfg.get("structure_type", "fabric"),
+                "material_model": mat.get("material_model", "linear"),
+                "yield_strength_gpa": mat.get("yield_strength_gpa", 0.0),
+                "hardening_modulus_gpa": mat.get("hardening_modulus_gpa", 0.0),
+                "ultimate_strain": mat.get("ultimate_strain", 0.0),
+                "poisson_ratio": mat.get("poisson_ratio", 0.3),
+                "elements": grid.elements,
+                "youngs_modulus_gpa": mat.get("tensile_modulus_gpa", 71.0),
+                "thickness": thickness,
+                "density_kgm3": float(mat.get("fiber_density_gcc", 1.44) * 1000.0),
+                "is_tiebreak": grid.is_tiebreak,
+                "coincident_nodes": grid.coincident_nodes,
+                "node_czm_spring_ids": grid.node_czm_spring_ids,
+                "cohesive_strength_gpa": mat.get("cohesive_strength_gpa", 0.485),
+                "fracture_energy_jm2": mat.get("fracture_energy_jm2", 50000.0),
+                "use_czm": use_czm,
+                "tensile_strength_gpa": mat.get("tensile_strength_gpa", 0.0),
+                "rate_parameter_c": mat.get("rate_parameter_c", 40.0),
+                "rate_parameter_p": mat.get("rate_parameter_p", 5.0),
+                "softening_steps": mat.get("softening_steps", 10),
             }
+            if structure_type == "metallic_sheet":
+                extra_kwargs["element_stress"] = grid.element_stress
+                extra_kwargs["element_peeq"] = grid.element_peeq
+                extra_kwargs["element_peeq_rate"] = grid.element_peeq_rate
+                extra_kwargs["element_damage"] = grid.element_damage
+                extra_kwargs["element_failed"] = grid.element_failed
 
             # Execute explicit integration step using Taichi or Numba backend
             solver_backend = sim_cfg.get("backend", "taichi")
+            structure_type = sim_cfg.get("structure_type", "fabric")
+            if structure_type == "metallic_sheet" and solver_backend == "taichi":
+                logger.warning(
+                    "Taichi solver does not support metallic_sheet mode. "
+                    "Falling back to numba backend."
+                )
+                solver_backend = "numba"
+
             mu_s = sim_cfg.get("mu_s", sim_cfg.get("friction_coefficient", 0.0))
             prev_clamp = clamp_dissipated
             if solver_backend == "numba":
                 from kevlargrid.solver.fused import fused_leapfrog_loop
 
-                extra_kwargs["proj_peak_deceleration"] = proj_peak_deceleration
+                if not hasattr(grid, "accel") or grid.accel is None:
+                    grid.accel = np.zeros_like(grid.nodes)
 
+                extra_kwargs["proj_peak_deceleration"] = proj_peak_deceleration
                 (
                     positions,
                     velocities,
-                    grid.failed,
+                    returned_failed,
                     proj.position,
                     proj.velocity,
                     damp_dissipated,
@@ -378,23 +544,78 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     contact_energy_init=contact_energy,
                     mu_s=mu_s,
                     friction_dissipated_init=friction_dissipated,
+                    X_ref=X_ref,
+                    spring_failed_step=grid.spring_failed_step,
+                    element_failed_step=grid.element_failed_step,
+                    element_strains=grid.element_strains,
+                    ang_positions=grid.ang_positions,
+                    ang_velocities=grid.ang_velocities,
+                    ang_accel=grid.ang_accel,
+                    nodal_accel=grid.accel,
+                    erosion_softening_steps=sim_cfg.get("erosion_softening_steps", 10),
+                    velocity_clamping_multiplier=sim_cfg.get("velocity_clamping_multiplier", 2.0),
                     **extra_kwargs,
                 )
+                if structure_type != "metallic_sheet":
+                    grid.failed = returned_failed
                 hist_peak_strain = np.zeros(len(hist_time))
                 n_springs = len(grid.springs)
                 if n_springs > 0:
                     s0 = grid.springs[:, 0]
                     s1 = grid.springs[:, 1]
                     L0 = grid.rest_lengths
+                    structure_type = sim_cfg.get("structure_type", "fabric")
+                    if structure_type == "metallic_sheet":
+                        n_nodes = len(grid.nodes)
+                        node_elements: list[list[int]] = [[] for _ in range(n_nodes)]
+                        for e_idx, elem in enumerate(grid.elements):
+                            for node in elem:
+                                node_elements[node].append(e_idx)
+                        spring_elements: list[list[int]] = []
+                        for n0, n1 in grid.springs:
+                            shared = list(set(node_elements[n0]).union(node_elements[n1]))
+                            spring_elements.append(shared)
+
+                        failed_springs = grid.failed.copy()
+                        assert grid.element_failed is not None
+                        for s_idx, el_indices in enumerate(spring_elements):
+                            if len(el_indices) > 0:
+                                all_failed = True
+                                for e_idx in el_indices:
+                                    if not grid.element_failed[e_idx]:
+                                        all_failed = False
+                                        break
+                                if all_failed:
+                                    failed_springs[s_idx] = True
+                        grid.failed = failed_springs
+                    else:
+                        spring_elements = []
+
                     for f in range(len(hist_time)):
                         pos_f = hist_pos[f]
                         failed_f = hist_failed[f]
+                        if structure_type == "metallic_sheet":
+                            failed_springs_f = np.zeros(n_springs, dtype=bool)
+                            for s_idx, el_indices in enumerate(spring_elements):
+                                if len(el_indices) > 0:
+                                    failed_springs_f[s_idx] = True
+                                    for e_idx in el_indices:
+                                        if not failed_f[e_idx]:
+                                            failed_springs_f[s_idx] = False
+                                            break
+                                else:
+                                    failed_springs_f[s_idx] = True
+                            failed_mask = failed_springs_f
+                        else:
+                            failed_mask = failed_f
+
                         dx_f = pos_f[s1, 0] - pos_f[s0, 0]
                         dy_f = pos_f[s1, 1] - pos_f[s0, 1]
                         dz_f = pos_f[s1, 2] - pos_f[s0, 2]
                         lens_f = np.sqrt(dx_f**2 + dy_f**2 + dz_f**2)
-                        strains_f = (lens_f - L0) / L0
-                        active_strains = np.where(failed_f, 0.0, strains_f)
+                        safe_L0 = np.where(L0 < 1e-8, 1.0, L0)
+                        strains_f = (lens_f - L0) / safe_L0
+                        active_strains = np.where(failed_mask, 0.0, strains_f)
                         hist_peak_strain[f] = (
                             np.max(active_strains) if len(active_strains) > 0 else 0.0
                         )
@@ -490,7 +711,10 @@ def run_solver_process(config: dict, queue, pipe) -> None:
             se = float(hist_se[-1]) if len(hist_se) > 0 else 0.0
             proj_ke = float(hist_proj_ke[-1]) if len(hist_proj_ke) > 0 else 0.0
             peak_strain = float(hist_peak_strain[-1]) if len(hist_peak_strain) > 0 else 0.0
-            failed_count = int(np.sum(grid.failed))
+            if structure_type == "metallic_sheet" and grid.element_failed is not None:
+                failed_count = int(np.sum(grid.element_failed))
+            else:
+                failed_count = int(np.sum(grid.failed))
 
             hist_pos_np = np.asarray(hist_pos)
             hist_failed_np = np.asarray(hist_failed)
@@ -503,7 +727,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     "steps": current_steps,
                     "t_sim": float(t_sim),
                     "positions": np.asarray(positions).copy(),
-                    "failed": np.asarray(grid.failed).copy(),
+                    "failed": np.asarray(
+                        grid.element_failed
+                        if (structure_type == "metallic_sheet" and grid.element_failed is not None)
+                        else grid.failed
+                    ).copy(),
                     "projectile_pos": np.asarray(proj.position).copy(),
                     "projectile_vel": np.asarray(proj.velocity).copy(),
                     "projectile_quat": np.asarray(proj.quat).copy(),
@@ -537,7 +765,6 @@ def run_solver_process(config: dict, queue, pipe) -> None:
                     + damp_dissipated
                     + failure_dissipated
                     + clamp_dissipated
-                    + contact_energy
                     + friction_dissipated
                 )
                 drift_pct = (
@@ -602,8 +829,11 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         is_penetrated = reason == "penetration"
         is_arrested = reason == "arrest" or reason == "timeout" or reason is None
 
-        initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2)
-        final_ke = 0.5 * proj.mass * np.sum(proj.velocity**2)
+        init_omega = np.array(proj_cfg.get("omega", [0.0, 0.0, 0.0]), dtype=np.float64)
+        init_rot_ke = 0.5 * np.sum(np.diagonal(proj.inertia) * init_omega**2)
+        initial_ke = 0.5 * proj.mass * np.sum(np.array(proj_cfg["velocity"]) ** 2) + init_rot_ke
+        final_rot_ke = 0.5 * np.sum(np.diagonal(proj.inertia) * proj.omega**2)
+        final_ke = 0.5 * proj.mass * np.sum(proj.velocity**2) + final_rot_ke
         energy_eff = float((initial_ke - final_ke) / initial_ke) if initial_ke > 0.0 else 0.0
 
         # Retrieve peak deceleration Gs
@@ -626,18 +856,52 @@ def run_solver_process(config: dict, queue, pipe) -> None:
         center_idx = int(np.argmin(dists_in_plane))
 
         max_layer_perf = -1
+        structure_type = sim_cfg.get("structure_type", "fabric")
         for layer in range(n_layers):
             c = center_idx + layer * n_nodes_per_layer
-            start_sp = grid.node_spring_offsets[c]
-            end_sp = grid.node_spring_offsets[c + 1]
-            sp_ids = grid.node_spring_ids[start_sp:end_sp]
-            if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
-                max_layer_perf = layer
+            if structure_type == "metallic_sheet":
+                containing_elements = []
+                for e_idx, elem in enumerate(grid.elements):
+                    if c in elem:
+                        containing_elements.append(e_idx)
+                if len(containing_elements) > 0 and np.all(grid.failed[containing_elements]):
+                    max_layer_perf = layer
+            else:
+                start_sp = grid.node_spring_offsets[c]
+                end_sp = grid.node_spring_offsets[c + 1]
+                sp_ids = grid.node_spring_ids[start_sp:end_sp]
+                if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
+                    max_layer_perf = layer
 
         diff_vec = positions[grid.springs[:, 1]] - positions[grid.springs[:, 0]]
         lengths = np.sqrt(np.sum(diff_vec**2, axis=1))
-        strains = (lengths - grid.rest_lengths) / grid.rest_lengths
-        active_strains = strains[~grid.failed]
+        safe_rest_lengths = np.where(grid.rest_lengths < 1e-8, 1.0, grid.rest_lengths)
+        strains = (lengths - grid.rest_lengths) / safe_rest_lengths
+
+        if structure_type == "metallic_sheet":
+            n_nodes = len(grid.nodes)
+            node_elements_report: list[list[int]] = [[] for _ in range(n_nodes)]
+            for e_idx, elem in enumerate(grid.elements):
+                for node in elem:
+                    node_elements_report[node].append(e_idx)
+            spring_elements_report: list[list[int]] = []
+            for n0, n1 in grid.springs:
+                shared = list(set(node_elements_report[n0]).intersection(node_elements_report[n1]))
+                spring_elements_report.append(shared)
+
+            failed_springs = np.zeros(len(grid.springs), dtype=bool)
+            for s_idx, el_indices in enumerate(spring_elements_report):
+                if len(el_indices) > 0:
+                    failed_springs[s_idx] = True
+                    for e_idx in el_indices:
+                        if not grid.failed[e_idx]:
+                            failed_springs[s_idx] = False
+                            break
+            failed_mask = failed_springs
+        else:
+            failed_mask = grid.failed
+
+        active_strains = strains[~failed_mask]
         final_peak_strain = float(np.max(active_strains)) if len(active_strains) > 0 else 0.0
 
         report = {

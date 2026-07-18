@@ -44,12 +44,28 @@ class Grid:
     failed: np.ndarray
     tension_only: np.ndarray
     damage: np.ndarray
+    elements: np.ndarray
+    element_stress: np.ndarray | None
+    element_peeq: np.ndarray | None
+    element_peeq_rate: np.ndarray | None
+    element_damage: np.ndarray | None
+    element_failed: np.ndarray | None
+    is_tiebreak: np.ndarray
+    spring_failed_step: np.ndarray
+    element_failed_step: np.ndarray | None
+    element_strains: np.ndarray
+    ang_positions: np.ndarray
+    ang_velocities: np.ndarray
+    ang_accel: np.ndarray
+    accel: np.ndarray | None
     n_nodes: int
     n_springs: int
     initial_spring_counts: np.ndarray
     node_spring_offsets: np.ndarray
     node_spring_ids: np.ndarray
     node_spring_signs: np.ndarray
+    coincident_nodes: np.ndarray
+    node_czm_spring_ids: np.ndarray
 
     def __init__(
         self,
@@ -62,6 +78,10 @@ class Grid:
         tension_only: np.ndarray,
         initial_spring_counts: np.ndarray | None = None,
         damage: np.ndarray | None = None,
+        elements: np.ndarray | None = None,
+        is_tiebreak: np.ndarray | None = None,
+        coincident_nodes: np.ndarray | None = None,
+        node_czm_spring_ids: np.ndarray | None = None,
     ) -> None:
         self.nodes = nodes
         self.springs = springs
@@ -70,12 +90,45 @@ class Grid:
         self.rest_lengths = rest_lengths
         self.failed = failed
         self.tension_only = tension_only
+        self.elements = elements if elements is not None else np.zeros((0, 4), dtype=np.int32)
+        self.element_stress = None
+        self.element_peeq = None
+        self.element_peeq_rate = None
+        self.element_damage = None
+        if elements is not None and len(elements) > 0:
+            self.element_failed = np.zeros(len(elements), dtype=np.int32)
+            self.element_failed_step = np.zeros(len(elements), dtype=np.int32) - 1
+            self.element_strains = np.zeros((len(elements), 8), dtype=np.float64)
+        else:
+            self.element_failed = None
+            self.element_failed_step = None
+            self.element_strains = np.zeros((0, 8), dtype=np.float64)
+        self.spring_failed_step = np.zeros(len(springs), dtype=np.int32) - 1
+        self.ang_positions = np.zeros((len(nodes), 3), dtype=np.float64)
+        self.ang_velocities = np.zeros((len(nodes), 3), dtype=np.float64)
+        self.ang_accel = np.zeros((len(nodes), 3), dtype=np.float64)
+        self.accel = None
+        if is_tiebreak is None:
+            self.is_tiebreak = np.zeros(len(springs), dtype=bool)
+        else:
+            self.is_tiebreak = is_tiebreak
         if damage is None:
             self.damage = failed.astype(np.float64)
         else:
             self.damage = damage
         self.n_nodes = len(nodes)
         self.n_springs = len(springs)
+
+        if coincident_nodes is None:
+            self.coincident_nodes = np.zeros((self.n_nodes, 4), dtype=np.int32) - 1
+            self.coincident_nodes[:, 0] = np.arange(self.n_nodes, dtype=np.int32)
+        else:
+            self.coincident_nodes = coincident_nodes
+
+        if node_czm_spring_ids is None:
+            self.node_czm_spring_ids = np.zeros((self.n_nodes, 2), dtype=np.int32) - 1
+        else:
+            self.node_czm_spring_ids = node_czm_spring_ids
 
         # Count how many springs connect to each node
         node_counts = np.zeros(self.n_nodes, dtype=np.int32)
@@ -122,6 +175,10 @@ def generate_rectangular_grid(
     material: dict,
     n_plies: int = 1,
     t_ply: float | None = None,
+    corrugation_amplitude: float = 0.0,
+    corrugation_period: float = 1.0,
+    corrugation_axis: str = "x",
+    use_czm: bool = False,
 ) -> Grid:
     """Create a rectangular grid with orthogonal and diagonal springs.
 
@@ -142,12 +199,22 @@ def generate_rectangular_grid(
         Number of plies (acts as scalar multiplier in Mode A, or number of stacks in Mode B).
     t_ply : float, optional
         Vertical spacing between discrete layers (metres). If provided, enables Mode B.
+    corrugation_amplitude : float
+        Amplitude of the vertical corrugations (metres).
+    corrugation_period : float
+        Period of the corrugations (metres).
+    corrugation_axis : str
+        Axis along which corrugations propagate ("x" or "y").
 
     Returns
     -------
     Grid
         A fully initialised :class:`Grid` instance.
     """
+    is_tiebreak = None
+    coincident_nodes = None
+    node_czm_spring_ids = None
+
     # 1. Base properties (single layer)
     x = np.arange(nx) * dx
     y = np.arange(ny) * dx
@@ -157,6 +224,18 @@ def generate_rectangular_grid(
 
     x_grid, y_grid = np.meshgrid(x, y, indexing="ij")
     base_nodes = np.stack([x_grid, y_grid, np.zeros_like(x_grid)], axis=-1).reshape(-1, 3)
+
+    # Apply vertical corrugation if amplitude > 0
+    if corrugation_amplitude > 0.0 and corrugation_period > 0.0:
+        if corrugation_axis == "y":
+            base_nodes[:, 2] += corrugation_amplitude * np.sin(
+                2.0 * np.pi * base_nodes[:, 1] / corrugation_period
+            )
+        else:
+            base_nodes[:, 2] += corrugation_amplitude * np.sin(
+                2.0 * np.pi * base_nodes[:, 0] / corrugation_period
+            )
+
     n_nodes_per_layer = nx * ny
 
     # 2. Lump base masses by tributary area
@@ -208,10 +287,21 @@ def generate_rectangular_grid(
                 springs_list.append((idx, idx_diag2))
                 tension_only_list.append(False)
 
-    base_springs = np.array(springs_list, dtype=np.int32)
+    base_springs = np.array(springs_list, dtype=np.int32).reshape(-1, 2)
     base_tension_only = np.array(tension_only_list, dtype=bool)
 
-    # 4. Calculate spring stiffnesses
+    # 4. Generate 2D quadrilateral elements (Q4)
+    elements_list = []
+    for i in range(nx - 1):
+        for j in range(ny - 1):
+            n0 = i * ny + j
+            n1 = (i + 1) * ny + j
+            n2 = (i + 1) * ny + (j + 1)
+            n3 = i * ny + (j + 1)
+            elements_list.append((n0, n1, n2, n3))
+    base_elements = np.array(elements_list, dtype=np.int32).reshape(-1, 4)
+
+    # 5. Calculate spring stiffnesses and rest lengths
     tensile_modulus_gpa = material.get("tensile_modulus_gpa", 71.0)
     fiber_density_gcc = material.get("fiber_density_gcc", 1.44)
     shear_ratio = material.get("shear_ratio", 0.0004)
@@ -225,9 +315,13 @@ def generate_rectangular_grid(
     k_shear = k_ortho * shear_ratio
 
     base_stiffnesses = np.where(base_tension_only, k_ortho, k_shear)
-    base_rest_lengths = np.where(base_tension_only, dx, np.sqrt(2.0) * dx)
 
-    # 5. Stacking if Mode B
+    # Calculate base rest lengths from coordinates (supports corrugated grids)
+    p0 = base_nodes[base_springs[:, 0]]
+    p1 = base_nodes[base_springs[:, 1]]
+    base_rest_lengths = np.linalg.norm(p0 - p1, axis=1)
+
+    # 6. Stacking if Mode B
     if is_mode_b:
         assert t_ply is not None
         all_nodes = []
@@ -236,11 +330,12 @@ def generate_rectangular_grid(
         all_stiffnesses = []
         all_rest_lengths = []
         all_tension_only = []
+        all_elements = []
 
         for ply in range(n_plies):
             ply_nodes = base_nodes.copy()
             # Stack along Z-axis
-            ply_nodes[:, 2] = ply * t_ply
+            ply_nodes[:, 2] = base_nodes[:, 2] + ply * t_ply
             all_nodes.append(ply_nodes)
 
             # Offset spring connectivity indices to target correct nodes in this layer
@@ -254,12 +349,17 @@ def generate_rectangular_grid(
             all_rest_lengths.append(base_rest_lengths)
             all_tension_only.append(base_tension_only)
 
+            # Duplicate elements
+            ply_elements = base_elements + offset
+            all_elements.append(ply_elements)
+
         nodes = np.concatenate(all_nodes, axis=0)
         springs = np.concatenate(all_springs, axis=0)
         masses = np.concatenate(all_masses, axis=0)
         stiffnesses = np.concatenate(all_stiffnesses, axis=0)
         rest_lengths = np.concatenate(all_rest_lengths, axis=0)
         tension_only = np.concatenate(all_tension_only, axis=0)
+        elements = np.concatenate(all_elements, axis=0)
     else:
         nodes = base_nodes
         springs = base_springs
@@ -267,6 +367,10 @@ def generate_rectangular_grid(
         stiffnesses = base_stiffnesses
         rest_lengths = base_rest_lengths
         tension_only = base_tension_only
+        elements = base_elements
+        is_tiebreak = None
+        coincident_nodes = None
+        node_czm_spring_ids = None
 
     failed = np.zeros(len(springs), dtype=bool)
 
@@ -278,4 +382,8 @@ def generate_rectangular_grid(
         rest_lengths=rest_lengths,
         failed=failed,
         tension_only=tension_only,
+        elements=elements,
+        is_tiebreak=is_tiebreak,
+        coincident_nodes=coincident_nodes,
+        node_czm_spring_ids=node_czm_spring_ids,
     )

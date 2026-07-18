@@ -316,20 +316,10 @@ class TestPointImpact:
         failed_counts = []
         detached_node_counts = []
         grid_damage = np.zeros(n_springs, dtype=np.float64)
+        contact_potential_energy = 0.0
 
         for chunk in range(n_chunks):
-            (
-                positions,
-                velocities,
-                grid_failed,
-                proj_pos,
-                proj_vel,
-                damp_diss,
-                failure_diss,
-                clamp_diss,
-                t_sim,
-                *_,
-            ) = fused_leapfrog_loop(
+            res_loop = fused_leapfrog_loop(
                 positions,
                 velocities,
                 grid.springs,
@@ -368,7 +358,18 @@ class TestPointImpact:
                 node_spring_ids=grid.node_spring_ids,
                 node_spring_signs=grid.node_spring_signs,
                 grid_damage=grid_damage,
+                contact_energy_init=contact_potential_energy,
             )
+            positions = res_loop[0]
+            velocities = res_loop[1]
+            grid_failed = res_loop[2]
+            proj_pos = res_loop[3]
+            proj_vel = res_loop[4]
+            damp_diss = res_loop[5]
+            failure_diss = res_loop[6]
+            clamp_diss = res_loop[7]
+            t_sim = res_loop[8]
+            contact_potential_energy = res_loop[17]
 
             # Calculate energies
             ke_nodes = compute_kinetic_energy(velocities, grid.masses)
@@ -378,7 +379,12 @@ class TestPointImpact:
             lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
             strains = (lengths - grid.rest_lengths) / grid.rest_lengths
             se_springs = compute_strain_energy(
-                strains, grid.stiffnesses, grid.rest_lengths, grid_failed, grid_damage
+                strains,
+                grid.stiffnesses,
+                grid.rest_lengths,
+                grid_failed,
+                grid_damage,
+                tension_only=grid.tension_only,
             )
             ke_proj = 0.5 * proj_mass * np.sum(proj_vel**2)
 
@@ -387,31 +393,6 @@ class TestPointImpact:
             active_counts = np.zeros(n_nodes, dtype=np.int32)
             np.add.at(active_counts, grid.springs[:, 0], active_springs)
             np.add.at(active_counts, grid.springs[:, 1], active_springs)
-
-            # Compute contact potential energy
-            x_p, y_p, z_p = proj_pos
-            w_h = blade_width / 2.0
-            t_h = edge_thickness / 2.0
-            x_proj = np.clip(positions[:, 0], x_p - w_h, x_p + w_h)
-            y_proj = np.clip(positions[:, 1], y_p - t_h, y_p + t_h)
-            dist = np.sqrt(
-                (positions[:, 0] - x_proj) ** 2
-                + (positions[:, 1] - y_proj) ** 2
-                + (positions[:, 2] - z_p) ** 2
-            )
-            contact_mask = dist <= dx * 2.0
-            w_i = 1.0 / np.maximum(dist, 1e-4)
-            contact_mask = contact_mask & (active_counts > 0)
-            w_mean = np.mean(w_i[contact_mask]) if np.sum(contact_mask) > 0 else 1.0
-            w_normalized = np.where(contact_mask, w_i / w_mean, 0.0)
-
-            penetration = np.maximum(0.0, (z_p - positions[:, 2]) * -1.0)
-            scale_factor = np.where(
-                grid.initial_spring_counts > 0, active_counts / grid.initial_spring_counts, 0.0
-            )
-            contact_potential_energy = np.sum(
-                0.5 * k_penalty * w_normalized * (penetration**2) * scale_factor
-            )
 
             total_system_energy = (
                 ke_nodes

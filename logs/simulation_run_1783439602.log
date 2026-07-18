@@ -1,0 +1,96 @@
+[2026-07-07 08:53:22] [INFO]: ============================================================
+[2026-07-07 08:53:22] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-07-07 08:53:22] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-07-07 08:53:22] [INFO]: Python: 3.12.13
+[2026-07-07 08:53:22] [INFO]: Active Backend: taichi
+[2026-07-07 08:53:22] [INFO]: Taichi CPU/GPU Integration active
+[2026-07-07 08:53:22] [INFO]: Grid Dimensions: 200x200 (plies: 1)
+[2026-07-07 08:53:22] [INFO]: Grid Nodes: 40000 | Springs: 158802
+[2026-07-07 08:53:22] [INFO]: Projectile: Shape=propeller | Mass=1.70000 kg | Initial Velocity=[0.0, 0.0, 70.0] m/s
+[2026-07-07 08:53:22] [INFO]: Initial System Energy: 4623.2465 J
+[2026-07-07 08:53:22] [INFO]: ============================================================
+[2026-07-07 08:53:22] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:27] [INFO]: Step 260: t=39.3 us | z_pos=-702.252 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=18192.8047%
+[2026-07-07 08:53:27] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=841098.2166 | Clamp=0.0000 | Contact=0.0000 | Total=845721.4632
+[2026-07-07 08:53:27] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:32] [INFO]: Step 520: t=78.5 us | z_pos=-699.505 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=36385.6095%
+[2026-07-07 08:53:32] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=1682196.4332 | Clamp=0.0000 | Contact=0.0000 | Total=1686819.6798
+[2026-07-07 08:53:32] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:37] [INFO]: Step 781: t=117.8 us | z_pos=-696.757 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=54578.4142%
+[2026-07-07 08:53:37] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=2523294.6499 | Clamp=0.0000 | Contact=0.0000 | Total=2527917.8964
+[2026-07-07 08:53:37] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:42] [INFO]: Step 1041: t=157.0 us | z_pos=-694.009 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=72771.2189%
+[2026-07-07 08:53:42] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=3364392.8665 | Clamp=0.0000 | Contact=0.0000 | Total=3369016.1130
+[2026-07-07 08:53:42] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:47] [INFO]: Step 1301: t=196.3 us | z_pos=-691.262 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=90964.0237%
+[2026-07-07 08:53:47] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=4205491.0831 | Clamp=0.0000 | Contact=0.0000 | Total=4210114.3296
+[2026-07-07 08:53:47] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:52] [INFO]: Step 1562: t=235.5 us | z_pos=-688.514 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=109156.8284%
+[2026-07-07 08:53:52] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=5046589.2997 | Clamp=0.0000 | Contact=0.0000 | Total=5051212.5463
+[2026-07-07 08:53:52] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:53:57] [INFO]: Step 1822: t=274.8 us | z_pos=-685.766 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=127349.6331%
+[2026-07-07 08:53:57] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=5887687.5163 | Clamp=0.0000 | Contact=0.0000 | Total=5892310.7629
+[2026-07-07 08:53:57] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:02] [INFO]: Step 2082: t=314.0 us | z_pos=-683.019 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=145542.4379%
+[2026-07-07 08:54:02] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=6728785.7330 | Clamp=0.0000 | Contact=0.0000 | Total=6733408.9795
+[2026-07-07 08:54:02] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:07] [INFO]: Step 2343: t=353.3 us | z_pos=-680.271 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=163735.2426%
+[2026-07-07 08:54:07] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=7569883.9496 | Clamp=0.0000 | Contact=0.0000 | Total=7574507.1961
+[2026-07-07 08:54:07] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:12] [INFO]: Step 2603: t=392.5 us | z_pos=-677.523 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=181928.0473%
+[2026-07-07 08:54:12] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=8410982.1662 | Clamp=0.0000 | Contact=0.0000 | Total=8415605.4127
+[2026-07-07 08:54:12] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:17] [INFO]: Step 2864: t=431.8 us | z_pos=-674.776 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=200120.8521%
+[2026-07-07 08:54:17] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=9252080.3828 | Clamp=0.0000 | Contact=0.0000 | Total=9256703.6294
+[2026-07-07 08:54:17] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:23] [INFO]: Step 3124: t=471.0 us | z_pos=-672.028 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=218313.6568%
+[2026-07-07 08:54:23] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=10093178.5994 | Clamp=0.0000 | Contact=0.0000 | Total=10097801.8460
+[2026-07-07 08:54:23] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:28] [INFO]: Step 3384: t=510.3 us | z_pos=-669.280 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=236506.4615%
+[2026-07-07 08:54:28] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=10934276.8160 | Clamp=0.0000 | Contact=0.0000 | Total=10938900.0626
+[2026-07-07 08:54:28] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:33] [INFO]: Step 3645: t=549.5 us | z_pos=-666.532 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=254699.2663%
+[2026-07-07 08:54:33] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=11775375.0327 | Clamp=0.0000 | Contact=0.0000 | Total=11779998.2792
+[2026-07-07 08:54:33] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:38] [INFO]: Step 3905: t=588.8 us | z_pos=-663.785 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=272892.0710%
+[2026-07-07 08:54:38] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=12616473.2493 | Clamp=0.0000 | Contact=0.0000 | Total=12621096.4958
+[2026-07-07 08:54:38] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:43] [INFO]: Step 4165: t=628.0 us | z_pos=-661.037 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=291084.8757%
+[2026-07-07 08:54:43] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=13457571.4659 | Clamp=0.0000 | Contact=0.0000 | Total=13462194.7125
+[2026-07-07 08:54:43] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:49] [INFO]: Step 4426: t=667.3 us | z_pos=-658.289 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=309277.6805%
+[2026-07-07 08:54:49] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=14298669.6825 | Clamp=0.0000 | Contact=0.0000 | Total=14303292.9291
+[2026-07-07 08:54:49] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:54] [INFO]: Step 4686: t=706.5 us | z_pos=-655.542 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=327470.4852%
+[2026-07-07 08:54:54] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=15139767.8991 | Clamp=0.0000 | Contact=0.0000 | Total=15144391.1457
+[2026-07-07 08:54:54] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:54:59] [INFO]: Step 4946: t=745.8 us | z_pos=-652.794 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=345663.2899%
+[2026-07-07 08:54:59] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=15980866.1158 | Clamp=0.0000 | Contact=0.0000 | Total=15985489.3623
+[2026-07-07 08:54:59] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:04] [INFO]: Step 5207: t=785.1 us | z_pos=-650.046 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=363856.0947%
+[2026-07-07 08:55:04] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=16821964.3324 | Clamp=0.0000 | Contact=0.0000 | Total=16826587.5789
+[2026-07-07 08:55:04] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:09] [INFO]: Step 5467: t=824.3 us | z_pos=-647.299 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=382048.8994%
+[2026-07-07 08:55:09] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=17663062.5490 | Clamp=0.0000 | Contact=0.0000 | Total=17667685.7956
+[2026-07-07 08:55:10] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:15] [INFO]: Step 5728: t=863.6 us | z_pos=-644.551 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=400241.7041%
+[2026-07-07 08:55:15] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=18504160.7656 | Clamp=0.0000 | Contact=0.0000 | Total=18508784.0122
+[2026-07-07 08:55:15] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:20] [INFO]: Step 5988: t=902.8 us | z_pos=-641.803 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=418434.5089%
+[2026-07-07 08:55:20] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=19345258.9822 | Clamp=0.0000 | Contact=0.0000 | Total=19349882.2288
+[2026-07-07 08:55:20] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:25] [INFO]: Step 6248: t=942.1 us | z_pos=-639.056 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=436627.3136%
+[2026-07-07 08:55:25] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=20186357.1989 | Clamp=0.0000 | Contact=0.0000 | Total=20190980.4454
+[2026-07-07 08:55:25] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:31] [INFO]: Step 6509: t=981.3 us | z_pos=-636.308 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=454820.1183%
+[2026-07-07 08:55:31] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=21027455.4155 | Clamp=0.0000 | Contact=0.0000 | Total=21032078.6620
+[2026-07-07 08:55:31] [WARNING]: Taichi solver does not support metallic_sheet mode. Falling back to numba backend.
+[2026-07-07 08:55:36] [INFO]: Step 6769: t=1020.6 us | z_pos=-633.560 mm | v_z=70.00 m/s | Decel=0.00 g | Failed=39601 (24.94%) | Drift=473012.9231%
+[2026-07-07 08:55:36] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=4623.2465 | Damp=0.0000 | Fric=0.0000 | Fail=21868553.6321 | Clamp=0.0000 | Contact=0.0000 | Total=21873176.8786
+[2026-07-07 08:55:36] [ERROR]: Simulation run failed with exception:
+[2026-07-07 08:55:36] [ERROR]: Traceback (most recent call last):
+  File "/Users/bennames/Developer/VibeDynaLITE/src/kevlargrid/solver/worker.py", line 693, in run_solver_process
+    if len(sp_ids) > 0 and np.all(grid.failed[sp_ids]):
+                                  ~~~~~~~~~~~^^^^^^^^
+IndexError: index 78499 is out of bounds for axis 0 with size 39601
+

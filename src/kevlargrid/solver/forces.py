@@ -255,6 +255,8 @@ def compute_interply_contact_forces(
     velocities: np.ndarray | None = None,
     mu_s: float = 0.0,
     dt: float = 0.0,
+    grid_masses: np.ndarray | None = None,
+    damping_ratio: float = 0.0,
 ) -> tuple[np.ndarray, float, float]:
     """Compute vectorised inter-ply penalty contact forces, potential energy, and friction dissipation.
 
@@ -282,6 +284,10 @@ def compute_interply_contact_forces(
         Simulation timestep.
     active_counts : np.ndarray, optional
         Number of active springs per node, shape ``(n_nodes,)``.
+    grid_masses : np.ndarray, optional
+        Masses of grid nodes, shape ``(n_nodes,)``.
+    damping_ratio : float
+        Contact damping ratio (damping coefficient).
 
     Returns
     -------
@@ -317,9 +323,21 @@ def compute_interply_contact_forces(
             both_active = active_n & active_n1
             penetrating = penetrating & both_active
 
-        # Force magnitude
-        f_mag = where(penetrating, k_penalty * penetration, 0.0)
         direction = where(z_n > z_n1, 1.0, -1.0)
+
+        # Force magnitude with damping
+        f_mag = k_penalty * penetration
+        if damping_ratio > 0.0 and velocities is not None and grid_masses is not None:
+            v_n = velocities[start_idx:end_idx]
+            v_n1 = velocities[end_idx : end_idx + n_nodes_per_layer]
+            v_rel_z = v_n[:, 2] - v_n1[:, 2]
+            m_n = grid_masses[start_idx:end_idx]
+            m_n1 = grid_masses[end_idx : end_idx + n_nodes_per_layer]
+            m_eff = 2.0 * (m_n * m_n1) / (m_n + m_n1 + 1e-20)
+            f_damp = 2.0 * damping_ratio * np.sqrt(m_eff * k_penalty) * (-v_rel_z * direction)
+            f_mag += f_damp
+
+        f_mag = where(penetrating & (f_mag > 0.0), f_mag, 0.0)
 
         # Accumulate forces: layer n and layer n+1 repelled along Z based on relative position
         indices_n = np.arange(start_idx, end_idx)

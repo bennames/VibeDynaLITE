@@ -1,0 +1,27 @@
+# Progress Journal
+
+- **2026-06-28T07:01:00Z**: Resumed execution of the full ballistic validation sweep as task-65: `TAICHI_FORCE_CPU=1 .venv/bin/pytest tests/integration/test_run_bench8.py`
+- **2026-06-28T07:27:24Z**: Task-65 finished successfully, but results.json values did not meet physical criteria (penetrated at 450m/s).
+- **2026-06-28T07:31:00Z**: Identified discrepancy in `taichi_solver.py` where `k_update_cfl_g()` in graph mode used the buggy bounding volume contact stiffness check instead of the correct `compute_dynamic_dt_func`.
+- **2026-06-28T07:31:41Z**: Modified `taichi_solver.py` to redirect `k_update_cfl_g()` to use `compute_dynamic_dt_func`.
+- **2026-06-28T07:31:43Z**: Launched the validation sweep as task-232.
+- **2026-06-28T08:00:48Z**: Task-232 finished, but results still didn't arrest (Case A residual = 328m/s). Realized that the contact stiffness `k_penalty` in the workspace was modified to `2.0e5` based on calibration, which is too soft and allows snapshot penetration, and that HEAD's original `2.0e6` might now be correct and stable with the CFL bug fixed.
+- **2026-06-28T08:05:02Z**: Changed `k_penalty` back to `2.0e6` in `run_benchmark_8.py`.
+- **2026-06-28T08:05:04Z**: Launched the validation sweep as task-343.
+- **2026-06-28T08:36:21Z**: Task-343 finished. With k_penalty=2.0e6, Case A residual is still 302m/s.
+- **2026-06-28T08:36:29Z**: Launched `test_run_numba.py` as task-405 to get ground truth reference from the Numba backend.
+- **2026-06-28T08:41:45Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T08:46:51Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T08:51:57Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T08:57:04Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:02:11Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:07:18Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:12:26Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:17:32Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:22:38Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:27:45Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:32:50Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:38:00Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:43:04Z**: Verified that task-405 is still running. Updated heartbeat.
+- **2026-06-28T09:48:11Z**: Verified that task-405 is still running. Updated heartbeat.
+- **Last visited**: 2026-06-28T09:48:11Z

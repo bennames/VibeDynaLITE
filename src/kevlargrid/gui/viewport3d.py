@@ -327,6 +327,8 @@ class Viewport3D:
         thickness_ratio: float = 12.0,
         tip_radius: float = 0.002,
         t_ply: float | None = None,
+        structure_type: str = "fabric",
+        fail_thresh: float = 0.036,
     ) -> None:
         """Store grid model coordinates and regenerate layer visibility checkboxes.
 
@@ -357,7 +359,11 @@ class Viewport3D:
             self.grid = grid
             self.n_plies = n_plies
             self.n_nodes_per_layer = n_nodes_per_layer
+            if structure_type == "metallic_sheet":
+                self.n_nodes_per_layer = len(grid.nodes) // n_plies
             self.layer_visibility = [True] * n_plies
+            self.structure_type = structure_type
+            self.fail_thresh = fail_thresh
 
             # Cache projectile params
             self.proj_shape_type = shape_type
@@ -378,6 +384,58 @@ class Viewport3D:
                 delattr(self, "_last_mesh_params")
             self.proj_mesh = None
             self.proj_actor = None
+
+            # Pre-compute element indices for each spring to map element failure to spring failure
+            if (
+                structure_type == "metallic_sheet"
+                and grid.elements is not None
+                and len(grid.elements) > 0
+            ):
+                n_nodes = len(grid.nodes)
+                node_elements: list[list[int]] = [[] for _ in range(n_nodes)]
+                for e_idx, elem in enumerate(grid.elements):
+                    for node in elem:
+                        node_elements[node].append(e_idx)
+
+                n_springs = len(grid.springs)
+                spring_to_elements = np.full((n_springs, 2), -1, dtype=np.int32)
+                for s_idx, (n0, n1) in enumerate(grid.springs):
+                    shared = list(set(node_elements[n0]).intersection(node_elements[n1]))
+                    if len(shared) > 0:
+                        spring_to_elements[s_idx, 0] = shared[0]
+                    if len(shared) > 1:
+                        spring_to_elements[s_idx, 1] = shared[1]
+                self.spring_to_elements_map = spring_to_elements
+            else:
+                self.spring_to_elements_map = None
+
+            if (
+                structure_type == "metallic_sheet"
+                and grid.elements is not None
+                and len(grid.elements) > 0
+            ):
+                n_el = len(grid.elements)
+                elements = grid.elements
+                edge_nodes = np.empty((n_el, 4, 2), dtype=np.int32)
+                edge_nodes[:, 0, 0] = elements[:, 0]
+                edge_nodes[:, 0, 1] = elements[:, 1]
+                edge_nodes[:, 1, 0] = elements[:, 1]
+                edge_nodes[:, 1, 1] = elements[:, 2]
+                edge_nodes[:, 2, 0] = elements[:, 2]
+                edge_nodes[:, 2, 1] = elements[:, 3]
+                edge_nodes[:, 3, 0] = elements[:, 3]
+                edge_nodes[:, 3, 1] = elements[:, 0]
+                self.edge_nodes = edge_nodes.reshape(-1, 2)
+
+                p1_ref = grid.nodes[self.edge_nodes[:, 0]]
+                p2_ref = grid.nodes[self.edge_nodes[:, 1]]
+                self.edge_rest_lengths = np.sqrt(np.sum((p2_ref - p1_ref) ** 2, axis=1))
+                self.edge_rest_lengths = np.where(
+                    self.edge_rest_lengths < 1e-8, 1.0, self.edge_rest_lengths
+                )
+            else:
+                self.edge_nodes = None
+                self.edge_rest_lengths = None
 
             # Find bounds of single grid center
             if len(grid.nodes) > 0:
@@ -434,17 +492,38 @@ class Viewport3D:
                             self._texture_h = self.height
 
                     # Pre-calculate VTK cell-connectivity connectivity line lists once
-                    springs = grid.springs
-                    n_springs = len(springs)
-                    lines = np.empty(n_springs * 3, dtype=np.int32)
-                    lines[0::3] = 2
-                    lines[1::3] = springs[:, 0]
-                    lines[2::3] = springs[:, 1]
+                    if self.edge_nodes is not None:
+                        n_el = len(grid.elements)
+                        elements = grid.elements
+                        cell_lines = np.empty((n_el, 4, 3), dtype=np.int32)
+                        cell_lines[:, :, 0] = 2
+                        cell_lines[:, 0, 1] = elements[:, 0]
+                        cell_lines[:, 0, 2] = elements[:, 1]
+                        cell_lines[:, 1, 1] = elements[:, 1]
+                        cell_lines[:, 1, 2] = elements[:, 2]
+                        cell_lines[:, 2, 1] = elements[:, 2]
+                        cell_lines[:, 2, 2] = elements[:, 3]
+                        cell_lines[:, 3, 1] = elements[:, 3]
+                        cell_lines[:, 3, 2] = elements[:, 0]
+                        lines = cell_lines.ravel()
+                        n_display_springs = len(self.edge_nodes)
+                    else:
+                        springs = grid.springs
+                        if springs is not None:
+                            springs = np.asarray(springs).reshape(-1, 2)
+                        else:
+                            springs = np.zeros((0, 2), dtype=np.int32)
+                        n_springs = len(springs)
+                        lines = np.empty(n_springs * 3, dtype=np.int32)
+                        lines[0::3] = 2
+                        lines[1::3] = springs[:, 0]
+                        lines[2::3] = springs[:, 1]
+                        n_display_springs = n_springs
 
                     self.mesh = pv.PolyData(grid.nodes, lines=lines)
 
                     # Initialize cell color array (RGBA uint8)
-                    dummy_colors = np.zeros((n_springs, 4), dtype=np.uint8)
+                    dummy_colors = np.zeros((n_display_springs, 4), dtype=np.uint8)
                     self.mesh.cell_data["colors"] = dummy_colors
 
                     # Add mesh to plotter
@@ -456,6 +535,9 @@ class Viewport3D:
                         show_scalar_bar=False,
                         lighting=False,
                     )
+
+                    # Add global CSYS axes tripod S8.4
+                    self.plotter.add_axes(line_width=3, color="white")
 
                     # Projectile mesh will be created by redraw() since _last_mesh_params was deleted
                     # Show to initialize offscreen rendering context window
@@ -537,11 +619,14 @@ class Viewport3D:
                     if hasattr(self, "proj_mesh") and self.proj_mesh is not None:
                         self.proj_actor = self.plotter.add_mesh(
                             self.proj_mesh,
-                            color=[230, 230, 250],
-                            style="wireframe",
-                            line_width=2.5,
-                            lighting=False,
+                            color=[200, 200, 220],
+                            style="surface",
+                            show_edges=True,
+                            edge_color=[80, 80, 100],
+                            line_width=1.5,
+                            lighting=True,
                         )
+                    self.plotter.add_axes(line_width=3, color="white")
                     self.plotter.show(auto_close=False, interactive=False, interactive_update=True)
 
                     texture_reg_tag = "viewport_texture_registry"
@@ -571,16 +656,50 @@ class Viewport3D:
             # 3D Yaw-Pitch camera projection coordinates rotation matrix
             R = np.array([[cy, 0.0, -sy], [-sy * sp, cp, -cy * sp], [sy * cp, sp, cy * cp]])  # noqa: N806
 
-            springs = self.grid.springs
-            failed = self.grid.failed
-            n_springs = len(springs)
+            if (
+                getattr(self, "structure_type", "fabric") == "metallic_sheet"
+                and getattr(self, "edge_nodes", None) is not None
+            ):
+                springs = self.edge_nodes
+                if springs is not None:
+                    springs = np.asarray(springs).reshape(-1, 2)
+                else:
+                    springs = np.zeros((0, 2), dtype=np.int32)
+                n_springs = len(springs)
+                failed_elements = getattr(self.grid, "element_failed", None)
+                if failed_elements is not None and len(failed_elements) * 4 == n_springs:
+                    failed_bool = (
+                        (failed_elements == 1) if failed_elements.dtype != bool else failed_elements
+                    )
+                    failed = np.repeat(failed_bool, 4)
+                else:
+                    failed = np.zeros(n_springs, dtype=bool)
 
-            # Calculate live engineering strain for color-scale mapping
-            p1 = self.grid.nodes[springs[:, 0]]
-            p2 = self.grid.nodes[springs[:, 1]]
-            lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
-            strains = (lengths - self.grid.rest_lengths) / self.grid.rest_lengths
-            fail_thresh = 0.036
+                p1 = self.grid.nodes[springs[:, 0]]
+                p2 = self.grid.nodes[springs[:, 1]]
+                lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                strains = (lengths - self.edge_rest_lengths) / self.edge_rest_lengths
+            else:
+                springs = self.grid.springs
+                if springs is not None:
+                    springs = np.asarray(springs).reshape(-1, 2)
+                else:
+                    springs = np.zeros((0, 2), dtype=np.int32)
+                n_springs = len(springs)
+                failed = getattr(self.grid, "failed", None)
+                if failed is None or len(failed) != n_springs:
+                    failed = np.zeros(n_springs, dtype=bool)
+                p1 = self.grid.nodes[springs[:, 0]]
+                p2 = self.grid.nodes[springs[:, 1]]
+                lengths = np.sqrt(np.sum((p2 - p1) ** 2, axis=1))
+                safe_rest_lengths = np.where(
+                    self.grid.rest_lengths < 1e-8, 1.0, self.grid.rest_lengths
+                )
+                strains = (lengths - self.grid.rest_lengths) / safe_rest_lengths
+
+            fail_thresh = getattr(self, "fail_thresh", 0.036)
+            if fail_thresh <= 1e-8:
+                fail_thresh = 0.036
 
             # --- PyVista offscreen hardware rendering path ---
             if (
@@ -694,6 +813,7 @@ class Viewport3D:
                             )
                         elif shape == "propeller":
                             S = self.proj_span
+                            S_safe = S if S > 0.0 else 1e-15
                             c_r = self.proj_root_chord
                             c_t = self.proj_tip_chord
                             tau = self.proj_thickness_ratio / 100.0
@@ -703,7 +823,7 @@ class Viewport3D:
                             dV_sum = 0.0
                             y_dV_sum = 0.0
                             for y in ys:
-                                c = c_r + (y / S) * (c_t - c_r)
+                                c = c_r + (y / S_safe) * (c_t - c_r)
                                 area = 0.60 * (c**2) * tau
                                 dV = area * dy
                                 dV_sum += dV
@@ -729,10 +849,12 @@ class Viewport3D:
                                 self.plotter.remove_actor(self.proj_actor)
                         self.proj_actor = self.plotter.add_mesh(
                             self.proj_mesh,
-                            color=[230, 230, 250],
-                            style="wireframe",
-                            line_width=2.5,
-                            lighting=False,
+                            color=[200, 200, 220],
+                            style="surface",
+                            show_edges=True,
+                            edge_color=[80, 80, 100],
+                            line_width=1.5,
+                            lighting=True,
                         )
 
                     # Update projectile position and orientation in actor using 4x4 matrix
@@ -907,11 +1029,19 @@ class Viewport3D:
                     cam1_z = max(pt1_cam[2] + self.distance, 1e-4)
                     cam2_z = max(pt2_cam[2] + self.distance, 1e-4)
 
-                    scr1_x = self.center_x + (self.focal_length * pt1_cam[0] / cam1_z)
-                    scr1_y = self.center_y - (self.focal_length * pt1_cam[1] / cam1_z)
+                    scr1_x = self.center_x + (
+                        self.focal_length * (pt1_cam[0] + self.pan_x) / cam1_z
+                    )
+                    scr1_y = self.center_y - (
+                        self.focal_length * (pt1_cam[1] + self.pan_y) / cam1_z
+                    )
 
-                    scr2_x = self.center_x + (self.focal_length * pt2_cam[0] / cam2_z)
-                    scr2_y = self.center_y - (self.focal_length * pt2_cam[1] / cam2_z)
+                    scr2_x = self.center_x + (
+                        self.focal_length * (pt2_cam[0] + self.pan_x) / cam2_z
+                    )
+                    scr2_y = self.center_y - (
+                        self.focal_length * (pt2_cam[1] + self.pan_y) / cam2_z
+                    )
 
                     dpg.draw_line(
                         [float(scr1_x), float(scr1_y)],
@@ -922,6 +1052,68 @@ class Viewport3D:
                     )
             except Exception as e:
                 logger.error(f"Fallback projectile draw failed: {e}")
+
+            # Draw a global CSYS axes tripod in the bottom-left corner of the canvas in fallback mode S8.4
+            if not (HAS_PYVISTA and self.has_pyvista):
+                try:
+                    ox = 50.0
+                    oy = float(self.height) - 50.0
+                    axis_x = R @ np.array([30.0, 0.0, 0.0])
+                    axis_y = R @ np.array([0.0, 30.0, 0.0])
+                    axis_z = R @ np.array([0.0, 0.0, 30.0])
+                    ex_x, ey_x = ox + axis_x[0], oy - axis_x[1]
+                    ex_y, ey_y = ox + axis_y[0], oy - axis_y[1]
+                    ex_z, ey_z = ox + axis_z[0], oy - axis_z[1]
+
+                    # X axis (Red)
+                    dpg.draw_line(
+                        [ox, oy],
+                        [ex_x, ey_x],
+                        color=[255, 0, 0, 255],
+                        thickness=2,
+                        parent=self.canvas_tag,
+                    )
+                    dpg.draw_text(
+                        [ex_x + 3, ey_x - 3],
+                        "X",
+                        color=[255, 0, 0, 255],
+                        size=12,
+                        parent=self.canvas_tag,
+                    )
+
+                    # Y axis (Green)
+                    dpg.draw_line(
+                        [ox, oy],
+                        [ex_y, ey_y],
+                        color=[0, 255, 0, 255],
+                        thickness=2,
+                        parent=self.canvas_tag,
+                    )
+                    dpg.draw_text(
+                        [ex_y + 3, ey_y - 3],
+                        "Y",
+                        color=[0, 255, 0, 255],
+                        size=12,
+                        parent=self.canvas_tag,
+                    )
+
+                    # Z axis (Blue)
+                    dpg.draw_line(
+                        [ox, oy],
+                        [ex_z, ey_z],
+                        color=[0, 120, 255, 255],
+                        thickness=2,
+                        parent=self.canvas_tag,
+                    )
+                    dpg.draw_text(
+                        [ex_z + 3, ey_z - 3],
+                        "Z",
+                        color=[0, 120, 255, 255],
+                        size=12,
+                        parent=self.canvas_tag,
+                    )
+                except Exception as e:
+                    logger.error(f"Fallback axes tripod draw failed: {e}")
 
     def _get_shape_wireframe_lines(self) -> list[tuple[np.ndarray, np.ndarray]]:
         shape = self.proj_shape_type.lower()
@@ -1182,11 +1374,22 @@ class Viewport3D:
     def update(self, positions: np.ndarray, failed: np.ndarray) -> None:
         """Update node coordinate positions dynamically."""
         with self.render_lock:
-            if self.grid is not None:
+            if self.grid is None:
+                return
+
+            if len(positions) != len(self.grid.nodes):
+                return
+
+            if getattr(self, "structure_type", "fabric") == "metallic_sheet":
+                if len(failed) != len(self.grid.element_failed):
+                    return
+                self.grid.nodes = np.asarray(positions)
+                self.grid.element_failed = np.asarray(failed)
+            else:
+                if len(failed) != len(self.grid.failed):
+                    return
                 self.grid.nodes = np.asarray(positions)
                 self.grid.failed = np.asarray(failed)
-                # We do NOT call self.redraw() here; it will be called by draw_projectile()
-                # to render the complete synchronized frame containing the projectile.
 
     def draw_projectile(
         self,
@@ -1322,6 +1525,7 @@ def _make_propeller_mesh(
     ny = 25
     nx = 15
     S = span
+    S_safe = S if S > 0.0 else 1e-15
     c_r = root_chord
     c_t = tip_chord
     twist_deg = twist
@@ -1333,8 +1537,8 @@ def _make_propeller_mesh(
 
     ys_geom = np.linspace(0.0, S - R_tip, ny)
     for y_geom in ys_geom:
-        c = c_r + (y_geom / S) * (c_t - c_r)
-        theta = math.radians(twist_deg) * (y_geom / S)
+        c = c_r + (y_geom / S_safe) * (c_t - c_r)
+        theta = math.radians(twist_deg) * (y_geom / S_safe)
 
         slice_pts = []
         us = np.linspace(0.0, 1.0, nx)

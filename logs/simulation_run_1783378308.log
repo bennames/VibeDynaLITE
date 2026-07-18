@@ -1,0 +1,19 @@
+[2026-07-06 15:51:48] [WARNING]: Projectile initially overlaps Kevlar grid. Adjusted Z starting position to -0.010000 m to ensure tangent contact.
+[2026-07-06 15:51:48] [INFO]: ============================================================
+[2026-07-06 15:51:48] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-07-06 15:51:48] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-07-06 15:51:48] [INFO]: Python: 3.12.13
+[2026-07-06 15:51:48] [INFO]: Active Backend: numba
+[2026-07-06 15:51:48] [INFO]: Numba Threads Configured: 10
+[2026-07-06 15:51:48] [INFO]: Grid Dimensions: 5x5 (plies: 1)
+[2026-07-06 15:51:48] [INFO]: Grid Nodes: 25 | Springs: 72
+[2026-07-06 15:51:48] [INFO]: Projectile: Shape=sphere | Mass=0.05000 kg | Initial Velocity=[0.0, 0.0, 400.0] m/s
+[2026-07-06 15:51:48] [INFO]: Initial System Energy: 4000.0000 J
+[2026-07-06 15:51:48] [INFO]: ============================================================
+[2026-07-06 15:51:48] [ERROR]: Simulation run failed with exception:
+[2026-07-06 15:51:48] [ERROR]: Traceback (most recent call last):
+  File "/Users/bennames/Developer/VibeDynaLITE/src/kevlargrid/solver/worker.py", line 631, in run_solver_process
+    is_penetrated = reason == "penetration"
+                    ^^^^^^
+UnboundLocalError: cannot access local variable 'reason' where it is not associated with a value
+

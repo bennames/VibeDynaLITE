@@ -1,0 +1,8 @@
+[2026-06-28 10:48:07] [WARNING]: Projectile initially overlaps Kevlar grid. Adjusted Z starting position to -0.010000 m to ensure tangent contact.
+[2026-06-28 10:48:07] [ERROR]: Simulation run failed with exception:
+[2026-06-28 10:48:07] [ERROR]: Traceback (most recent call last):
+  File "/Users/bennames/Developer/VibeDynaLITE/src/kevlargrid/solver/worker.py", line 212, in run_solver_process
+    initial_proj_ke = 0.5 * proj.mass * np.sum(proj_velocity**2)
+                                               ^^^^^^^^^^^^^
+NameError: name 'proj_velocity' is not defined
+

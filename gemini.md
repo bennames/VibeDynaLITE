@@ -15,3 +15,6 @@ This document outlines the workflow and verification constraints for agent inter
 
 4. **Wait for Explicit Approval Before Executing Plans**
    - When in planning mode, you must NOT proceed to execute the implementation plan (i.e., do not begin making code changes, writing scripts, or running tests) when asked to review comments, address feedback, or update the plan document. You must update/revise the implementation plan as requested, request feedback again, and wait for the user's explicit approval to proceed to the execution phase.
+
+5. **Maintain Wiki Documentation**
+   - You must keep the project wiki documentation (`VibeDynaLITEWiki/`) up to date as part of any new feature implementation, ensuring that the wiki remains a reliable source of truth for code architecture and formulation.

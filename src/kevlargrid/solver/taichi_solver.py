@@ -1029,7 +1029,7 @@ class TaichiSolver:
             for i in range(self.n_nodes):
                 P_rel = self.positions[i] - proj_pos
                 P_loc = self.ti_q_rotate(q_conj, P_rel)
-                delta = -self.eval_sdf(P_loc)
+                delta = proximity_threshold - self.eval_sdf(P_loc)
                 if delta > 0.0:
                     n_loc = self.eval_sdf_normal(P_loc)
                     n_world = self.ti_q_rotate(q, n_loc)
@@ -1965,6 +1965,7 @@ def taichi_leapfrog_loop(
     proj_inertia_inv: np.ndarray | None = None,
     hist_proj_quat: np.ndarray | None = None,
     contact_energy_init: float = 0.0,
+    proximity_threshold: float = -1.0,
 ) -> tuple[
     np.ndarray,
     np.ndarray,
@@ -2148,7 +2149,8 @@ def taichi_leapfrog_loop(
 
     w_h = proj_blade_width / 2.0
     t_h = proj_edge_thickness / 2.0
-    proximity_threshold = dx * 2.0
+    proximity_threshold_val = dx * 2.0 if proximity_threshold < 0.0 else proximity_threshold
+    solver.proximity_threshold[None] = proximity_threshold_val
     use_visc_val = 1 if use_viscous else 0
 
     # Running explicit integration loop in chunks of save_interval
@@ -2177,7 +2179,7 @@ def taichi_leapfrog_loop(
             k_penalty,
             w_h,
             t_h,
-            proximity_threshold,
+            proximity_threshold_val,
             rayleigh_alpha,
             use_visc_val,
             cfl_factor,
@@ -2236,7 +2238,7 @@ def taichi_leapfrog_loop(
             k_penalty,
             w_h,
             t_h,
-            proximity_threshold,
+            proximity_threshold_val,
             rayleigh_alpha,
             use_visc_val,
             cfl_factor,

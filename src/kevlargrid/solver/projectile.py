@@ -223,6 +223,7 @@ class Projectile:
 
         elif self.shape_type == "propeller":
             S = self.span
+            S_safe = S if S > 0.0 else 1e-15
             c_r = self.root_chord
             c_t = self.tip_chord
             theta_t = np.radians(self.twist)
@@ -238,7 +239,7 @@ class Projectile:
             chords = np.zeros(N)
             thicknesses = np.zeros(N)
             for idx, y in enumerate(ys):
-                c = c_r + (y / S) * (c_t - c_r)
+                c = c_r + (y / S_safe) * (c_t - c_r)
                 t = c * tau
                 area = 0.60 * (c**2) * tau
                 areas[idx] = area
@@ -259,7 +260,7 @@ class Projectile:
             for idx, y in enumerate(ys):
                 c = chords[idx]
                 t = thicknesses[idx]
-                theta = theta_t * (y / S)
+                theta = theta_t * (y / S_safe)
                 dV = areas[idx] * dy
                 dm = rho * dV
 
@@ -610,7 +611,8 @@ def generate_impact_report(
     termination_reason: str,
 ) -> dict[str, Any]:
     """Generate a summary report of the impact event."""
-    residual_ke = 0.5 * projectile.mass * np.sum(projectile.vel**2)
+    rot_ke = 0.5 * np.sum(np.diagonal(projectile.inertia) * projectile.omega**2)
+    residual_ke = 0.5 * projectile.mass * np.sum(projectile.vel**2) + rot_ke
     exit_velocity = float(np.sqrt(np.sum(projectile.vel**2)))
     energy_absorbed = initial_ke - residual_ke
 

@@ -91,6 +91,11 @@ def parse_unit_value(val: Any, expected_base_unit: str) -> float | int:
             return num
         elif unit in ("g/m2", "g/m^2"):
             return num * 1e-3
+    elif expected_base_unit == "jm2":
+        if unit in ("jm2", "j/m2", "j/m^2", "j/m²"):
+            return num
+        elif unit in ("kj/m2", "kj/m^2", "kj/m²"):
+            return num * 1e3
 
     raise ValidationError(
         f"Unknown or incompatible unit '{unit_str}' for expected unit type '{expected_base_unit}'"
@@ -168,6 +173,20 @@ def normalize_config_units(config: dict) -> None:
             mat["fiber_density_gcc"] = parse_unit_value(mat["fiber_density_gcc"], "gcc")
         if "areal_density_kgm2" in mat:
             mat["areal_density_kgm2"] = parse_unit_value(mat["areal_density_kgm2"], "kgm2")
+        if "yield_strength_gpa" in mat:
+            mat["yield_strength_gpa"] = parse_unit_value(mat["yield_strength_gpa"], "gpa")
+        if "hardening_modulus_gpa" in mat:
+            mat["hardening_modulus_gpa"] = parse_unit_value(mat["hardening_modulus_gpa"], "gpa")
+        if "cohesive_strength_gpa" in mat:
+            mat["cohesive_strength_gpa"] = parse_unit_value(mat["cohesive_strength_gpa"], "gpa")
+        if "fracture_energy_jm2" in mat:
+            mat["fracture_energy_jm2"] = parse_unit_value(mat["fracture_energy_jm2"], "jm2")
+        if "rate_parameter_c" in mat:
+            mat["rate_parameter_c"] = float(mat["rate_parameter_c"])
+        if "rate_parameter_p" in mat:
+            mat["rate_parameter_p"] = float(mat["rate_parameter_p"])
+        if "softening_steps" in mat:
+            mat["softening_steps"] = int(mat["softening_steps"])
 
     if "grid" in config and isinstance(config["grid"], dict):
         grid = config["grid"]
@@ -175,6 +194,10 @@ def normalize_config_units(config: dict) -> None:
             grid["dx"] = parse_unit_value(grid["dx"], "m")
         if "t_ply" in grid and grid["t_ply"] is not None:
             grid["t_ply"] = parse_unit_value(grid["t_ply"], "m")
+        if "corrugation_amplitude" in grid:
+            grid["corrugation_amplitude"] = parse_unit_value(grid["corrugation_amplitude"], "m")
+        if "corrugation_period" in grid:
+            grid["corrugation_period"] = parse_unit_value(grid["corrugation_period"], "m")
 
     if "projectile" in config and isinstance(config["projectile"], dict):
         proj = config["projectile"]
@@ -397,6 +420,53 @@ def validate_config(config: dict) -> bool:
         ):
             raise ValidationError(f"yarn_count must be a list of two positive integers (got {yc}).")
 
+    if "material_model" not in mat:
+        mat["material_model"] = "linear"
+
+    if mat["material_model"] not in ["linear", "j2_plasticity"]:
+        raise ValidationError(f"Invalid material_model: '{mat['material_model']}'")
+
+    if mat["material_model"] == "j2_plasticity":
+        for key in ["yield_strength_gpa", "hardening_modulus_gpa", "ultimate_strain"]:
+            if key not in mat:
+                raise ValidationError(
+                    f"Material parameter '{key}' is required for j2_plasticity model"
+                )
+            val = mat[key]
+            if not isinstance(val, (int, float)) or val < 0.0:
+                raise ValidationError(
+                    f"Material parameter '{key}' must be a non-negative number (got {val})."
+                )
+            if key != "hardening_modulus_gpa" and val == 0.0:
+                raise ValidationError(
+                    f"Material parameter '{key}' must be a positive number (got {val})."
+                )
+        if "poisson_ratio" not in mat:
+            mat["poisson_ratio"] = 0.3
+        else:
+            pr = mat["poisson_ratio"]
+            if not isinstance(pr, (int, float)) or pr < 0.0 or pr >= 0.5:
+                raise ValidationError(f"poisson_ratio must be in range [0.0, 0.5) (got {pr}).")
+
+        if "rate_parameter_c" not in mat:
+            mat["rate_parameter_c"] = 40.0
+        else:
+            c_val = mat["rate_parameter_c"]
+            if not isinstance(c_val, (int, float)) or c_val <= 0.0:
+                raise ValidationError(f"rate_parameter_c must be a positive number (got {c_val}).")
+        if "rate_parameter_p" not in mat:
+            mat["rate_parameter_p"] = 5.0
+        else:
+            p_val = mat["rate_parameter_p"]
+            if not isinstance(p_val, (int, float)) or p_val <= 0.0:
+                raise ValidationError(f"rate_parameter_p must be a positive number (got {p_val}).")
+        if "softening_steps" not in mat:
+            mat["softening_steps"] = 10
+        else:
+            s_val = mat["softening_steps"]
+            if not isinstance(s_val, int) or s_val <= 0:
+                raise ValidationError(f"softening_steps must be a positive integer (got {s_val}).")
+
     # 3. Grid validation
     grid = config["grid"]
     for key in ["nx", "ny", "dx", "n_plies", "boundary_type"]:
@@ -422,6 +492,25 @@ def validate_config(config: dict) -> bool:
             raise ValidationError(
                 f"Grid parameter 't_ply' must be a positive number or null (got {t_ply})."
             )
+
+    if "corrugation_amplitude" in grid:
+        val = grid["corrugation_amplitude"]
+        if not isinstance(val, (int, float)) or val < 0.0:
+            raise ValidationError(
+                f"Grid parameter 'corrugation_amplitude' must be a non-negative number (got {val})."
+            )
+    if "corrugation_period" in grid:
+        val = grid["corrugation_period"]
+        if not isinstance(val, (int, float)) or val <= 0.0:
+            raise ValidationError(
+                f"Grid parameter 'corrugation_period' must be a positive number (got {val})."
+            )
+    if "corrugation_axis" not in grid:
+        grid["corrugation_axis"] = "x"
+    elif grid["corrugation_axis"] not in ["x", "y"]:
+        raise ValidationError(
+            f"Grid parameter 'corrugation_axis' must be 'x' or 'y' (got '{grid['corrugation_axis']}')."
+        )
 
     # 4. Projectile validation
     # 4. Projectile validation
@@ -531,6 +620,52 @@ def validate_config(config: dict) -> bool:
 
     # 5. Simulation validation
     sim = config["simulation"]
+    if "structure_type" not in sim:
+        sim["structure_type"] = "fabric"
+    if sim["structure_type"] not in ["fabric", "metallic_sheet"]:
+        raise ValidationError(
+            f"Simulation parameter 'structure_type' must be 'fabric' or 'metallic_sheet' (got '{sim['structure_type']}')."
+        )
+
+    if sim["structure_type"] == "metallic_sheet":
+        if "use_czm" not in sim:
+            sim["use_czm"] = False
+        if not isinstance(sim["use_czm"], bool):
+            raise ValidationError(
+                f"Simulation parameter 'use_czm' must be a boolean (got {type(sim['use_czm']).__name__})."
+            )
+        from kevlargrid.materials.library import MATERIALS
+
+        mat_name = mat.get("name", "")
+        if "fracture_energy_jm2" not in mat:
+            if mat_name in MATERIALS and "fracture_energy_jm2" in MATERIALS[mat_name]:
+                mat["fracture_energy_jm2"] = MATERIALS[mat_name]["fracture_energy_jm2"]
+            else:
+                mat["fracture_energy_jm2"] = 50000.0
+
+        if (
+            not isinstance(mat["fracture_energy_jm2"], (int, float))
+            or mat["fracture_energy_jm2"] <= 0.0
+        ):
+            raise ValidationError(
+                f"Material property 'fracture_energy_jm2' must be a positive number (got {mat['fracture_energy_jm2']})."
+            )
+
+        if sim["use_czm"]:
+            if "cohesive_strength_gpa" not in mat:
+                if mat_name in MATERIALS and "cohesive_strength_gpa" in MATERIALS[mat_name]:
+                    mat["cohesive_strength_gpa"] = MATERIALS[mat_name]["cohesive_strength_gpa"]
+                else:
+                    mat["cohesive_strength_gpa"] = mat.get("tensile_strength_gpa", 0.485)
+
+            if (
+                not isinstance(mat["cohesive_strength_gpa"], (int, float))
+                or mat["cohesive_strength_gpa"] <= 0.0
+            ):
+                raise ValidationError(
+                    f"Material cohesive property 'cohesive_strength_gpa' must be a positive number (got {mat['cohesive_strength_gpa']})."
+                )
+
     model = sim.get("damping_model")
     if model is None:
         if "rayleigh_beta" in sim and sim["rayleigh_beta"] > 0.0:
@@ -551,6 +686,10 @@ def validate_config(config: dict) -> bool:
         sim["auto_cfl"] = True
     if "dt" not in sim:
         sim["dt"] = 1.5e-7
+    if "erosion_softening_steps" not in sim:
+        sim["erosion_softening_steps"] = 10
+    if "velocity_clamping_multiplier" not in sim:
+        sim["velocity_clamping_multiplier"] = 2.0
 
     for key in [
         "duration",
@@ -561,6 +700,9 @@ def validate_config(config: dict) -> bool:
         "rayleigh_beta",
         "auto_cfl",
         "dt",
+        "structure_type",
+        "erosion_softening_steps",
+        "velocity_clamping_multiplier",
     ]:
         if key not in sim:
             raise ValidationError(f"Simulation section missing required key: '{key}'")
@@ -608,6 +750,18 @@ def validate_config(config: dict) -> bool:
     if not isinstance(beta, (int, float)) or beta < 0.0:
         raise ValidationError(
             f"Simulation parameter 'rayleigh_beta' must be a non-negative number (got {beta})."
+        )
+
+    soft_steps = sim["erosion_softening_steps"]
+    if not isinstance(soft_steps, int) or soft_steps < 0:
+        raise ValidationError(
+            f"Simulation parameter 'erosion_softening_steps' must be a non-negative integer (got {soft_steps})."
+        )
+
+    v_mult = sim["velocity_clamping_multiplier"]
+    if not isinstance(v_mult, (int, float)) or v_mult <= 0.0:
+        raise ValidationError(
+            f"Simulation parameter 'velocity_clamping_multiplier' must be a positive number (got {v_mult})."
         )
 
     logger.info("Configuration validation succeeded.")

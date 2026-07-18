@@ -1,0 +1,30 @@
+# Progress Journal
+
+- **2026-06-28T03:14:00Z**: Initialized workspace, ORIGINAL_REQUEST.md, and BRIEFING.md. Preparing to run the benchmark.
+- **2026-06-28T03:15:13Z**: Launched `pytest tests/` as task-19 in the background. Waiting for execution to complete.
+- **2026-06-28T03:16:21Z**: Canceled task-19 per system message instructions to avoid running benchmark 8 twice.
+- **2026-06-28T03:17:26Z**: Launched `pytest tests/ -k "not test_run_benchmark_8"` as task-34 in the background. Waiting for execution to complete.
+- **2026-06-28T03:30:11Z**: Modified `tests/integration/test_run_bench8.py` to use Taichi backend so it can be run via pytest to avoid python direct run timeouts.
+- **2026-06-28T03:32:09Z**: Canceled task-34 per system message instructions to avoid running the slow calibration tests.
+- **2026-06-28T03:32:10Z**: Launched `pytest tests/ -k "not test_run_benchmark_8 and not test_run_calib"` as task-50 in the background. Waiting for execution to complete.
+- **2026-06-28T03:35:24Z**: Canceled task-50 per system message instructions because profile test was updated to skip Metal GPU profiling.
+- **2026-06-28T03:35:25Z**: Launched `pytest tests/ -k "not test_run_benchmark_8 and not test_run_calib"` as task-59 in the background. Waiting for execution to complete.
+- **2026-06-28T04:40:16Z**: Canceled task-59 per system message instructions to skip the slow Numba test as well.
+- **2026-06-28T03:40:17Z**: Launched `pytest tests/ -k "not test_run_benchmark_8 and not test_run_calib and not test_run_numba"` as task-68 in the background. Waiting for execution to complete.
+- **2026-06-28T03:43:04Z**: Task-68 finished successfully, all unit tests passed.
+- **2026-06-28T03:44:07Z**: Launched `pytest tests/integration/test_run_bench8.py` (configured to run Taichi backend) as task-77. Checked status, still running.
+- **2026-06-28T04:20:18Z**: Canceled task-77 because it was hanging on Metal GPU.
+- **2026-06-28T04:20:21Z**: Modified `src/kevlargrid/solver/taichi_solver.py` to support `TAICHI_FORCE_CPU=1`.
+- **2026-06-28T04:20:22Z**: Launched `TAICHI_FORCE_CPU=1 .venv/bin/pytest tests/integration/test_run_bench8.py` as task-108.
+- **2026-06-28T04:58:52Z**: Task-108 completed in 38m12s. Validated results.json but velocities did not meet criteria (penetration at 450m/s).
+- **2026-06-28T04:59:28Z**: Launched `pytest tests/integration/test_run_numba.py -s` as task-172 to test Numba backend on Case A.
+- **2026-06-28T05:05:30Z**: Canceled task-172 because Numba is very slow.
+- **2026-06-28T05:06:50Z**: Modified `src/kevlargrid/solver/taichi_solver.py` to zero `proj_torque` at the start of each step in the JIT graph.
+- **2026-06-28T05:06:52Z**: Launched `TAICHI_FORCE_CPU=1 .venv/bin/pytest tests/integration/test_run_bench8.py` as task-316.
+- **2026-06-28T05:30:30Z**: Task-316 finished. Still wrong results because `k_penalty` in `run_benchmark_8.py` was modified.
+- **2026-06-28T05:30:48Z**: Reverted `run_benchmark_8.py` to restore `k_penalty = 2.0e6` from HEAD.
+- **2026-06-28T05:30:52Z**: Launched `TAICHI_FORCE_CPU=1 .venv/bin/pytest tests/integration/test_run_bench8.py` as task-348.
+- **2026-06-28T05:59:18Z**: Task-348 finished. Still wrong results because the revert also reverted the calibration parameters from the previous agent.
+- **2026-06-28T06:00:30Z**: Restored calibrated parameters in `run_benchmark_8.py` (k_penalty=2.0e5, cfl_factor=0.1, dynamic strain energy scaling).
+- **2026-06-28T06:00:36Z**: Launched `TAICHI_FORCE_CPU=1 .venv/bin/pytest tests/integration/test_run_bench8.py` as task-408.
+- **Last visited**: 2026-06-28T06:00:36Z

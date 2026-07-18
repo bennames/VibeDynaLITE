@@ -1,0 +1,257 @@
+[2026-06-28 10:51:29] [INFO]: ============================================================
+[2026-06-28 10:51:29] [INFO]: VibeDynaLITE Solver Subprocess Started
+[2026-06-28 10:51:29] [INFO]: OS: Darwin 25.5.0 (arm64)
+[2026-06-28 10:51:29] [INFO]: Python: 3.12.13
+[2026-06-28 10:51:29] [INFO]: Active Backend: numba
+[2026-06-28 10:51:29] [INFO]: Numba Threads Configured: 8
+[2026-06-28 10:51:29] [INFO]: Grid Dimensions: 100x100 (plies: 20)
+[2026-06-28 10:51:29] [INFO]: Grid Nodes: 200000 | Springs: 788040
+[2026-06-28 10:51:29] [INFO]: Projectile: Shape=cylinder | Mass=1.70000 kg | Initial Velocity=[0.0, 0.0, 100.0] m/s
+[2026-06-28 10:51:29] [INFO]: Initial System Energy: 8500.0002 J
+[2026-06-28 10:51:29] [INFO]: ============================================================
+[2026-06-28 10:51:50] [INFO]: Step 158: t=10.1 us | z_pos=-13.997 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:51:50] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:51:55] [INFO]: Step 317: t=20.1 us | z_pos=-12.994 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:51:55] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:00] [INFO]: Step 475: t=30.2 us | z_pos=-11.990 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:00] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:04] [INFO]: Step 634: t=40.3 us | z_pos=-10.987 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:04] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:09] [INFO]: Step 792: t=50.3 us | z_pos=-9.985 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:09] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:14] [INFO]: Step 941: t=59.8 us | z_pos=-9.040 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:14] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:19] [INFO]: Step 1090: t=69.3 us | z_pos=-8.095 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:19] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:24] [INFO]: Step 1240: t=78.8 us | z_pos=-7.150 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:24] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:29] [INFO]: Step 1389: t=88.3 us | z_pos=-6.205 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:29] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:34] [INFO]: Step 1538: t=97.7 us | z_pos=-5.261 mm | v_z=100.00 m/s | Decel=0.00 g | Failed=0 (0.00%) | Drift=0.0000%
+[2026-06-28 10:52:35] [INFO]: Energy (J): KE_grid=0.0000 | SE_grid=0.0000 | KE_proj=8500.0002 | Damp=0.0000 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=0.0000 | Total=8500.0002
+[2026-06-28 10:52:40] [INFO]: Step 1654: t=105.1 us | z_pos=-4.540 mm | v_z=93.76 m/s | Decel=157220.09 g | Failed=0 (0.00%) | Drift=2.1334%
+[2026-06-28 10:52:40] [INFO]: Energy (J): KE_grid=658.3374 | SE_grid=248.4475 | KE_proj=7595.0021 | Damp=0.0021 | Fric=0.0000 | Fail=0.0000 | Clamp=0.0000 | Contact=179.5510 | Total=8681.3401
+[2026-06-28 10:52:45] [INFO]: Step 1765: t=112.1 us | z_pos=-3.892 mm | v_z=91.67 m/s | Decel=157220.09 g | Failed=0 (0.00%) | Drift=0.0306%
+[2026-06-28 10:52:45] [INFO]: Energy (J): KE_grid=1318.2927 | SE_grid=41.8192 | KE_proj=7142.4088 | Damp=0.0593 | Fric=0.0000 | Fail=0.0053 | Clamp=0.0000 | Contact=0.0168 | Total=8502.6022
+[2026-06-28 10:52:51] [INFO]: Step 1869: t=118.7 us | z_pos=-3.288 mm | v_z=91.58 m/s | Decel=157220.09 g | Failed=0 (0.00%) | Drift=0.0392%
+[2026-06-28 10:52:51] [INFO]: Energy (J): KE_grid=1268.5800 | SE_grid=103.0162 | KE_proj=7130.7996 | Damp=0.1476 | Fric=0.0000 | Fail=0.0088 | Clamp=0.0000 | Contact=0.7831 | Total=8503.3352
+[2026-06-28 10:52:56] [INFO]: Step 1972: t=125.3 us | z_pos=-2.691 mm | v_z=91.53 m/s | Decel=157220.09 g | Failed=0 (0.00%) | Drift=0.0309%
+[2026-06-28 10:52:56] [INFO]: Energy (J): KE_grid=1202.3084 | SE_grid=178.0463 | KE_proj=7121.9162 | Damp=0.2855 | Fric=0.0000 | Fail=0.0178 | Clamp=0.0000 | Contact=0.0511 | Total=8502.6253
+[2026-06-28 10:53:02] [INFO]: Step 2074: t=131.8 us | z_pos=-2.095 mm | v_z=91.44 m/s | Decel=157220.09 g | Failed=0 (0.00%) | Drift=0.0388%
+[2026-06-28 10:53:02] [INFO]: Energy (J): KE_grid=1141.0964 | SE_grid=251.5825 | KE_proj=7109.4187 | Damp=0.4406 | Fric=0.0000 | Fail=0.0290 | Clamp=0.0000 | Contact=0.7285 | Total=8503.2956
+[2026-06-28 10:53:07] [INFO]: Step 2177: t=138.3 us | z_pos=-1.499 mm | v_z=91.33 m/s | Decel=157220.09 g | Failed=4 (0.00%) | Drift=0.0335%
+[2026-06-28 10:53:07] [INFO]: Energy (J): KE_grid=1078.4483 | SE_grid=331.5634 | KE_proj=7091.8987 | Damp=0.6270 | Fric=0.0000 | Fail=0.0409 | Clamp=0.0000 | Contact=0.2720 | Total=8502.8504
+[2026-06-28 10:53:13] [INFO]: Step 2280: t=144.8 us | z_pos=-0.904 mm | v_z=91.18 m/s | Decel=157220.09 g | Failed=16 (0.00%) | Drift=0.0481%
+[2026-06-28 10:53:13] [INFO]: Energy (J): KE_grid=1034.0810 | SE_grid=398.3594 | KE_proj=7069.2733 | Damp=0.8302 | Fric=0.0000 | Fail=0.0694 | Clamp=0.0000 | Contact=1.4721 | Total=8504.0853
+[2026-06-28 10:53:18] [INFO]: Step 2382: t=151.3 us | z_pos=-0.310 mm | v_z=91.01 m/s | Decel=157220.09 g | Failed=16 (0.00%) | Drift=0.0484%
+[2026-06-28 10:53:18] [INFO]: Energy (J): KE_grid=989.6708 | SE_grid=468.5340 | KE_proj=7043.2869 | Damp=1.0492 | Fric=0.0000 | Fail=0.0771 | Clamp=0.0000 | Contact=1.4933 | Total=8504.1113
+[2026-06-28 10:53:24] [INFO]: Step 2485: t=157.9 us | z_pos=0.283 mm | v_z=90.84 m/s | Decel=157220.09 g | Failed=20 (0.00%) | Drift=0.0414%
+[2026-06-28 10:53:24] [INFO]: Energy (J): KE_grid=948.0137 | SE_grid=536.9463 | KE_proj=7016.3062 | Damp=1.2835 | Fric=0.0000 | Fail=0.0910 | Clamp=0.0000 | Contact=0.8800 | Total=8503.5207
+[2026-06-28 10:53:30] [INFO]: Step 2588: t=164.4 us | z_pos=0.874 mm | v_z=90.61 m/s | Decel=157220.09 g | Failed=88 (0.01%) | Drift=0.0544%
+[2026-06-28 10:53:30] [INFO]: Energy (J): KE_grid=909.9894 | SE_grid=608.9242 | KE_proj=6982.0943 | Damp=1.5207 | Fric=0.0000 | Fail=0.1250 | Clamp=0.0000 | Contact=1.9747 | Total=8504.6283
+[2026-06-28 10:53:36] [INFO]: Step 2690: t=170.9 us | z_pos=1.464 mm | v_z=90.35 m/s | Decel=157220.09 g | Failed=364 (0.05%) | Drift=0.0545%
+[2026-06-28 10:53:36] [INFO]: Energy (J): KE_grid=890.8500 | SE_grid=667.8081 | KE_proj=6942.1042 | Damp=1.7715 | Fric=0.0000 | Fail=0.1953 | Clamp=0.0000 | Contact=1.9058 | Total=8504.6349
+[2026-06-28 10:53:42] [INFO]: Step 2793: t=177.4 us | z_pos=2.052 mm | v_z=90.07 m/s | Decel=157220.09 g | Failed=872 (0.11%) | Drift=0.0809%
+[2026-06-28 10:53:42] [INFO]: Energy (J): KE_grid=895.6400 | SE_grid=704.6105 | KE_proj=6900.1711 | Damp=2.0550 | Fric=0.0000 | Fail=0.3242 | Clamp=0.0000 | Contact=4.0793 | Total=8506.8801
+[2026-06-28 10:53:48] [INFO]: Step 2895: t=183.9 us | z_pos=2.637 mm | v_z=89.58 m/s | Decel=157220.09 g | Failed=1984 (0.25%) | Drift=0.0985%
+[2026-06-28 10:53:48] [INFO]: Energy (J): KE_grid=941.2199 | SE_grid=730.7220 | KE_proj=6828.1159 | Damp=2.3814 | Fric=0.0000 | Fail=0.5136 | Clamp=0.0000 | Contact=5.4207 | Total=8508.3734
+[2026-06-28 10:53:55] [INFO]: Step 2998: t=190.5 us | z_pos=3.220 mm | v_z=89.02 m/s | Decel=157220.09 g | Failed=2777 (0.35%) | Drift=0.1768%
+[2026-06-28 10:53:55] [INFO]: Energy (J): KE_grid=1038.6052 | SE_grid=716.5079 | KE_proj=6744.3940 | Damp=3.0922 | Fric=0.0000 | Fail=0.7649 | Clamp=0.0000 | Contact=11.6668 | Total=8515.0310
+[2026-06-28 10:54:01] [INFO]: Step 3101: t=197.0 us | z_pos=3.798 mm | v_z=88.42 m/s | Decel=157220.09 g | Failed=2927 (0.37%) | Drift=0.1310%
+[2026-06-28 10:54:01] [INFO]: Energy (J): KE_grid=1171.2907 | SE_grid=673.4553 | KE_proj=6653.1926 | Damp=4.4040 | Fric=0.0000 | Fail=2.0056 | Clamp=0.0000 | Contact=6.7851 | Total=8511.1332
+[2026-06-28 10:54:08] [INFO]: Step 3203: t=203.5 us | z_pos=4.372 mm | v_z=87.87 m/s | Decel=157220.09 g | Failed=2997 (0.38%) | Drift=0.1515%
+[2026-06-28 10:54:08] [INFO]: Energy (J): KE_grid=1280.9843 | SE_grid=644.6978 | KE_proj=6570.1672 | Damp=5.7410 | Fric=0.0000 | Fail=2.7972 | Clamp=0.0000 | Contact=8.4918 | Total=8512.8792
+[2026-06-28 10:54:14] [INFO]: Step 3306: t=210.0 us | z_pos=4.943 mm | v_z=86.94 m/s | Decel=157220.09 g | Failed=3446 (0.44%) | Drift=0.7718%
+[2026-06-28 10:54:14] [INFO]: Energy (J): KE_grid=1293.8498 | SE_grid=758.6123 | KE_proj=6441.0457 | Damp=7.3490 | Fric=0.0000 | Fail=6.4123 | Clamp=0.0000 | Contact=58.3317 | Total=8565.6008
+[2026-06-28 10:54:21] [INFO]: Step 3409: t=216.5 us | z_pos=5.502 mm | v_z=84.41 m/s | Decel=157220.09 g | Failed=5668 (0.72%) | Drift=1.7510%
+[2026-06-28 10:54:21] [INFO]: Energy (J): KE_grid=1475.2948 | SE_grid=906.5708 | KE_proj=6101.3236 | Damp=9.8764 | Fric=0.0000 | Fail=25.5269 | Clamp=0.0000 | Contact=130.2416 | Total=8648.8341
+[2026-06-28 10:54:28] [INFO]: Step 3511: t=223.1 us | z_pos=6.042 mm | v_z=81.29 m/s | Decel=157220.09 g | Failed=8704 (1.10%) | Drift=0.9546%
+[2026-06-28 10:54:28] [INFO]: Energy (J): KE_grid=1928.2385 | SE_grid=899.7174 | KE_proj=5650.6058 | Damp=12.8671 | Fric=0.0000 | Fail=38.0880 | Clamp=0.0000 | Contact=51.6224 | Total=8581.1391
+[2026-06-28 10:54:34] [INFO]: Step 3614: t=229.6 us | z_pos=6.565 mm | v_z=79.39 m/s | Decel=157220.09 g | Failed=11740 (1.49%) | Drift=0.6145%
+[2026-06-28 10:54:34] [INFO]: Energy (J): KE_grid=2166.4817 | SE_grid=928.6388 | KE_proj=5374.8140 | Damp=15.9238 | Fric=0.0000 | Fail=50.2705 | Clamp=0.0000 | Contact=16.1038 | Total=8552.2325
+[2026-06-28 10:54:41] [INFO]: Step 3717: t=236.1 us | z_pos=7.079 mm | v_z=78.41 m/s | Decel=157220.09 g | Failed=15715 (1.99%) | Drift=0.6072%
+[2026-06-28 10:54:41] [INFO]: Energy (J): KE_grid=2198.5176 | SE_grid=1027.0326 | KE_proj=5235.2267 | Damp=19.1150 | Fric=0.0000 | Fail=61.0676 | Clamp=0.0000 | Contact=10.6515 | Total=8551.6110
+[2026-06-28 10:54:47] [INFO]: Step 3819: t=242.6 us | z_pos=7.587 mm | v_z=77.59 m/s | Decel=157220.09 g | Failed=20849 (2.65%) | Drift=0.6784%
+[2026-06-28 10:54:47] [INFO]: Energy (J): KE_grid=2185.5579 | SE_grid=1137.6917 | KE_proj=5124.8905 | Damp=22.4874 | Fric=0.0000 | Fail=77.1143 | Clamp=0.0000 | Contact=9.9266 | Total=8557.6684
+[2026-06-28 10:54:54] [INFO]: Step 3922: t=249.1 us | z_pos=8.091 mm | v_z=76.84 m/s | Decel=157220.09 g | Failed=26884 (3.41%) | Drift=0.8070%
+[2026-06-28 10:54:54] [INFO]: Energy (J): KE_grid=2153.1405 | SE_grid=1250.0443 | KE_proj=5027.8161 | Damp=26.1609 | Fric=0.0000 | Fail=99.0058 | Clamp=0.0000 | Contact=12.4268 | Total=8568.5943
+[2026-06-28 10:55:01] [INFO]: Step 4025: t=255.7 us | z_pos=8.589 mm | v_z=76.13 m/s | Decel=157220.09 g | Failed=34385 (4.36%) | Drift=1.0185%
+[2026-06-28 10:55:01] [INFO]: Energy (J): KE_grid=2158.1919 | SE_grid=1311.9362 | KE_proj=4933.3655 | Damp=30.8509 | Fric=0.0000 | Fail=141.3051 | Clamp=0.0000 | Contact=10.9195 | Total=8586.5690
+[2026-06-28 10:55:07] [INFO]: Step 4127: t=262.2 us | z_pos=9.084 mm | v_z=75.60 m/s | Decel=157220.09 g | Failed=43817 (5.56%) | Drift=1.1605%
+[2026-06-28 10:55:07] [INFO]: Energy (J): KE_grid=2177.4860 | SE_grid=1327.7500 | KE_proj=4862.9140 | Damp=36.6890 | Fric=0.0000 | Fail=187.9890 | Clamp=0.0000 | Contact=5.8138 | Total=8598.6417
+[2026-06-28 10:55:14] [INFO]: Step 4230: t=268.7 us | z_pos=9.575 mm | v_z=75.27 m/s | Decel=157220.09 g | Failed=54232 (6.88%) | Drift=1.3673%
+[2026-06-28 10:55:14] [INFO]: Energy (J): KE_grid=2179.6914 | SE_grid=1336.5866 | KE_proj=4818.7661 | Damp=43.4775 | Fric=0.0000 | Fail=234.3410 | Clamp=0.0000 | Contact=3.3593 | Total=8616.2220
+[2026-06-28 10:55:20] [INFO]: Step 4333: t=275.2 us | z_pos=10.065 mm | v_z=75.00 m/s | Decel=157220.09 g | Failed=64940 (8.24%) | Drift=1.6731%
+[2026-06-28 10:55:20] [INFO]: Energy (J): KE_grid=2206.1609 | SE_grid=1307.9963 | KE_proj=4784.7505 | Damp=50.9859 | Fric=0.0000 | Fail=288.7505 | Clamp=0.0000 | Contact=3.5670 | Total=8642.2112
+[2026-06-28 10:55:27] [INFO]: Step 4435: t=281.7 us | z_pos=10.553 mm | v_z=74.67 m/s | Decel=157220.09 g | Failed=76630 (9.72%) | Drift=1.9960%
+[2026-06-28 10:55:27] [INFO]: Energy (J): KE_grid=2251.1277 | SE_grid=1263.4245 | KE_proj=4743.1666 | Damp=59.1665 | Fric=0.0000 | Fail=347.5029 | Clamp=0.0000 | Contact=5.2736 | Total=8669.6617
+[2026-06-28 10:55:33] [INFO]: Step 4538: t=288.3 us | z_pos=11.038 mm | v_z=74.31 m/s | Decel=157220.09 g | Failed=88965 (11.29%) | Drift=2.3705%
+[2026-06-28 10:55:33] [INFO]: Energy (J): KE_grid=2296.7267 | SE_grid=1221.4014 | KE_proj=4698.0140 | Damp=68.3851 | Fric=0.0000 | Fail=411.3153 | Clamp=0.0000 | Contact=5.6515 | Total=8701.4940
+[2026-06-28 10:55:40] [INFO]: Step 4641: t=294.8 us | z_pos=11.522 mm | v_z=73.90 m/s | Decel=157220.09 g | Failed=101179 (12.84%) | Drift=2.7482%
+[2026-06-28 10:55:40] [INFO]: Energy (J): KE_grid=2339.4693 | SE_grid=1187.3856 | KE_proj=4647.2416 | Damp=78.5475 | Fric=0.0000 | Fail=475.4092 | Clamp=0.0000 | Contact=5.5400 | Total=8733.5932
+[2026-06-28 10:55:46] [INFO]: Step 4743: t=301.3 us | z_pos=12.002 mm | v_z=73.53 m/s | Decel=157220.09 g | Failed=113115 (14.35%) | Drift=3.0790%
+[2026-06-28 10:55:46] [INFO]: Energy (J): KE_grid=2385.5912 | SE_grid=1142.6059 | KE_proj=4599.7593 | Damp=89.7691 | Fric=0.0000 | Fail=538.6094 | Clamp=0.0000 | Contact=5.3792 | Total=8761.7140
+[2026-06-28 10:55:53] [INFO]: Step 4846: t=307.8 us | z_pos=12.480 mm | v_z=73.16 m/s | Decel=157220.09 g | Failed=124039 (15.74%) | Drift=3.4595%
+[2026-06-28 10:55:53] [INFO]: Energy (J): KE_grid=2426.0151 | SE_grid=1101.3262 | KE_proj=4554.3524 | Damp=101.9733 | Fric=0.0000 | Fail=604.3922 | Clamp=0.0000 | Contact=6.0007 | Total=8794.0599
+[2026-06-28 10:55:59] [INFO]: Step 4949: t=314.3 us | z_pos=12.956 mm | v_z=72.67 m/s | Decel=157220.09 g | Failed=134359 (17.05%) | Drift=3.8684%
+[2026-06-28 10:55:59] [INFO]: Energy (J): KE_grid=2485.4685 | SE_grid=1052.1383 | KE_proj=4493.8685 | Damp=115.0615 | Fric=0.0000 | Fail=675.3472 | Clamp=0.0000 | Contact=6.9324 | Total=8828.8164
+[2026-06-28 10:56:06] [INFO]: Step 5051: t=320.9 us | z_pos=13.428 mm | v_z=72.28 m/s | Decel=157220.09 g | Failed=143971 (18.27%) | Drift=4.1871%
+[2026-06-28 10:56:06] [INFO]: Energy (J): KE_grid=2523.3825 | SE_grid=1009.8921 | KE_proj=4444.1259 | Damp=129.1214 | Fric=0.0000 | Fail=744.7114 | Clamp=0.0000 | Contact=4.6699 | Total=8855.9030
+[2026-06-28 10:56:12] [INFO]: Step 5154: t=327.4 us | z_pos=13.900 mm | v_z=72.01 m/s | Decel=157220.09 g | Failed=152547 (19.36%) | Drift=4.7341%
+[2026-06-28 10:56:12] [INFO]: Energy (J): KE_grid=2548.4649 | SE_grid=981.8529 | KE_proj=4409.8121 | Damp=143.9853 | Fric=0.0000 | Fail=814.4105 | Clamp=0.0000 | Contact=3.8703 | Total=8902.3960
+[2026-06-28 10:56:18] [INFO]: Step 5259: t=334.1 us | z_pos=14.380 mm | v_z=71.79 m/s | Decel=157220.09 g | Failed=159956 (20.30%) | Drift=5.0180%
+[2026-06-28 10:56:18] [INFO]: Energy (J): KE_grid=2542.6718 | SE_grid=966.5973 | KE_proj=4382.6925 | Damp=159.7535 | Fric=0.0000 | Fail=871.4183 | Clamp=0.0000 | Contact=3.3965 | Total=8926.5300
+[2026-06-28 10:56:25] [INFO]: Step 5366: t=340.8 us | z_pos=14.863 mm | v_z=71.57 m/s | Decel=157220.09 g | Failed=166189 (21.09%) | Drift=5.5488%
+[2026-06-28 10:56:25] [INFO]: Energy (J): KE_grid=2549.8938 | SE_grid=963.1428 | KE_proj=4356.2434 | Damp=176.2421 | Fric=0.0000 | Fail=921.9479 | Clamp=0.0000 | Contact=4.1788 | Total=8971.6489
+[2026-06-28 10:56:31] [INFO]: Step 5472: t=347.6 us | z_pos=15.345 mm | v_z=71.36 m/s | Decel=157220.09 g | Failed=171337 (21.74%) | Drift=6.0909%
+[2026-06-28 10:56:31] [INFO]: Energy (J): KE_grid=2561.2530 | SE_grid=962.1621 | KE_proj=4330.3899 | Damp=192.9267 | Fric=0.0000 | Fail=966.6974 | Clamp=0.0000 | Contact=4.2978 | Total=9017.7269
+[2026-06-28 10:56:37] [INFO]: Step 5578: t=354.3 us | z_pos=15.826 mm | v_z=71.17 m/s | Decel=157220.09 g | Failed=175942 (22.33%) | Drift=6.3012%
+[2026-06-28 10:56:37] [INFO]: Energy (J): KE_grid=2546.3539 | SE_grid=964.9514 | KE_proj=4307.8489 | Damp=209.2242 | Fric=0.0000 | Fail=1004.1469 | Clamp=0.0000 | Contact=3.0781 | Total=9035.6035
+[2026-06-28 10:56:43] [INFO]: Step 5684: t=361.1 us | z_pos=16.305 mm | v_z=71.02 m/s | Decel=157220.09 g | Failed=180275 (22.88%) | Drift=6.6183%
+[2026-06-28 10:56:43] [INFO]: Energy (J): KE_grid=2552.6421 | SE_grid=950.9938 | KE_proj=4288.5977 | Damp=224.7367 | Fric=0.0000 | Fail=1041.6427 | Clamp=0.0000 | Contact=3.9470 | Total=9062.5600
+[2026-06-28 10:56:50] [INFO]: Step 5791: t=367.9 us | z_pos=16.786 mm | v_z=70.87 m/s | Decel=157220.09 g | Failed=184559 (23.42%) | Drift=6.9384%
+[2026-06-28 10:56:50] [INFO]: Energy (J): KE_grid=2582.7024 | SE_grid=913.1685 | KE_proj=4270.7815 | Damp=239.6897 | Fric=0.0000 | Fail=1079.8093 | Clamp=0.0000 | Contact=3.6119 | Total=9089.7632
+[2026-06-28 10:56:56] [INFO]: Step 5898: t=374.7 us | z_pos=17.267 mm | v_z=70.73 m/s | Decel=157220.09 g | Failed=188680 (23.94%) | Drift=7.2120%
+[2026-06-28 10:56:56] [INFO]: Energy (J): KE_grid=2635.5746 | SE_grid=855.1985 | KE_proj=4253.8264 | Damp=254.0736 | Fric=0.0000 | Fail=1111.0766 | Clamp=0.0000 | Contact=3.2691 | Total=9113.0188
+[2026-06-28 10:57:02] [INFO]: Step 6006: t=381.5 us | z_pos=17.749 mm | v_z=70.60 m/s | Decel=157220.09 g | Failed=192678 (24.45%) | Drift=7.5316%
+[2026-06-28 10:57:02] [INFO]: Energy (J): KE_grid=2709.2835 | SE_grid=777.8758 | KE_proj=4237.3345 | Damp=268.4275 | Fric=0.0000 | Fail=1143.9665 | Clamp=0.0000 | Contact=3.2953 | Total=9140.1832
+[2026-06-28 10:57:08] [INFO]: Step 6113: t=388.3 us | z_pos=18.232 mm | v_z=70.47 m/s | Decel=157220.09 g | Failed=196487 (24.93%) | Drift=8.0609%
+[2026-06-28 10:57:08] [INFO]: Energy (J): KE_grid=2797.8562 | SE_grid=699.7829 | KE_proj=4223.0382 | Damp=282.4395 | Fric=0.0000 | Fail=1179.4011 | Clamp=0.0000 | Contact=2.6610 | Total=9185.1789
+[2026-06-28 10:57:14] [INFO]: Step 6222: t=395.2 us | z_pos=18.716 mm | v_z=70.35 m/s | Decel=157220.09 g | Failed=199971 (25.38%) | Drift=8.2576%
+[2026-06-28 10:57:14] [INFO]: Energy (J): KE_grid=2866.1996 | SE_grid=618.7634 | KE_proj=4207.8116 | Damp=296.1169 | Fric=0.0000 | Fail=1210.4454 | Clamp=0.0000 | Contact=2.5568 | Total=9201.8937
+[2026-06-28 10:57:20] [INFO]: Step 6331: t=402.1 us | z_pos=19.201 mm | v_z=70.23 m/s | Decel=157220.09 g | Failed=203249 (25.79%) | Drift=8.6715%
+[2026-06-28 10:57:20] [INFO]: Energy (J): KE_grid=2942.5406 | SE_grid=545.6794 | KE_proj=4193.7745 | Damp=309.3490 | Fric=0.0000 | Fail=1242.9990 | Clamp=0.0000 | Contact=2.7335 | Total=9237.0761
+[2026-06-28 10:57:27] [INFO]: Step 6439: t=409.0 us | z_pos=19.683 mm | v_z=70.13 m/s | Decel=157220.09 g | Failed=206364 (26.19%) | Drift=9.1526%
+[2026-06-28 10:57:27] [INFO]: Energy (J): KE_grid=3002.2372 | SE_grid=493.2257 | KE_proj=4181.9334 | Damp=322.2328 | Fric=0.0000 | Fail=1275.6205 | Clamp=0.0000 | Contact=2.7217 | Total=9277.9713
+[2026-06-28 10:57:34] [INFO]: Step 6550: t=416.1 us | z_pos=20.178 mm | v_z=70.02 m/s | Decel=157220.09 g | Failed=209255 (26.55%) | Drift=9.3387%
+[2026-06-28 10:57:34] [INFO]: Energy (J): KE_grid=3032.9938 | SE_grid=452.7212 | KE_proj=4168.8556 | Damp=335.1534 | Fric=0.0000 | Fail=1301.8566 | Clamp=0.0000 | Contact=2.2058 | Total=9293.7865
+[2026-06-28 10:57:40] [INFO]: Step 6661: t=423.1 us | z_pos=20.670 mm | v_z=69.94 m/s | Decel=157220.09 g | Failed=211981 (26.90%) | Drift=9.7114%
+[2026-06-28 10:57:40] [INFO]: Energy (J): KE_grid=3056.7456 | SE_grid=433.4705 | KE_proj=4158.1995 | Damp=348.0320 | Fric=0.0000 | Fail=1326.8461 | Clamp=0.0000 | Contact=2.1765 | Total=9325.4702
+[2026-06-28 10:57:47] [INFO]: Step 6772: t=430.2 us | z_pos=21.161 mm | v_z=69.86 m/s | Decel=157220.09 g | Failed=214910 (27.27%) | Drift=10.1198%
+[2026-06-28 10:57:47] [INFO]: Energy (J): KE_grid=3064.9762 | SE_grid=430.1501 | KE_proj=4149.4551 | Damp=361.1586 | Fric=0.0000 | Fail=1352.7037 | Clamp=0.0000 | Contact=1.7403 | Total=9360.1840
+[2026-06-28 10:57:54] [INFO]: Step 6884: t=437.3 us | z_pos=21.660 mm | v_z=69.81 m/s | Decel=157220.09 g | Failed=217868 (27.65%) | Drift=10.5558%
+[2026-06-28 10:57:54] [INFO]: Energy (J): KE_grid=3061.2688 | SE_grid=439.0220 | KE_proj=4142.7517 | Damp=374.6088 | Fric=0.0000 | Fail=1377.5334 | Clamp=0.0000 | Contact=2.0609 | Total=9397.2456
+[2026-06-28 10:58:01] [INFO]: Step 6998: t=444.5 us | z_pos=22.163 mm | v_z=69.75 m/s | Decel=157220.09 g | Failed=220845 (28.02%) | Drift=10.7590%
+[2026-06-28 10:58:01] [INFO]: Energy (J): KE_grid=3021.2757 | SE_grid=465.9067 | KE_proj=4136.3192 | Damp=388.3074 | Fric=0.0000 | Fail=1400.7755 | Clamp=0.0000 | Contact=1.9297 | Total=9414.5141
+[2026-06-28 10:58:08] [INFO]: Step 7113: t=451.9 us | z_pos=22.674 mm | v_z=69.71 m/s | Decel=157220.09 g | Failed=223637 (28.38%) | Drift=11.0301%
+[2026-06-28 10:58:08] [INFO]: Energy (J): KE_grid=3006.8969 | SE_grid=473.2833 | KE_proj=4131.3271 | Damp=402.0966 | Fric=0.0000 | Fail=1422.3927 | Clamp=0.0000 | Contact=1.5623 | Total=9437.5589
+[2026-06-28 10:58:14] [INFO]: Step 7230: t=459.2 us | z_pos=23.189 mm | v_z=69.68 m/s | Decel=157220.09 g | Failed=226131 (28.70%) | Drift=11.2837%
+[2026-06-28 10:58:14] [INFO]: Energy (J): KE_grid=3020.4100 | SE_grid=450.2938 | KE_proj=4126.7906 | Damp=415.8326 | Fric=0.0000 | Fail=1444.1493 | Clamp=0.0000 | Contact=1.6349 | Total=9459.1111
+[2026-06-28 10:58:21] [INFO]: Step 7347: t=466.7 us | z_pos=23.709 mm | v_z=69.65 m/s | Decel=157220.09 g | Failed=228419 (28.99%) | Drift=11.6992%
+[2026-06-28 10:58:21] [INFO]: Energy (J): KE_grid=3069.8186 | SE_grid=405.4813 | KE_proj=4123.3767 | Damp=429.3816 | Fric=0.0000 | Fail=1464.5626 | Clamp=0.0000 | Contact=1.8119 | Total=9494.4329
+[2026-06-28 10:58:27] [INFO]: Step 7466: t=474.3 us | z_pos=24.235 mm | v_z=69.62 m/s | Decel=157220.09 g | Failed=230784 (29.29%) | Drift=11.9077%
+[2026-06-28 10:58:27] [INFO]: Energy (J): KE_grid=3080.7728 | SE_grid=384.3683 | KE_proj=4119.9230 | Damp=442.8964 | Fric=0.0000 | Fail=1482.5212 | Clamp=0.0000 | Contact=1.6712 | Total=9512.1529
+[2026-06-28 10:58:33] [INFO]: Step 7585: t=481.8 us | z_pos=24.759 mm | v_z=69.59 m/s | Decel=157220.09 g | Failed=233038 (29.57%) | Drift=12.1247%
+[2026-06-28 10:58:33] [INFO]: Energy (J): KE_grid=3086.1140 | SE_grid=369.4359 | KE_proj=4116.4332 | Damp=456.4156 | Fric=0.0000 | Fail=1500.1754 | Clamp=0.0000 | Contact=2.0215 | Total=9530.5955
+[2026-06-28 10:58:39] [INFO]: Step 7704: t=489.4 us | z_pos=25.284 mm | v_z=69.56 m/s | Decel=157220.09 g | Failed=235065 (29.83%) | Drift=12.2994%
+[2026-06-28 10:58:39] [INFO]: Energy (J): KE_grid=3085.0137 | SE_grid=354.8354 | KE_proj=4113.2994 | Damp=469.8702 | Fric=0.0000 | Fail=1520.2726 | Clamp=0.0000 | Contact=2.1540 | Total=9545.4453
+[2026-06-28 10:58:46] [INFO]: Step 7823: t=496.9 us | z_pos=25.808 mm | v_z=69.53 m/s | Decel=157220.09 g | Failed=237284 (30.11%) | Drift=12.6588%
+[2026-06-28 10:58:46] [INFO]: Energy (J): KE_grid=3085.6926 | SE_grid=356.5071 | KE_proj=4109.7450 | Damp=483.0232 | Fric=0.0000 | Fail=1538.7664 | Clamp=0.0000 | Contact=2.2648 | Total=9575.9992
+[2026-06-28 10:58:52] [INFO]: Step 7943: t=504.5 us | z_pos=26.335 mm | v_z=69.50 m/s | Decel=157220.09 g | Failed=239396 (30.38%) | Drift=12.8427%
+[2026-06-28 10:58:52] [INFO]: Energy (J): KE_grid=3071.5970 | SE_grid=360.8256 | KE_proj=4106.2475 | Damp=496.0671 | Fric=0.0000 | Fail=1554.8976 | Clamp=0.0000 | Contact=1.9978 | Total=9591.6327
+[2026-06-28 10:58:58] [INFO]: Step 8062: t=512.1 us | z_pos=26.860 mm | v_z=69.47 m/s | Decel=157220.09 g | Failed=241356 (30.63%) | Drift=13.1497%
+[2026-06-28 10:58:58] [INFO]: Energy (J): KE_grid=3069.4030 | SE_grid=360.8968 | KE_proj=4102.3543 | Damp=508.9054 | Fric=0.0000 | Fail=1574.3500 | Clamp=0.0000 | Contact=1.8137 | Total=9617.7232
+[2026-06-28 10:59:05] [INFO]: Step 8181: t=519.7 us | z_pos=27.387 mm | v_z=69.44 m/s | Decel=157220.09 g | Failed=243176 (30.86%) | Drift=13.2885%
+[2026-06-28 10:59:05] [INFO]: Energy (J): KE_grid=3062.7824 | SE_grid=354.2827 | KE_proj=4099.2216 | Damp=521.5440 | Fric=0.0000 | Fail=1589.8880 | Clamp=0.0000 | Contact=1.8016 | Total=9629.5203
+[2026-06-28 10:59:12] [INFO]: Step 8301: t=527.3 us | z_pos=27.914 mm | v_z=69.41 m/s | Decel=157220.09 g | Failed=244995 (31.09%) | Drift=13.5058%
+[2026-06-28 10:59:12] [INFO]: Energy (J): KE_grid=3074.0669 | SE_grid=336.8204 | KE_proj=4095.5604 | Damp=533.9249 | Fric=0.0000 | Fail=1605.6544 | Clamp=0.0000 | Contact=1.9668 | Total=9647.9938
+[2026-06-28 10:59:18] [INFO]: Step 8421: t=534.9 us | z_pos=28.440 mm | v_z=69.38 m/s | Decel=157220.09 g | Failed=246908 (31.33%) | Drift=13.6396%
+[2026-06-28 10:59:18] [INFO]: Energy (J): KE_grid=3075.6718 | SE_grid=323.3500 | KE_proj=4091.8070 | Damp=546.0102 | Fric=0.0000 | Fail=1620.9539 | Clamp=0.0000 | Contact=1.5707 | Total=9659.3636
+[2026-06-28 10:59:25] [INFO]: Step 8540: t=542.5 us | z_pos=28.966 mm | v_z=69.35 m/s | Decel=157220.09 g | Failed=248840 (31.58%) | Drift=13.7931%
+[2026-06-28 10:59:25] [INFO]: Energy (J): KE_grid=3075.3881 | SE_grid=313.0797 | KE_proj=4088.2452 | Damp=557.9174 | Fric=0.0000 | Fail=1636.3827 | Clamp=0.0000 | Contact=1.3965 | Total=9672.4096
+[2026-06-28 10:59:31] [INFO]: Step 8660: t=550.1 us | z_pos=29.492 mm | v_z=69.31 m/s | Decel=157220.09 g | Failed=250668 (31.81%) | Drift=13.9362%
+[2026-06-28 10:59:31] [INFO]: Energy (J): KE_grid=3073.7360 | SE_grid=306.3727 | KE_proj=4083.8757 | Damp=569.5308 | Fric=0.0000 | Fail=1649.8414 | Clamp=0.0000 | Contact=1.2209 | Total=9684.5775
+[2026-06-28 10:59:37] [INFO]: Step 8780: t=557.7 us | z_pos=30.018 mm | v_z=69.27 m/s | Decel=157220.09 g | Failed=252503 (32.04%) | Drift=14.1618%
+[2026-06-28 10:59:37] [INFO]: Energy (J): KE_grid=3077.6620 | SE_grid=298.0034 | KE_proj=4079.4933 | Damp=581.0708 | Fric=0.0000 | Fail=1666.0233 | Clamp=0.0000 | Contact=1.5024 | Total=9703.7553
+[2026-06-28 10:59:43] [INFO]: Step 8899: t=565.3 us | z_pos=30.543 mm | v_z=69.23 m/s | Decel=157220.09 g | Failed=254295 (32.27%) | Drift=14.2489%
+[2026-06-28 10:59:43] [INFO]: Energy (J): KE_grid=3073.8414 | SE_grid=290.7503 | KE_proj=4074.6653 | Damp=592.4613 | Fric=0.0000 | Fail=1678.4076 | Clamp=0.0000 | Contact=1.0272 | Total=9711.1532
+[2026-06-28 10:59:49] [INFO]: Step 9019: t=572.9 us | z_pos=31.068 mm | v_z=69.19 m/s | Decel=157220.09 g | Failed=256013 (32.49%) | Drift=14.4394%
+[2026-06-28 10:59:49] [INFO]: Energy (J): KE_grid=3076.0910 | SE_grid=285.1058 | KE_proj=4069.7831 | Damp=603.6719 | Fric=0.0000 | Fail=1691.3367 | Clamp=0.0000 | Contact=1.3566 | Total=9727.3450
+[2026-06-28 10:59:55] [INFO]: Step 9138: t=580.5 us | z_pos=31.592 mm | v_z=69.15 m/s | Decel=157220.09 g | Failed=257715 (32.70%) | Drift=14.6822%
+[2026-06-28 10:59:55] [INFO]: Energy (J): KE_grid=3084.4914 | SE_grid=276.3675 | KE_proj=4064.6773 | Damp=614.6977 | Fric=0.0000 | Fail=1706.5016 | Clamp=0.0000 | Contact=1.2509 | Total=9747.9864
+[2026-06-28 11:00:01] [INFO]: Step 9258: t=588.1 us | z_pos=32.117 mm | v_z=69.10 m/s | Decel=157220.09 g | Failed=259294 (32.90%) | Drift=14.8801%
+[2026-06-28 11:00:01] [INFO]: Energy (J): KE_grid=3085.7768 | SE_grid=272.7467 | KE_proj=4059.7054 | Damp=625.5061 | Fric=0.0000 | Fail=1719.9037 | Clamp=0.0000 | Contact=1.1705 | Total=9764.8092
+[2026-06-28 11:00:08] [INFO]: Step 9378: t=595.7 us | z_pos=32.641 mm | v_z=69.06 m/s | Decel=157220.09 g | Failed=260806 (33.10%) | Drift=15.1408%
+[2026-06-28 11:00:08] [INFO]: Energy (J): KE_grid=3094.2287 | SE_grid=267.7719 | KE_proj=4054.5371 | Damp=636.1612 | Fric=0.0000 | Fail=1732.8374 | Clamp=0.0000 | Contact=1.4287 | Total=9786.9649
+[2026-06-28 11:00:15] [INFO]: Step 9497: t=603.3 us | z_pos=33.164 mm | v_z=69.02 m/s | Decel=157220.09 g | Failed=262255 (33.28%) | Drift=15.3893%
+[2026-06-28 11:00:15] [INFO]: Energy (J): KE_grid=3101.3776 | SE_grid=262.1990 | KE_proj=4049.7764 | Damp=646.7482 | Fric=0.0000 | Fail=1746.8613 | Clamp=0.0000 | Contact=1.1242 | Total=9808.0866
+[2026-06-28 11:00:21] [INFO]: Step 9617: t=610.9 us | z_pos=33.688 mm | v_z=68.99 m/s | Decel=157220.09 g | Failed=263605 (33.45%) | Drift=15.5754%
+[2026-06-28 11:00:21] [INFO]: Energy (J): KE_grid=3100.9498 | SE_grid=259.1201 | KE_proj=4045.9662 | Damp=657.1001 | Fric=0.0000 | Fail=1759.6638 | Clamp=0.0000 | Contact=1.1111 | Total=9823.9111
+[2026-06-28 11:00:28] [INFO]: Step 9736: t=618.5 us | z_pos=34.211 mm | v_z=68.95 m/s | Decel=157220.09 g | Failed=264899 (33.61%) | Drift=15.6550%
+[2026-06-28 11:00:28] [INFO]: Energy (J): KE_grid=3088.4498 | SE_grid=260.0322 | KE_proj=4041.7791 | Damp=667.2566 | Fric=0.0000 | Fail=1771.9686 | Clamp=0.0000 | Contact=1.1897 | Total=9830.6761
+[2026-06-28 11:00:35] [INFO]: Step 9856: t=626.1 us | z_pos=34.734 mm | v_z=68.92 m/s | Decel=157220.09 g | Failed=266265 (33.79%) | Drift=15.7589%
+[2026-06-28 11:00:36] [INFO]: Energy (J): KE_grid=3075.0928 | SE_grid=262.7345 | KE_proj=4038.6291 | Damp=677.3946 | Fric=0.0000 | Fail=1784.4046 | Clamp=0.0000 | Contact=1.2512 | Total=9839.5069
+[2026-06-28 11:00:43] [INFO]: Step 9976: t=633.7 us | z_pos=35.256 mm | v_z=68.90 m/s | Decel=157220.09 g | Failed=267455 (33.94%) | Drift=15.9172%
+[2026-06-28 11:00:43] [INFO]: Energy (J): KE_grid=3064.2156 | SE_grid=268.9117 | KE_proj=4035.8062 | Damp=687.2453 | Fric=0.0000 | Fail=1795.7468 | Clamp=0.0000 | Contact=1.0403 | Total=9852.9659
+[2026-06-28 11:00:51] [INFO]: Step 10095: t=641.3 us | z_pos=35.779 mm | v_z=68.88 m/s | Decel=157220.09 g | Failed=268636 (34.09%) | Drift=16.0665%
+[2026-06-28 11:00:51] [INFO]: Energy (J): KE_grid=3052.5343 | SE_grid=276.3963 | KE_proj=4032.9845 | Damp=696.9910 | Fric=0.0000 | Fail=1805.6596 | Clamp=0.0000 | Contact=1.0876 | Total=9865.6533
+[2026-06-28 11:00:59] [INFO]: Step 10215: t=648.8 us | z_pos=36.301 mm | v_z=68.86 m/s | Decel=157220.09 g | Failed=269829 (34.24%) | Drift=16.2464%
+[2026-06-28 11:00:59] [INFO]: Energy (J): KE_grid=3040.3489 | SE_grid=283.4461 | KE_proj=4031.1120 | Damp=706.5362 | Fric=0.0000 | Fail=1818.5259 | Clamp=0.0000 | Contact=0.9788 | Total=9880.9479
+[2026-06-28 11:01:06] [INFO]: Step 10334: t=656.4 us | z_pos=36.823 mm | v_z=68.85 m/s | Decel=157220.09 g | Failed=271103 (34.40%) | Drift=16.3223%
+[2026-06-28 11:01:06] [INFO]: Energy (J): KE_grid=3024.8633 | SE_grid=287.1046 | KE_proj=4029.6961 | Damp=715.8383 | Fric=0.0000 | Fail=1829.0643 | Clamp=0.0000 | Contact=0.8305 | Total=9887.3971
+[2026-06-28 11:01:14] [INFO]: Step 10454: t=664.0 us | z_pos=37.346 mm | v_z=68.84 m/s | Decel=157220.09 g | Failed=272284 (34.55%) | Drift=16.5369%
+[2026-06-28 11:01:14] [INFO]: Energy (J): KE_grid=3022.2868 | SE_grid=288.0590 | KE_proj=4028.8904 | Damp=724.8881 | Fric=0.0000 | Fail=1840.5944 | Clamp=0.0000 | Contact=0.9178 | Total=9905.6364
+[2026-06-28 11:01:21] [INFO]: Step 10574: t=671.6 us | z_pos=37.868 mm | v_z=68.84 m/s | Decel=157220.09 g | Failed=273449 (34.70%) | Drift=16.6809%
+[2026-06-28 11:01:22] [INFO]: Energy (J): KE_grid=3017.6121 | SE_grid=287.1946 | KE_proj=4027.9027 | Damp=733.7220 | Fric=0.0000 | Fail=1850.4752 | Clamp=0.0000 | Contact=0.9686 | Total=9917.8752
+[2026-06-28 11:01:29] [INFO]: Step 10693: t=679.2 us | z_pos=38.390 mm | v_z=68.83 m/s | Decel=157220.09 g | Failed=274455 (34.83%) | Drift=16.8099%
+[2026-06-28 11:01:29] [INFO]: Energy (J): KE_grid=3010.4915 | SE_grid=286.4555 | KE_proj=4027.0742 | Damp=742.3356 | Fric=0.0000 | Fail=1861.7756 | Clamp=0.0000 | Contact=0.7129 | Total=9928.8452
+[2026-06-28 11:01:36] [INFO]: Step 10813: t=686.8 us | z_pos=38.912 mm | v_z=68.82 m/s | Decel=157220.09 g | Failed=275370 (34.94%) | Drift=16.9246%
+[2026-06-28 11:01:36] [INFO]: Energy (J): KE_grid=3006.1081 | SE_grid=283.4606 | KE_proj=4026.5050 | Damp=750.7940 | Fric=0.0000 | Fail=1871.0476 | Clamp=0.0000 | Contact=0.6775 | Total=9938.5928
+[2026-06-28 11:01:43] [INFO]: Step 10932: t=694.4 us | z_pos=39.434 mm | v_z=68.82 m/s | Decel=157220.09 g | Failed=276275 (35.06%) | Drift=17.0725%
+[2026-06-28 11:01:43] [INFO]: Energy (J): KE_grid=2999.3160 | SE_grid=283.4842 | KE_proj=4026.1213 | Damp=759.0848 | Fric=0.0000 | Fail=1882.3792 | Clamp=0.0000 | Contact=0.7755 | Total=9951.1609
+[2026-06-28 11:01:49] [INFO]: Step 11052: t=702.0 us | z_pos=39.956 mm | v_z=68.82 m/s | Decel=157220.09 g | Failed=277071 (35.16%) | Drift=17.1785%
+[2026-06-28 11:01:49] [INFO]: Energy (J): KE_grid=2990.9790 | SE_grid=282.4668 | KE_proj=4025.5595 | Damp=767.2818 | Fric=0.0000 | Fail=1893.2047 | Clamp=0.0000 | Contact=0.6832 | Total=9960.1751
+[2026-06-28 11:01:55] [INFO]: Step 11172: t=709.6 us | z_pos=40.478 mm | v_z=68.81 m/s | Decel=157220.09 g | Failed=277843 (35.26%) | Drift=17.2930%
+[2026-06-28 11:01:55] [INFO]: Energy (J): KE_grid=2984.4972 | SE_grid=281.8432 | KE_proj=4025.0083 | Damp=775.2818 | Fric=0.0000 | Fail=1902.6323 | Clamp=0.0000 | Contact=0.6445 | Total=9969.9073
+[2026-06-28 11:02:00] [INFO]: Step 11291: t=717.2 us | z_pos=41.000 mm | v_z=68.81 m/s | Decel=157220.09 g | Failed=278575 (35.35%) | Drift=17.4332%
+[2026-06-28 11:02:00] [INFO]: Energy (J): KE_grid=2978.8142 | SE_grid=282.5940 | KE_proj=4024.6059 | Damp=783.0527 | Fric=0.0000 | Fail=1912.0866 | Clamp=0.0000 | Contact=0.6693 | Total=9981.8226
+[2026-06-28 11:02:05] [INFO]: Step 11411: t=724.8 us | z_pos=41.522 mm | v_z=68.80 m/s | Decel=157220.09 g | Failed=279256 (35.44%) | Drift=17.5876%
+[2026-06-28 11:02:05] [INFO]: Energy (J): KE_grid=2974.2228 | SE_grid=284.7178 | KE_proj=4024.1880 | Damp=790.5988 | Fric=0.0000 | Fail=1920.4527 | Clamp=0.0000 | Contact=0.7699 | Total=9994.9500
+[2026-06-28 11:02:11] [INFO]: Step 11531: t=732.4 us | z_pos=42.043 mm | v_z=68.80 m/s | Decel=157220.09 g | Failed=279994 (35.53%) | Drift=17.7570%
+[2026-06-28 11:02:11] [INFO]: Energy (J): KE_grid=2970.7913 | SE_grid=287.2871 | KE_proj=4023.7777 | Damp=798.0579 | Fric=0.0000 | Fail=1928.8752 | Clamp=0.0000 | Contact=0.5602 | Total=10009.3494
+[2026-06-28 11:02:16] [INFO]: Step 11650: t=740.0 us | z_pos=42.565 mm | v_z=68.80 m/s | Decel=157220.09 g | Failed=280805 (35.63%) | Drift=18.0204%
+[2026-06-28 11:02:16] [INFO]: Energy (J): KE_grid=2975.5019 | SE_grid=288.5911 | KE_proj=4023.4343 | Damp=805.3833 | Fric=0.0000 | Fail=1938.2012 | Clamp=0.0000 | Contact=0.6218 | Total=10031.7337
+[2026-06-28 11:02:21] [INFO]: Step 11770: t=747.6 us | z_pos=43.087 mm | v_z=68.79 m/s | Decel=157220.09 g | Failed=281569 (35.73%) | Drift=18.1829%
+[2026-06-28 11:02:21] [INFO]: Energy (J): KE_grid=2974.2764 | SE_grid=288.2928 | KE_proj=4023.0958 | Damp=812.5441 | Fric=0.0000 | Fail=1946.7703 | Clamp=0.0000 | Contact=0.5636 | Total=10045.5429
+[2026-06-28 11:02:27] [INFO]: Step 11889: t=755.2 us | z_pos=43.609 mm | v_z=68.79 m/s | Decel=157220.09 g | Failed=282299 (35.82%) | Drift=18.2620%
+[2026-06-28 11:02:27] [INFO]: Energy (J): KE_grid=2967.5621 | SE_grid=287.9613 | KE_proj=4022.5077 | Damp=819.6129 | Fric=0.0000 | Fail=1954.0351 | Clamp=0.0000 | Contact=0.5934 | Total=10052.2725
+[2026-06-28 11:02:32] [INFO]: Step 12009: t=762.8 us | z_pos=44.131 mm | v_z=68.79 m/s | Decel=157220.09 g | Failed=283053 (35.92%) | Drift=18.3611%
+[2026-06-28 11:02:32] [INFO]: Energy (J): KE_grid=2963.2315 | SE_grid=287.4409 | KE_proj=4022.0412 | Damp=826.5789 | Fric=0.0000 | Fail=1960.9318 | Clamp=0.0000 | Contact=0.4673 | Total=10060.6916
+[2026-06-28 11:02:37] [INFO]: Step 12129: t=770.4 us | z_pos=44.652 mm | v_z=68.78 m/s | Decel=157220.09 g | Failed=283856 (36.02%) | Drift=18.4999%
+[2026-06-28 11:02:37] [INFO]: Energy (J): KE_grid=2962.8006 | SE_grid=287.1606 | KE_proj=4021.5902 | Damp=833.4671 | Fric=0.0000 | Fail=1966.8788 | Clamp=0.0000 | Contact=0.5943 | Total=10072.4915
+[2026-06-28 11:02:42] [INFO]: Step 12248: t=778.0 us | z_pos=45.174 mm | v_z=68.78 m/s | Decel=157220.09 g | Failed=284650 (36.12%) | Drift=18.7881%
+[2026-06-28 11:02:42] [INFO]: Energy (J): KE_grid=2973.5716 | SE_grid=286.6340 | KE_proj=4020.9580 | Damp=840.4027 | Fric=0.0000 | Fail=1974.8670 | Clamp=0.0000 | Contact=0.5521 | Total=10096.9855
+[2026-06-28 11:02:47] [INFO]: Step 12368: t=785.6 us | z_pos=45.696 mm | v_z=68.77 m/s | Decel=157220.09 g | Failed=285376 (36.21%) | Drift=18.8486%
+[2026-06-28 11:02:47] [INFO]: Energy (J): KE_grid=2966.8876 | SE_grid=285.5622 | KE_proj=4020.4818 | Damp=847.2656 | Fric=0.0000 | Fail=1981.3757 | Clamp=0.0000 | Contact=0.5560 | Total=10102.1287
+[2026-06-28 11:02:53] [INFO]: Step 12487: t=793.2 us | z_pos=46.217 mm | v_z=68.76 m/s | Decel=157220.09 g | Failed=286100 (36.31%) | Drift=18.9591%
+[2026-06-28 11:02:53] [INFO]: Energy (J): KE_grid=2962.9105 | SE_grid=284.7078 | KE_proj=4019.4902 | Damp=854.1461 | Fric=0.0000 | Fail=1989.7777 | Clamp=0.0000 | Contact=0.4898 | Total=10111.5221
+[2026-06-28 11:02:58] [INFO]: Step 12607: t=800.8 us | z_pos=46.739 mm | v_z=68.76 m/s | Decel=157220.09 g | Failed=286863 (36.40%) | Drift=19.0442%
+[2026-06-28 11:02:58] [INFO]: Energy (J): KE_grid=2958.8117 | SE_grid=282.6661 | KE_proj=4018.7207 | Damp=860.9112 | Fric=0.0000 | Fail=1997.1091 | Clamp=0.0000 | Contact=0.5402 | Total=10118.7590
+[2026-06-28 11:03:03] [INFO]: Step 12727: t=808.4 us | z_pos=47.260 mm | v_z=68.75 m/s | Decel=157220.09 g | Failed=287604 (36.50%) | Drift=19.1362%
+[2026-06-28 11:03:03] [INFO]: Energy (J): KE_grid=2955.0987 | SE_grid=281.9187 | KE_proj=4018.0047 | Damp=867.6241 | Fric=0.0000 | Fail=2003.4503 | Clamp=0.0000 | Contact=0.4793 | Total=10126.5759
+[2026-06-28 11:03:08] [INFO]: Step 12846: t=816.0 us | z_pos=47.782 mm | v_z=68.74 m/s | Decel=157220.09 g | Failed=288356 (36.59%) | Drift=19.2782%
+[2026-06-28 11:03:08] [INFO]: Energy (J): KE_grid=2956.2495 | SE_grid=280.9348 | KE_proj=4016.9241 | Damp=874.3352 | Fric=0.0000 | Fail=2009.6665 | Clamp=0.0000 | Contact=0.5378 | Total=10138.6479
+[2026-06-28 11:03:13] [INFO]: Step 12966: t=823.6 us | z_pos=48.303 mm | v_z=68.73 m/s | Decel=157220.09 g | Failed=289077 (36.68%) | Drift=19.4273%
+[2026-06-28 11:03:13] [INFO]: Energy (J): KE_grid=2958.6467 | SE_grid=278.3900 | KE_proj=4016.1212 | Damp=880.9463 | Fric=0.0000 | Fail=2016.6158 | Clamp=0.0000 | Contact=0.6016 | Total=10151.3216
+[2026-06-28 11:03:21] [INFO]: Step 13085: t=831.2 us | z_pos=48.824 mm | v_z=68.73 m/s | Decel=157220.09 g | Failed=289839 (36.78%) | Drift=19.4956%
+[2026-06-28 11:03:21] [INFO]: Energy (J): KE_grid=2953.3202 | SE_grid=277.8088 | KE_proj=4015.3441 | Damp=887.5193 | Fric=0.0000 | Fail=2022.5383 | Clamp=0.0000 | Contact=0.5941 | Total=10157.1248
+[2026-06-28 11:03:28] [INFO]: Step 13205: t=838.8 us | z_pos=49.346 mm | v_z=68.72 m/s | Decel=157220.09 g | Failed=290585 (36.87%) | Drift=19.5667%
+[2026-06-28 11:03:28] [INFO]: Energy (J): KE_grid=2948.0672 | SE_grid=277.2722 | KE_proj=4014.5712 | Damp=894.1048 | Fric=0.0000 | Fail=2028.6762 | Clamp=0.0000 | Contact=0.4792 | Total=10163.1708
+[2026-06-28 11:03:34] [INFO]: Step 13325: t=846.4 us | z_pos=49.867 mm | v_z=68.72 m/s | Decel=157220.09 g | Failed=291343 (36.97%) | Drift=19.6968%
+[2026-06-28 11:03:34] [INFO]: Energy (J): KE_grid=2945.4487 | SE_grid=276.8730 | KE_proj=4014.2167 | Damp=900.7494 | Fric=0.0000 | Fail=2036.4175 | Clamp=0.0000 | Contact=0.5212 | Total=10174.2265
+[2026-06-28 11:03:40] [INFO]: Step 13444: t=854.0 us | z_pos=50.388 mm | v_z=68.72 m/s | Decel=157220.09 g | Failed=292051 (37.06%) | Drift=19.8450%
+[2026-06-28 11:03:41] [INFO]: Energy (J): KE_grid=2947.4810 | SE_grid=275.6655 | KE_proj=4013.8860 | Damp=907.4001 | Fric=0.0000 | Fail=2041.7582 | Clamp=0.0000 | Contact=0.6379 | Total=10186.8287
+[2026-06-28 11:03:46] [INFO]: Step 13564: t=861.6 us | z_pos=50.909 mm | v_z=68.71 m/s | Decel=157220.09 g | Failed=292780 (37.15%) | Drift=20.0791%
+[2026-06-28 11:03:46] [INFO]: Energy (J): KE_grid=2956.9368 | SE_grid=273.8742 | KE_proj=4013.3087 | Damp=914.0200 | Fric=0.0000 | Fail=2048.0486 | Clamp=0.0000 | Contact=0.5313 | Total=10206.7197
+[2026-06-28 11:03:53] [INFO]: Step 13683: t=869.2 us | z_pos=51.430 mm | v_z=68.71 m/s | Decel=157220.09 g | Failed=293450 (37.24%) | Drift=20.2910%
+[2026-06-28 11:03:53] [INFO]: Energy (J): KE_grid=2961.4462 | SE_grid=274.9310 | KE_proj=4012.7118 | Damp=920.6114 | Fric=0.0000 | Fail=2054.5324 | Clamp=0.0000 | Contact=0.5013 | Total=10224.7341
+[2026-06-28 11:03:59] [INFO]: Step 13803: t=876.8 us | z_pos=51.951 mm | v_z=68.70 m/s | Decel=157220.09 g | Failed=294139 (37.33%) | Drift=20.4403%
+[2026-06-28 11:03:59] [INFO]: Energy (J): KE_grid=2963.1523 | SE_grid=273.7162 | KE_proj=4012.2219 | Damp=927.2613 | Fric=0.0000 | Fail=2060.5991 | Clamp=0.0000 | Contact=0.4734 | Total=10237.4242
+[2026-06-28 11:04:04] [INFO]: Step 13923: t=884.4 us | z_pos=52.472 mm | v_z=68.69 m/s | Decel=157220.09 g | Failed=294882 (37.42%) | Drift=20.5541%
+[2026-06-28 11:04:04] [INFO]: Energy (J): KE_grid=2962.3111 | SE_grid=273.0289 | KE_proj=4011.3932 | Damp=933.8664 | Fric=0.0000 | Fail=2065.9893 | Clamp=0.0000 | Contact=0.5083 | Total=10247.0972
+[2026-06-28 11:04:09] [INFO]: Step 14042: t=892.0 us | z_pos=52.993 mm | v_z=68.69 m/s | Decel=157220.09 g | Failed=295595 (37.51%) | Drift=20.6981%
+[2026-06-28 11:04:09] [INFO]: Energy (J): KE_grid=2962.4077 | SE_grid=273.0883 | KE_proj=4010.9041 | Damp=940.4679 | Fric=0.0000 | Fail=2071.8560 | Clamp=0.0000 | Contact=0.6148 | Total=10259.3388
+[2026-06-28 11:04:15] [INFO]: Step 14162: t=899.6 us | z_pos=53.514 mm | v_z=68.68 m/s | Decel=157220.09 g | Failed=296325 (37.60%) | Drift=20.7346%
+[2026-06-28 11:04:15] [INFO]: Energy (J): KE_grid=2956.0311 | SE_grid=271.1568 | KE_proj=4010.0883 | Damp=947.0694 | Fric=0.0000 | Fail=2077.5639 | Clamp=0.0000 | Contact=0.5321 | Total=10262.4416
+[2026-06-28 11:04:20] [INFO]: Step 14281: t=907.2 us | z_pos=54.035 mm | v_z=68.68 m/s | Decel=157220.09 g | Failed=297136 (37.71%) | Drift=20.7899%
+[2026-06-28 11:04:20] [INFO]: Energy (J): KE_grid=2951.8841 | SE_grid=269.0315 | KE_proj=4009.4263 | Damp=953.6250 | Fric=0.0000 | Fail=2082.5891 | Clamp=0.0000 | Contact=0.5860 | Total=10267.1420
