@@ -2390,9 +2390,9 @@ def numba_step_shell_forces_and_failures(
 
             step_stiff_damp_power += (
                 (
-                    (sig_xx_damp - q_bulk) * e_dot_xx_k
-                    + (sig_yy_damp - q_bulk) * e_dot_yy_k
-                    + tau_xy_damp * g_dot_xy_k
+                    (sig_xx_damp - q_bulk) * d_factor * e_dot_xx_k
+                    + (sig_yy_damp - q_bulk) * d_factor * e_dot_yy_k
+                    + tau_xy_damp * d_factor * g_dot_xy_k
                 )
                 * wk
                 * (dx * dx)
@@ -2464,6 +2464,10 @@ def numba_step_shell_forces_and_failures(
         C_rot_damp = 0.05 * sqrt(E * density_kgm3) * (t_curr**3) * dx * ramp
         shear_damping = 0.05 * sqrt(G * density_kgm3) * t_curr * (dx * dx * dx) * ramp
         C_rot_total = C_rot_damp + shear_damping
+        
+        # Hourglass dissipation rate
+        step_stiff_damp_power += 0.25 * C_damp * (q_vx**2 + q_vy**2 + q_vz**2)
+        step_stiff_damp_power += 0.25 * C_rot_total * (q_wx**2 + q_wy**2 + q_wz**2)
 
         # Node 0 (gamma_0 = 1.0)
         f_local_x0 -= 0.25 * C_damp * q_vx
@@ -2691,6 +2695,9 @@ def _fused_shell_loop_jit(
     c_p = sqrt(E / (density_kgm3 * (1.0 - poisson_ratio * poisson_ratio)))
     if cfl_factor > 0.0:
         omega_shell = 2.0 * c_p / dx
+        omega_bending = (4.0 * c_p * thickness) / (dx * dx * sqrt(12.0 * (1.0 - poisson_ratio * poisson_ratio)))
+        if omega_bending > omega_shell:
+            omega_shell = omega_bending
         k_total = mass_min * (omega_shell**2)
         if use_czm:
             k_total += 4.0 * k_0
@@ -2801,9 +2808,9 @@ def _fused_shell_loop_jit(
             numba_step_shell_forces_and_failures(
                 positions,
                 X_ref,
-                velocities,
+                v_half,
                 ang_positions,
-                ang_velocities,
+                omega_half,
                 elements,
                 thickness,
                 E,

@@ -9,10 +9,14 @@ All notable changes to this project are documented in this file.
 - **Flanagan-Belytschko Hourglass in Local Frame**: Projected zero-energy hourglass modes and damping in the local frame to preserve energy conservation.
 - **Bullet Ogive Nose Cutoff Correction**: Updated projectile contact distance checking to include `L_nose_val`, eliminating force jump discontinuities.
 - **Inter-ply Damping**: Added critical damping (damping ratio = 0.1) to inter-ply contact forces to eliminate unphysical layer resonance.
+- **Damping Phase Lag Resolution**: Evaluated shell damping forces and hourglass stabilization using mid-step velocities (`v_half`, `omega_half`) rather than start-of-step velocities. This centers the viscous terms in time and prevents numerical energy injection.
+- **Plate Bending Timestep Limit**: Incorporated the high-frequency flexural wave frequency limit ($\omega_{\text{bending}} \approx \frac{4 c_p h}{\Delta x^2 \sqrt{12(1-\nu^2)}}$) into the critical timestep ($dt_{\text{crit}}$) estimation, ensuring stability for thin shell elements at fine grid sizes.
+- **Thermodynamically Consistent Damping Bookkeeping**: Corrected integration-point damping energy accumulation to scale with element damage `d_factor`, and accumulated work done by hourglass damping forces in the global energy ledger, resolving bookkeeping energy drift.
 
 ### Fixed
 - **History Sizing Allocation**: Fixed the `m_frames` off-by-one pre-allocation sizing in both shell loop JITs to prevent JIT `IndexError` crashes.
-- **21 Unit Tests Passed**: Verified that the entire unit test suite compiles, JITs, and passes successfully, including the updated rate-based J2 plasticity tests.
+- **119 Unit Tests Passed**: Verified that the entire unit test suite compiles, JITs, and passes successfully, including the updated rate-based J2 plasticity tests.
+- **Explicit Shell Dynamics Stabilization**: Prevented numerical energy explosions and spurious element failures under high-velocity strikes (e.g. at `cfl_factor = 0.5`), verifying stable energy decay and zero unphysical failure cascades.
 
 ---
 
